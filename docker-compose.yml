@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  jjz-alert:
+    image: ghcr.io/herbertgao/jjz-alert:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./.env:/.env:ro
+    # 如需自定义命令可取消注释
+    # command: ["python", "main.py"] 
