@@ -1,7 +1,10 @@
-from config.config import get_users
+from config.config import get_users, get_remind_times, get_remind_enable
 from service.jjz_checker import check_jjz_status
 from service.bark_pusher import push_bark, BarkLevel
 from utils.parse import parse_status
+
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 def main():
     users = get_users()
@@ -34,5 +37,18 @@ def main():
         except Exception as e:
             print(f'[ERROR] 用户{idx} 处理异常: {e}')
 
+def schedule_jobs():
+    scheduler = BlockingScheduler()
+    remind_times = get_remind_times()
+    for hour, minute in remind_times:
+        trigger = CronTrigger(hour=hour, minute=minute)
+        scheduler.add_job(main, trigger)
+        print(f'[INFO] 已添加定时任务: 每天 {hour:02d}:{minute:02d}')
+    print('[INFO] 定时任务调度器启动')
+    scheduler.start()
+
 if __name__ == '__main__':
-    main() 
+    if get_remind_enable():
+        schedule_jobs()
+    else:
+        main() 

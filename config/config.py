@@ -3,6 +3,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def get_remind_enable():
+    return os.getenv('REMIND_ENABLE', 'true').lower() == 'true'
+
+def get_remind_times():
+    times = os.getenv('REMIND_TIMES', '')
+    result = []
+    for t in times.split(','):
+        t = t.strip()
+        if not t:
+            continue
+        try:
+            hour, minute = map(int, t.split(':'))
+            result.append((hour, minute))
+        except Exception:
+            continue
+    return result
+
 def get_users():
     users = []
     idx = 1
