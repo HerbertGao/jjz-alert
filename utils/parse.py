@@ -12,6 +12,7 @@ def parse_status(data):
             end_date = bz.get('yxqz')
             start_date = bz.get('yxqs')
             status = bz.get('blztmc', '未知状态')
+            jjz_type = bz.get('jjzzlmc', '未知类型')
             try:
                 if end_date:
                     end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
@@ -26,6 +27,7 @@ def parse_status(data):
                 'start_date': start_date,
                 'end_date': end_date,
                 'status': status,
-                'days_left': days_left
+                'days_left': days_left,
+                'jjz_type': jjz_type
             })
     return all_status 

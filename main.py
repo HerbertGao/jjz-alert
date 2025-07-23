@@ -24,7 +24,7 @@ def main():
             all_status = parse_status(data)
             if all_status:
                 for info in all_status:
-                    msg = f"车牌 {info['plate']} 的进京证状态：{info['status']}，有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
+                    msg = f"车牌 {info['plate']} 的进京证（{info['jjz_type']}）状态：{info['status']}，有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
                     level = BarkLevel.CRITICAL if info['status'] != '审核通过(生效中)' else BarkLevel.ACTIVE
                     result = push_bark('进京证状态', None, msg, user['bark_server'],
                               encrypt=user.get('bark_encrypt', False),
