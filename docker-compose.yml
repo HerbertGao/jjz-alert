@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   jjz-alert:
     image: ghcr.io/herbertgao/jjz-alert:latest
