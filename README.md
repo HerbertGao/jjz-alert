@@ -30,6 +30,7 @@ pip install -r requirements.txt
 REMIND_ENABLE=true         # true=定时提醒，false=只执行一次
 REMIND_TIMES=7:00,19:00   # 每天几点提醒，多个时间用英文逗号分隔
 
+USER1_JJZ_URL=https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList
 USER1_JJZ_TOKEN=你的进京证Token
 USER1_BARK_SERVER=https://api.day.app/你的deviceKey
 USER1_BARK_ENCRYPT=false
@@ -69,7 +70,7 @@ docker-compose up -d
 
 ## 进京证接口与 Bark 推送说明
 
-- 北京交警接口需配置有效 Token
+- 北京交警接口需配置有效 Token 和 URL（北京交警App和微信小程序的URL端口不同，须区分）
 - Bark 推送格式及加密方式详见 [Bark 官方文档](https://bark.day.app/#/tutorial)
 
 ## 其他
