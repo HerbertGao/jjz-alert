@@ -4,7 +4,7 @@
 #!category= 北京交警
 
 [Script]
-北京交警Authorization = type=http-request,pattern=^https:\/\/jjz\.jtgl\.beijing\.gov\.cn:2443\/pro\/.*,requires-body=0,max-size=0,debug=0,script-path=https://raw.githubusercontent.com/HerbertGao/jjz-alert/refs/heads/master/modules/surge/jjz.module,script-update-interval=0
+北京交警Authorization = type=http-request,pattern=^https:\/\/jjz\.jtgl\.beijing\.gov\.cn:2443\/pro\/.*,requires-body=0,max-size=0,debug=0,script-path=https://raw.githubusercontent.com/HerbertGao/jjz-alert/refs/heads/master/modules/js/jjz.js,script-update-interval=0
 
 [MITM]
 hostname = %APPEND% jjz.jtgl.beijing.gov.cn 
