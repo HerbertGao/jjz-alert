@@ -7,7 +7,7 @@ const url = $request.url;
   const auth = headers["Authorization"] || headers["authorization"];
   if (auth) {
     // 通知并复制到剪切板
-    $.msg("🚦北京交警 Authorization", "已抓取到Authorization，已复制到剪切板", auth, {"update-pasteboard": auth});
+    $.msg("🚦北京交警", "已抓取到Authorization，点击通知后可复制到剪切板", auth, {"update-pasteboard": auth});
     $.setdata(auth, "jjz_authorization");
   }
 })().catch(e => {
