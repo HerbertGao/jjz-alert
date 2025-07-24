@@ -42,7 +42,7 @@ def schedule_jobs():
     remind_times = get_remind_times()
     for hour, minute in remind_times:
         trigger = CronTrigger(hour=hour, minute=minute)
-        scheduler.add_job(main, trigger)
+        scheduler.add_job(main, trigger, misfire_grace_time=0)  # 立即补执行
         print(f'[INFO] 已添加定时任务: 每天 {hour:02d}:{minute:02d}')
     print('[INFO] 定时任务调度器启动')
     scheduler.start()
