@@ -2,6 +2,8 @@ services:
   jjz-alert:
     image: ghcr.io/herbertgao/jjz-alert:latest
     restart: unless-stopped # 只需要单次推送则设置为 no
+    environment:
+      - TZ=Asia/Shanghai
     env_file:
       - .env
     volumes:
