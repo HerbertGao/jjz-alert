@@ -30,9 +30,6 @@ RUN apt-get update && rm -rf /var/lib/apt/lists/* \
 # 复制项目文件
 COPY . .
 
-# 创建必要的目录
-RUN mkdir -p logs data
-
 # 设置权限（如 main.py 需执行权限可加）
 # RUN chmod +x main.py
 
