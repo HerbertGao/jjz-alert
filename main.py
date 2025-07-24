@@ -24,7 +24,12 @@ def main():
             all_status = parse_status(data)
             if all_status:
                 for info in all_status:
-                    msg = f"车牌 {info['plate']} 的进京证（{info['jjz_type']}）状态：{info['status']}，有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
+                    # 提取括号内的内容
+                    jjz_type_short = info['jjz_type']
+                    if '（' in jjz_type_short and '）' in jjz_type_short:
+                        jjz_type_short = jjz_type_short.split('（')[1].split('）')[0]
+                    
+                    msg = f"车牌 {info['plate']} 的进京证（{jjz_type_short}）状态：{info['status']}，有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
                     level = BarkLevel.CRITICAL if info['status'] != '审核通过(生效中)' else BarkLevel.ACTIVE
                     result = push_bark('进京证状态', None, msg, user['bark_server'],
                               encrypt=user.get('bark_encrypt', False),
@@ -42,7 +47,7 @@ def schedule_jobs():
     remind_times = get_remind_times()
     for hour, minute in remind_times:
         trigger = CronTrigger(hour=hour, minute=minute)
-        scheduler.add_job(main, trigger, misfire_grace_time=0)  # 立即补执行
+        scheduler.add_job(main, trigger, misfire_grace_time=0)
         print(f'[INFO] 已添加定时任务: 每天 {hour:02d}:{minute:02d}')
     print('[INFO] 定时任务调度器启动')
     scheduler.start()
