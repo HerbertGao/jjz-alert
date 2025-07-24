@@ -1,14 +1,10 @@
 #!name= 北京交警 Authorization 抓取
 #!desc= 抓取北京交警App的Authorization，自动通知并保存
 #!author= HerbertGao
-#!category=HerbertGao's Scripts
-
-[Rule]
-# 只拦截北京交警App的API请求
-URL-REGEX,^https:\/\/jjz\.jtgl\.beijing\.gov\.cn(:\d+)?\/pro\/.*,SCRIPT,jjz.js
+#!category= 北京交警
 
 [Script]
 北京交警Authorization = type=http-request,pattern=^https:\/\/jjz\.jtgl\.beijing\.gov\.cn(:\d+)?\/pro\/.*,requires-body=0,max-size=0,debug=0,script-path=https://raw.githubusercontent.com/HerbertGao/jjz-alert/refs/heads/master/modules/js/jjz.js,script-update-interval=0
 
 [MITM]
-hostname = %APPEND% jjz.jtgl.beijing.gov.cn
+hostname = %APPEND% jjz.jtgl.beijing.gov.cn:0
