@@ -1,7 +1,6 @@
 from utils.http import http_post
 
-def check_jjz_status(token):
-    url = "https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList"
+def check_jjz_status(url, token):
     headers = {
         "Authorization": token,
         "Content-Type": "application/json"

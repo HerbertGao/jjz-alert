@@ -11,7 +11,7 @@ def main():
     print(f'[INFO] 读取到 {len(users)} 个用户配置')
     for idx, user in enumerate(users, 1):
         try:
-            data = check_jjz_status(user['jjz_token'])
+            data = check_jjz_status(user.get('jjz_url'), user['jjz_token'])
             if 'error' in data:
                 print(f'[ERROR] 用户{idx} 查询失败: {data["error"]}')
                 result = push_bark('进京证查询失败', None, data['error'], user['bark_server'],

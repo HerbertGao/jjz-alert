@@ -29,6 +29,7 @@ def get_users():
         bark_encrypt = os.getenv(f'USER{idx}_BARK_ENCRYPT', 'false').lower() == 'true'
         bark_encrypt_key = os.getenv(f'USER{idx}_BARK_ENCRYPT_KEY') if bark_encrypt else None
         bark_encrypt_iv = os.getenv(f'USER{idx}_BARK_ENCRYPT_IV') if bark_encrypt else None
+        jjz_url = os.getenv(f'USER{idx}_JJZ_URL')
         if not jjz_token or not bark_server:
             break
         users.append({
@@ -36,7 +37,8 @@ def get_users():
             'bark_server': bark_server.rstrip('/'),
             'bark_encrypt': bark_encrypt,
             'bark_encrypt_key': bark_encrypt_key,
-            'bark_encrypt_iv': bark_encrypt_iv
+            'bark_encrypt_iv': bark_encrypt_iv,
+            'jjz_url': jjz_url
         })
         idx += 1
     return users 
