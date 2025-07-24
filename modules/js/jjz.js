@@ -3,11 +3,23 @@ const $ = new Env("北京交警Authorization");
 const headers = $request.headers;
 const url = $request.url;
 
+function extractPort(url) {
+  try {
+    const m = url.match(/^https?:\/\/[^:]+:(\d+)\//);
+    if (m) return m[1];
+    // 没有端口时返回默认
+    return url.startsWith('https://') ? '443' : '80';
+  } catch {
+    return '未知';
+  }
+}
+
 (async function main() {
   const auth = headers["Authorization"] || headers["authorization"];
+  const port = extractPort(url);
   if (auth) {
     // 通知并复制到剪切板
-    $.msg("🚦北京交警", "已抓取到Authorization，点击通知后可复制到剪切板", auth, {"update-pasteboard": auth});
+    $.msg("🚦北京交警", `已抓取到Authorization（端口:${port}），点击通知后可复制到剪切板`, auth, {"update-pasteboard": auth});
     $.setdata(auth, "jjz_authorization");
   }
 })().catch(e => {
