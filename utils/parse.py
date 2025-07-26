@@ -16,7 +16,9 @@ def parse_status(data):
             try:
                 if end_date:
                     end_dt = datetime.datetime.strptime(end_date, '%Y-%m-%d')
-                    days_left = (end_dt - datetime.datetime.now()).days
+                    # 使用当前日期的0点时间来计算，避免时分秒影响天数计算
+                    now_date = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                    days_left = (end_dt - now_date).days
                 else:
                     days_left = '无'
             except Exception as e:
