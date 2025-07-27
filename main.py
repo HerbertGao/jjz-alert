@@ -29,7 +29,11 @@ def main():
                     if '（' in jjz_type_short and '）' in jjz_type_short:
                         jjz_type_short = jjz_type_short.split('（')[1].split('）')[0]
                     
-                    msg = f"车牌 {info['plate']} 的进京证（{jjz_type_short}）状态：{info['status']}，有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
+                    # 根据状态决定是否显示有效期和剩余天数
+                    if info['status'] == '审核通过(生效中)':
+                        msg = f"车牌 {info['plate']} 的进京证（{jjz_type_short}）状态：{info['status']}，有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
+                    else:
+                        msg = f"车牌 {info['plate']} 的进京证（{jjz_type_short}）状态：{info['status']}。"
                     level = BarkLevel.CRITICAL if info['status'] != '审核通过(生效中)' else BarkLevel.ACTIVE
                     result = push_bark('进京证状态', None, msg, user['bark_server'],
                               encrypt=user.get('bark_encrypt', False),
