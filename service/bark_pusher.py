@@ -2,6 +2,7 @@ from enum import Enum
 from urllib.parse import urlencode
 from utils.crypto import encrypt_body
 from utils.http import http_get
+from config.config import get_default_icon
 
 class BarkLevel(Enum):
     CRITICAL = 'critical'
@@ -17,6 +18,11 @@ def push_bark(title, subtitle, body, server, encrypt=False, encrypt_key=None, en
     level_value = level.value if isinstance(level, BarkLevel) else (level if level else None)
     url = server.rstrip('/')
     query = {}
+
+    # 添加默认的icon参数
+    default_icon = get_default_icon()
+    if 'icon' not in kwargs:
+        kwargs['icon'] = default_icon
 
     if encrypt:
         payload = {}

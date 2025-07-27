@@ -20,25 +20,57 @@ def get_remind_times():
             continue
     return result
 
+def get_default_icon():
+    """获取默认的Bark推送图标URL"""
+    return os.getenv('BARK_DEFAULT_ICON', 'https://pp.myapp.com/ma_icon/0/icon_42285886_1752238397/256')
+
 def get_users():
     users = []
     idx = 1
     while True:
         jjz_token = os.getenv(f'USER{idx}_JJZ_TOKEN')
-        bark_server = os.getenv(f'USER{idx}_BARK_SERVER')
-        bark_encrypt = os.getenv(f'USER{idx}_BARK_ENCRYPT', 'false').lower() == 'true'
-        bark_encrypt_key = os.getenv(f'USER{idx}_BARK_ENCRYPT_KEY') if bark_encrypt else None
-        bark_encrypt_iv = os.getenv(f'USER{idx}_BARK_ENCRYPT_IV') if bark_encrypt else None
         jjz_url = os.getenv(f'USER{idx}_JJZ_URL')
-        if not jjz_token or not bark_server:
+        if not jjz_token or not jjz_url:
             break
-        users.append({
-            'jjz_token': jjz_token,
-            'bark_server': bark_server.rstrip('/'),
-            'bark_encrypt': bark_encrypt,
-            'bark_encrypt_key': bark_encrypt_key,
-            'bark_encrypt_iv': bark_encrypt_iv,
-            'jjz_url': jjz_url
-        })
+        
+        # 获取该用户的所有bark配置
+        bark_configs = []
+        bark_idx = 1
+        while True:
+            bark_server = os.getenv(f'USER{idx}_BARK{bark_idx}_SERVER')
+            if not bark_server:
+                break
+            bark_encrypt = os.getenv(f'USER{idx}_BARK{bark_idx}_ENCRYPT', 'false').lower() == 'true'
+            bark_encrypt_key = os.getenv(f'USER{idx}_BARK{bark_idx}_ENCRYPT_KEY') if bark_encrypt else None
+            bark_encrypt_iv = os.getenv(f'USER{idx}_BARK{bark_idx}_ENCRYPT_IV') if bark_encrypt else None
+            
+            bark_configs.append({
+                'bark_server': bark_server.rstrip('/'),
+                'bark_encrypt': bark_encrypt,
+                'bark_encrypt_key': bark_encrypt_key,
+                'bark_encrypt_iv': bark_encrypt_iv,
+            })
+            bark_idx += 1
+        
+        # 如果没有配置bark，使用旧的配置格式作为兼容
+        if not bark_configs:
+            bark_server = os.getenv(f'USER{idx}_BARK_SERVER')
+            if bark_server:
+                bark_encrypt = os.getenv(f'USER{idx}_BARK_ENCRYPT', 'false').lower() == 'true'
+                bark_encrypt_key = os.getenv(f'USER{idx}_BARK_ENCRYPT_KEY') if bark_encrypt else None
+                bark_encrypt_iv = os.getenv(f'USER{idx}_BARK_ENCRYPT_IV') if bark_encrypt else None
+                bark_configs.append({
+                    'bark_server': bark_server.rstrip('/'),
+                    'bark_encrypt': bark_encrypt,
+                    'bark_encrypt_key': bark_encrypt_key,
+                    'bark_encrypt_iv': bark_encrypt_iv,
+                })
+        
+        if bark_configs:
+            users.append({
+                'jjz_token': jjz_token,
+                'jjz_url': jjz_url,
+                'bark_configs': bark_configs
+            })
         idx += 1
     return users 
