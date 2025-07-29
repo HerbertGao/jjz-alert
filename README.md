@@ -9,6 +9,7 @@ JJZ-Alert 是一个自动化进京证有效期提醒工具，支持多用户配�
 - 多用户、多 Token 支持
 - 支持一个jjz_token对应多个bark配置
 - **支持为每个用户配置单独的推送图标**
+- **支持YAML格式配置文件管理（简洁数组格式）**
 - 自动查询进京证状态
 - Bark 推送（支持加密）
 - 自动添加推送图标
@@ -28,56 +29,53 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. 配置 `.env` 文件
+### 2. 配置
 
-#### 基础配置（单bark）
+创建 `config.yaml` 文件：
 
-```ini
-# 定时提醒相关配置
-REMIND_ENABLE=true         # true=定时提醒，false=只执行一次
-REMIND_TIMES=7:00,19:00   # 每天几点提醒，多个时间用英文逗号分隔
+```yaml
+# 全局配置
+global:
+  # 定时提醒相关配置
+  remind:
+    enable: true
+    times: ["08:00", "12:00", "18:00"]
+  
+  # Bark推送默认图标（可选）
+  bark_default_icon: "https://pp.myapp.com/ma_icon/0/icon_42285886_1752238397/256"
 
-# Bark推送默认图标（可选）
-BARK_DEFAULT_ICON=https://pp.myapp.com/ma_icon/0/icon_42285886_1752238397/256
+# 用户配置（数组形式）
+users:
+  # 用户1配置
+  - name: "user1"
+    jjz:
+      token: "your_jjz_token_here"
+      url: "https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList"
+    
+    bark_configs:
+      # Bark配置1 - 使用自定义图标
+      - server: "https://api.day.app/your_device_key_1"
+        encrypt: false
+        icon: "https://example.com/user1_icon1.png"
+      
+      # Bark配置2 - 使用自定义图标
+      - server: "https://api.day.app/your_device_key_2"
+        encrypt: true
+        encrypt_key: "your_16_char_key"
+        encrypt_iv: "your_16_char_iv"
+        icon: "https://example.com/user1_icon2.png"
 
-USER1_JJZ_URL=https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList
-USER1_JJZ_TOKEN=你的进京证Token
-USER1_BARK_SERVER=https://api.day.app/你的deviceKey
-USER1_BARK_ENCRYPT=false
-# 如需加密推送
-# USER1_BARK_ENCRYPT_KEY=16位密钥
-# USER1_BARK_ENCRYPT_IV=16位IV
-# 可继续添加 USER2_... USER3_... 等
-```
-
-#### 高级配置（多bark支持）
-
-```ini
-# 定时提醒相关配置
-REMIND_ENABLE=true
-REMIND_TIMES=7:00,19:00
-
-# Bark推送默认图标（可选）
-BARK_DEFAULT_ICON=https://pp.myapp.com/ma_icon/0/icon_42285886_1752238397/256
-
-# 用户1配置
-USER1_JJZ_URL=https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList
-USER1_JJZ_TOKEN=你的进京证Token
-
-# 用户1的多个bark配置
-USER1_BARK1_SERVER=https://api.day.app/你的deviceKey1
-USER1_BARK1_ENCRYPT=false
-USER1_BARK1_ICON=https://example.com/icon1.png
-
-USER1_BARK2_SERVER=https://api.day.app/你的deviceKey2
-USER1_BARK2_ENCRYPT=true
-USER1_BARK2_ENCRYPT_KEY=16位密钥
-USER1_BARK2_ENCRYPT_IV=16位IV
-USER1_BARK2_ICON=https://example.com/icon2.png
-
-USER1_BARK3_SERVER=https://api.day.app/你的deviceKey3
-USER1_BARK3_ENCRYPT=false
-# 不设置USER1_BARK3_ICON，将使用默认图标
+  # 用户2配置
+  - name: "user2"
+    jjz:
+      token: "your_jjz_token_2_here"
+      url: "https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList"
+    
+    bark_configs:
+      # 用户2的bark配置 - 使用自定义图标
+      - server: "https://api.day.app/your_device_key_4"
+        encrypt: false
+        icon: "https://example.com/user2_icon.png"
 ```
 
 ### 3. 运行
@@ -86,125 +84,198 @@ USER1_BARK3_ENCRYPT=false
 python main.py
 ```
 
+## 简洁数组格式优势
+
+YAML配置使用简洁的数组格式，具有以下优势：
+- **更规范的配置结构**：标准的数组格式，便于程序处理
+- **支持动态数量**：可以轻松添加或删除用户和bark配置
+- **便于遍历**：程序可以轻松遍历所有配置项
+- **支持配置验证**：便于进行类型检查和验证
+- **版本控制友好**：配置变更更容易跟踪和比较
+- **简洁易读**：移除冗余字段，配置更加简洁
+
 ## 多Bark配置说明
 
-现在支持为每个用户配置多个bark推送服务，这样可以：
+### 配置格式
 
-- 同时向多个设备推送通知
-- 配置不同的推送策略（如一个用于紧急通知，一个用于日常提醒）
-- 提高通知的可靠性
+每个用户可以有多个bark配置，使用数组格式：
 
-配置格式：`USER{n}_BARK{m}_SERVER`，其中：
+```yaml
+users:
+  - name: "user1"
+    jjz:
+      token: "your_token"
+      url: "https://api.example.com"
+    bark_configs:
+      - server: "https://api.day.app/key1"
+        encrypt: false
+        icon: "https://example.com/icon1.png"
+      - server: "https://api.day.app/key2"
+        encrypt: true
+        encrypt_key: "your_key"
+        encrypt_iv: "your_iv"
+        icon: "https://example.com/icon2.png"
+```
 
-- `n` 是用户编号（1, 2, 3...）
-- `m` 是该用户的bark配置编号（1, 2, 3...）
+### 使用场景
 
-详细配置说明请参考 [CONFIG_GUIDE.md](CONFIG_GUIDE.md)
+1. **多设备推送**：同时向手机、平板等多个设备推送
+2. **不同推送策略**：一个用于紧急通知，一个用于日常提醒
+3. **提高可靠性**：多个推送服务互为备份
+4. **个性化图标**：为不同设备配置不同的推送图标
 
 ## 推送图标功能
 
-所有Bark推送都会自动添加图标，让通知更加美观：
+### 图标优先级
 
-- **全局默认图标**：可通过 `BARK_DEFAULT_ICON` 环境变量设置
-- **用户特定图标**：每个用户可以为每个bark配置设置单独的图标
-- **图标优先级**：用户特定图标 > 全局默认图标 > 内置默认图标
-- 支持任何可访问的图片URL
+1. **用户特定图标**：`users[].bark_configs[].icon`（最高优先级）
+2. **全局默认图标**：`global.bark_default_icon`
+3. **内置默认图标**：系统内置图标（最低优先级）
 
-### 图标配置示例
+### 图标要求
 
-```ini
-# 全局默认图标
-BARK_DEFAULT_ICON=https://example.com/default_icon.png
-
-# 用户1的bark1使用自定义图标
-USER1_BARK1_ICON=https://example.com/user1_icon.png
-
-# 用户1的bark2不设置图标，将使用全局默认图标
-# USER1_BARK2_ICON=  # 不设置
-
-# 用户2的bark1使用自定义图标
-USER2_BARK1_ICON=https://example.com/user2_icon.png
-```
-
-## 状态显示格式
-
-系统采用智能状态显示格式，让通知更加简洁：
-
-### 状态格式化规则
-
-- **包含"审核通过"的状态**：只显示括号内的内容
-  - `审核通过(生效中)` → `生效中`
-  - `审核通过(已失效)` → `已失效`
-  - `审核通过(待生效)` → `待生效`
-- **其他状态**：显示完整状态
-  - `审核不通过` → `审核不通过`
-  - `审核中` → `审核中`
-  - `已取消` → `已取消`
-
-## 尾号限行提醒功能
-
-系统会自动查询北京尾号限行政策，并在推送中标识限行车辆：
-
-### 功能特点
-
-- **自动获取限行规则**：每日缓存一次限行政策，避免重复请求
-- **智能尾号识别**：支持数字尾号和字母尾号（字母按0处理）
-- **限行标识**：限行车辆会在车牌号后显示"（今日限行）"
-- **反爬虫处理**：使用 curl_cffi 库绕过 TLS 指纹检测
-
-### 尾号处理规则
-
-- 数字尾号：直接使用数字（如 津A12345 → 尾号5）
-- 字母尾号：按0处理（如 沪C1234A → 尾号0）
-- 限行判断：根据当日限行规则自动判断
-
-### 缓存机制
-
-- 每日首次查询时自动更新缓存
-- 缓存有效期：1天（自然日）
-- 支持未来一周限行规则查询
-
-## 定时提醒说明
-
-- `REMIND_ENABLE=true` 时，程序会在 `REMIND_TIMES` 指定的时间点每天自动提醒。
-- `REMIND_ENABLE=false` 时，程序启动后只会立即执行一次提醒，不再定时。
-- `REMIND_TIMES` 格式为 `HH:MM,HH:MM`，如 `7:00,19:00` 表示每天 7:00 和 19:00 各提醒一次。
+- 必须是可访问的HTTP/HTTPS链接
+- 建议使用PNG或JPG格式
+- 建议尺寸为256x256像素或更大
+- 文件大小建议不超过1MB
 
 ## Docker 部署
 
+### 使用 Docker Compose
+
+1. **创建配置文件**：
+   ```bash
+   cp config.yaml.example config.yaml
+   # 编辑 config.yaml 文件
+   ```
+
+2. **启动服务**：
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **查看日志**：
+   ```bash
+   docker-compose logs -f
+   ```
+
+### 使用 Docker 命令
+
 ```bash
-# 使用 docker-compose
-docker-compose up -d
+docker run -d \
+  --name jjz-alert \
+  --restart unless-stopped \
+  -v $(pwd)/config.yaml:/app/config.yaml:ro \
+  ghcr.io/herbertgao/jjz-alert:latest
 ```
 
-## GitHub Actions 自动构建
+## 配置说明
 
-推送到 main/master 分支或手动触发 workflow，会自动构建并推送多平台镜像到 `ghcr.io/herbertgao/jjz-alert`。
+### 全局配置 (global)
 
-## 镜像信息
+- `remind.enable`: 是否启用定时提醒（true/false）
+- `remind.times`: 提醒时间列表，格式为 ["HH:MM", "HH:MM"]
+- `bark_default_icon`: Bark推送的默认图标URL（可选）
 
-- 镜像仓库：`ghcr.io/herbertgao/jjz-alert`
-- 支持平台：`linux/amd64`, `linux/arm64`
+### 用户配置 (users[])
 
-## 进京证接口与 Bark 推送说明
+- `name`: 用户名称
+- `jjz.token`: 进京证查询token
+- `jjz.url`: 进京证查询API地址
+- `bark_configs[]`: bark配置数组
 
-- 北京交警接口需配置有效 Token 和 URL（北京交警App和微信小程序的URL端口不同，须区分）
-- Bark 推送格式及加密方式详见 [Bark 官方文档](https://bark.day.app/#/tutorial)
+### Bark配置 (bark_configs[])
 
-## 技术实现
+- `server`: bark服务器地址
+- `encrypt`: 是否启用加密（true/false）
+- `encrypt_key`: 加密密钥（仅在启用加密时需要）
+- `encrypt_iv`: 加密向量（仅在启用加密时需要）
+- `icon`: 推送图标（可选）
 
-### 反爬虫处理
+## 推送级别
 
-- 使用 `curl_cffi` 库替代标准 `requests` 库
-- 支持完整的浏览器级 TLS 指纹模拟
-- 自动处理 SSL 证书和反爬虫检测
+系统会根据进京证状态自动选择合适的推送级别：
 
-### 依赖库说明
+- `critical`: 进京证已过期或即将过期（剩余天数 ≤ 1）
+- `active`: 进京证正常（剩余天数 > 1）
+- `timeSensitive`: 进京证即将过期（剩余天数 ≤ 3）
+- `passive`: 其他情况
 
-- `curl_cffi`：HTTP 请求库，用于绕过 TLS 指纹反爬虫检测
-- `python-dotenv`：环境变量管理
-- `apscheduler`：定时任务调度
+## 定时提醒
 
-## 其他
+### 配置说明
 
-如需自定义推送内容、定时策略或有其它需求，请修改 `main.py` 或联系作者。
+- `remind.enable`: 是否启用定时提醒
+- `remind.times`: 提醒时间列表，格式为 ["HH:MM", "HH:MM"]
+
+### 示例配置
+
+```yaml
+global:
+  remind:
+    enable: true
+    times: ["08:00", "12:00", "18:00"]
+```
+
+### 注意事项
+
+- 时间格式为24小时制，如 "08:00", "12:00", "18:00"
+- 如果 `remind.enable` 为 false，则不会进行定时提醒
+- 程序启动时会立即执行一次查询，然后按配置的时间进行定时提醒
+
+## 加密推送
+
+### 配置说明
+
+如果您的Bark服务启用了加密，需要配置以下参数：
+
+- `encrypt`: 设置为 true
+- `encrypt_key`: 16位字符的加密密钥
+- `encrypt_iv`: 16位字符的加密向量
+
+### 示例配置
+
+```yaml
+bark_configs:
+  - server: "https://api.day.app/your_key"
+    encrypt: true
+    encrypt_key: "your_16_char_key"
+    encrypt_iv: "your_16_char_iv"
+    icon: "https://example.com/icon.png"
+```
+
+## 故障排除
+
+### 常见问题
+
+1. **配置文件不存在**：
+   - 确保 `config.yaml` 文件存在且格式正确
+   - 检查文件权限是否正确
+
+2. **推送失败**：
+   - 检查Bark服务器地址是否正确
+   - 确认网络连接正常
+   - 检查加密配置是否正确
+
+3. **查询失败**：
+   - 检查进京证token是否有效
+   - 确认API地址是否正确
+   - 检查网络连接
+
+### 日志查看
+
+```bash
+# Docker 环境
+docker-compose logs -f
+
+# 本地环境
+python main.py
+```
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 许可证
+
+MIT License

@@ -4,9 +4,7 @@ services:
     restart: unless-stopped # 只需要单次推送则设置为 no
     environment:
       - TZ=Asia/Shanghai
-    env_file:
-      - .env
     volumes:
-      - ./.env:/.env:ro
+      - ./config.yaml:/app/config.yaml:ro
     # 如需自定义命令可取消注释
     # command: ["python", "main.py"] 

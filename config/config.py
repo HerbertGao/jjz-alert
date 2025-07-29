@@ -1,82 +1,137 @@
 import os
-from dotenv import load_dotenv
+import yaml
 
-load_dotenv()
+def load_yaml_config(config_file='config.yaml'):
+    """加载YAML配置文件"""
+    try:
+        if os.path.exists(config_file):
+            with open(config_file, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+    except Exception as e:
+        print(f'[WARN] 无法加载YAML配置文件 {config_file}: {e}')
+    return None
 
 def get_remind_enable():
-    return os.getenv('REMIND_ENABLE', 'true').lower() == 'true'
+    """获取定时提醒开关状态"""
+    yaml_config = load_yaml_config()
+    if yaml_config and 'global' in yaml_config and 'remind' in yaml_config['global']:
+        return yaml_config['global']['remind'].get('enable', True)
+    
+    # 默认值
+    return True
 
 def get_remind_times():
-    times = os.getenv('REMIND_TIMES', '')
-    result = []
-    for t in times.split(','):
-        t = t.strip()
-        if not t:
-            continue
-        try:
-            hour, minute = map(int, t.split(':'))
-            result.append((hour, minute))
-        except Exception:
-            continue
-    return result
+    """获取定时提醒时间列表"""
+    yaml_config = load_yaml_config()
+    if yaml_config and 'global' in yaml_config and 'remind' in yaml_config['global']:
+        times = yaml_config['global']['remind'].get('times', [])
+        result = []
+        for t in times:
+            try:
+                hour, minute = map(int, t.split(':'))
+                result.append((hour, minute))
+            except Exception:
+                continue
+        return result
+    
+    # 默认值
+    return []
 
 def get_default_icon():
     """获取默认的Bark推送图标URL"""
-    return os.getenv('BARK_DEFAULT_ICON', 'https://pp.myapp.com/ma_icon/0/icon_42285886_1752238397/256')
+    yaml_config = load_yaml_config()
+    if yaml_config and 'global' in yaml_config:
+        return yaml_config['global'].get('bark_default_icon', 'https://pp.myapp.com/ma_icon/0/icon_42285886_1752238397/256')
+    
+    # 默认值
+    return 'https://pp.myapp.com/ma_icon/0/icon_42285886_1752238397/256'
 
 def get_users():
+    """获取用户配置列表"""
+    yaml_config = load_yaml_config()
+    if yaml_config and 'users' in yaml_config:
+        return parse_yaml_users(yaml_config['users'])
+    
+    # 如果没有配置，返回空列表
+    return []
+
+def parse_yaml_users(users_config):
+    """解析YAML格式的用户配置（支持数组格式）"""
     users = []
-    idx = 1
-    while True:
-        jjz_token = os.getenv(f'USER{idx}_JJZ_TOKEN')
-        jjz_url = os.getenv(f'USER{idx}_JJZ_URL')
-        if not jjz_token or not jjz_url:
-            break
-        
-        # 获取该用户的所有bark配置
-        bark_configs = []
-        bark_idx = 1
-        while True:
-            bark_server = os.getenv(f'USER{idx}_BARK{bark_idx}_SERVER')
-            if not bark_server:
-                break
-            bark_encrypt = os.getenv(f'USER{idx}_BARK{bark_idx}_ENCRYPT', 'false').lower() == 'true'
-            bark_encrypt_key = os.getenv(f'USER{idx}_BARK{bark_idx}_ENCRYPT_KEY') if bark_encrypt else None
-            bark_encrypt_iv = os.getenv(f'USER{idx}_BARK{bark_idx}_ENCRYPT_IV') if bark_encrypt else None
-            # 获取用户特定的图标配置，如果没有配置则使用默认图标
-            bark_icon = os.getenv(f'USER{idx}_BARK{bark_idx}_ICON', get_default_icon())
+    default_icon = get_default_icon()
+    
+    # 检查是否为数组格式
+    if isinstance(users_config, list):
+        # 数组格式：users: [{name: "user1", ...}, {name: "user2", ...}]
+        for user_config in users_config:
+            if 'jjz' not in user_config or 'bark_configs' not in user_config:
+                continue
+                
+            jjz_config = user_config['jjz']
+            bark_configs = []
             
-            bark_configs.append({
-                'bark_server': bark_server.rstrip('/'),
-                'bark_encrypt': bark_encrypt,
-                'bark_encrypt_key': bark_encrypt_key,
-                'bark_encrypt_iv': bark_encrypt_iv,
-                'bark_icon': bark_icon,
-            })
-            bark_idx += 1
-        
-        # 如果没有配置bark，使用旧的配置格式作为兼容
-        if not bark_configs:
-            bark_server = os.getenv(f'USER{idx}_BARK_SERVER')
-            if bark_server:
-                bark_encrypt = os.getenv(f'USER{idx}_BARK_ENCRYPT', 'false').lower() == 'true'
-                bark_encrypt_key = os.getenv(f'USER{idx}_BARK_ENCRYPT_KEY') if bark_encrypt else None
-                bark_encrypt_iv = os.getenv(f'USER{idx}_BARK_ENCRYPT_IV') if bark_encrypt else None
-                # 获取用户特定的图标配置，如果没有配置则使用默认图标
-                bark_icon = os.getenv(f'USER{idx}_BARK_ICON', get_default_icon())
-                bark_configs.append({
-                    'bark_server': bark_server.rstrip('/'),
-                    'bark_encrypt': bark_encrypt,
-                    'bark_encrypt_key': bark_encrypt_key,
-                    'bark_encrypt_iv': bark_encrypt_iv,
-                    'bark_icon': bark_icon,
+            # 检查bark_configs是否为数组格式
+            if isinstance(user_config['bark_configs'], list):
+                for bark_config in user_config['bark_configs']:
+                    bark_configs.append({
+                        'bark_server': bark_config['server'].rstrip('/'),
+                        'bark_encrypt': bark_config.get('encrypt', False),
+                        'bark_encrypt_key': bark_config.get('encrypt_key'),
+                        'bark_encrypt_iv': bark_config.get('encrypt_iv'),
+                        'bark_icon': bark_config.get('icon', default_icon),
+                    })
+            else:
+                # 兼容旧的对象格式
+                for bark_key, bark_config in user_config['bark_configs'].items():
+                    bark_configs.append({
+                        'bark_server': bark_config['server'].rstrip('/'),
+                        'bark_encrypt': bark_config.get('encrypt', False),
+                        'bark_encrypt_key': bark_config.get('encrypt_key'),
+                        'bark_encrypt_iv': bark_config.get('encrypt_iv'),
+                        'bark_icon': bark_config.get('icon', default_icon),
+                    })
+            
+            if bark_configs:
+                users.append({
+                    'jjz_token': jjz_config['token'],
+                    'jjz_url': jjz_config['url'],
+                    'bark_configs': bark_configs
                 })
-        
-        if bark_configs:
-            users.append({
-                'jjz_token': jjz_token,
-                'jjz_url': jjz_url,
-                'bark_configs': bark_configs
-            })
-        idx += 1
+    else:
+        # 兼容旧的对象格式：users: {user1: {...}, user2: {...}}
+        for user_key, user_config in users_config.items():
+            if 'jjz' not in user_config or 'bark_configs' not in user_config:
+                continue
+                
+            jjz_config = user_config['jjz']
+            bark_configs = []
+            
+            # 检查bark_configs是否为数组格式
+            if isinstance(user_config['bark_configs'], list):
+                for bark_config in user_config['bark_configs']:
+                    bark_configs.append({
+                        'bark_server': bark_config['server'].rstrip('/'),
+                        'bark_encrypt': bark_config.get('encrypt', False),
+                        'bark_encrypt_key': bark_config.get('encrypt_key'),
+                        'bark_encrypt_iv': bark_config.get('encrypt_iv'),
+                        'bark_icon': bark_config.get('icon', default_icon),
+                    })
+            else:
+                # 兼容旧的对象格式
+                for bark_key, bark_config in user_config['bark_configs'].items():
+                    bark_configs.append({
+                        'bark_server': bark_config['server'].rstrip('/'),
+                        'bark_encrypt': bark_config.get('encrypt', False),
+                        'bark_encrypt_key': bark_config.get('encrypt_key'),
+                        'bark_encrypt_iv': bark_config.get('encrypt_iv'),
+                        'bark_icon': bark_config.get('icon', default_icon),
+                    })
+            
+            if bark_configs:
+                users.append({
+                    'jjz_token': jjz_config['token'],
+                    'jjz_url': jjz_config['url'],
+                    'bark_configs': bark_configs
+                })
+    
     return users 
