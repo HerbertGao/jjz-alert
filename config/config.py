@@ -43,12 +43,15 @@ def get_users():
             bark_encrypt = os.getenv(f'USER{idx}_BARK{bark_idx}_ENCRYPT', 'false').lower() == 'true'
             bark_encrypt_key = os.getenv(f'USER{idx}_BARK{bark_idx}_ENCRYPT_KEY') if bark_encrypt else None
             bark_encrypt_iv = os.getenv(f'USER{idx}_BARK{bark_idx}_ENCRYPT_IV') if bark_encrypt else None
+            # 获取用户特定的图标配置，如果没有配置则使用默认图标
+            bark_icon = os.getenv(f'USER{idx}_BARK{bark_idx}_ICON', get_default_icon())
             
             bark_configs.append({
                 'bark_server': bark_server.rstrip('/'),
                 'bark_encrypt': bark_encrypt,
                 'bark_encrypt_key': bark_encrypt_key,
                 'bark_encrypt_iv': bark_encrypt_iv,
+                'bark_icon': bark_icon,
             })
             bark_idx += 1
         
@@ -59,11 +62,14 @@ def get_users():
                 bark_encrypt = os.getenv(f'USER{idx}_BARK_ENCRYPT', 'false').lower() == 'true'
                 bark_encrypt_key = os.getenv(f'USER{idx}_BARK_ENCRYPT_KEY') if bark_encrypt else None
                 bark_encrypt_iv = os.getenv(f'USER{idx}_BARK_ENCRYPT_IV') if bark_encrypt else None
+                # 获取用户特定的图标配置，如果没有配置则使用默认图标
+                bark_icon = os.getenv(f'USER{idx}_BARK_ICON', get_default_icon())
                 bark_configs.append({
                     'bark_server': bark_server.rstrip('/'),
                     'bark_encrypt': bark_encrypt,
                     'bark_encrypt_key': bark_encrypt_key,
                     'bark_encrypt_iv': bark_encrypt_iv,
+                    'bark_icon': bark_icon,
                 })
         
         if bark_configs:

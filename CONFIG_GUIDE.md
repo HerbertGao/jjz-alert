@@ -7,6 +7,7 @@
 - 同时向多个设备推送通知
 - 配置不同的推送策略（如一个用于紧急通知，一个用于日常提醒）
 - 提高通知的可靠性
+- **为每个用户配置单独的推送图标**
 
 ## 配置格式
 
@@ -38,18 +39,21 @@ USER1_BARK1_SERVER=https://api.day.app/your_bark_key_1
 USER1_BARK1_ENCRYPT=false
 USER1_BARK1_ENCRYPT_KEY=
 USER1_BARK1_ENCRYPT_IV=
+USER1_BARK1_ICON=https://example.com/icon1.png
 
 # Bark配置2
 USER1_BARK2_SERVER=https://api.day.app/your_bark_key_2
 USER1_BARK2_ENCRYPT=true
 USER1_BARK2_ENCRYPT_KEY=your_encrypt_key_2
 USER1_BARK2_ENCRYPT_IV=your_encrypt_iv_2
+USER1_BARK2_ICON=https://example.com/icon2.png
 
 # Bark配置3
 USER1_BARK3_SERVER=https://api.day.app/your_bark_key_3
 USER1_BARK3_ENCRYPT=false
 USER1_BARK3_ENCRYPT_KEY=
 USER1_BARK3_ENCRYPT_IV=
+# 不设置USER1_BARK3_ICON，将使用默认图标
 
 # 用户2配置
 USER2_JJZ_TOKEN=your_jjz_token_2_here
@@ -60,6 +64,7 @@ USER2_BARK1_SERVER=https://api.day.app/your_bark_key_4
 USER2_BARK1_ENCRYPT=false
 USER2_BARK1_ENCRYPT_KEY=
 USER2_BARK1_ENCRYPT_IV=
+USER2_BARK1_ICON=https://example.com/user2_icon.png
 ```
 
 ### 配置说明
@@ -73,6 +78,7 @@ USER2_BARK1_ENCRYPT_IV=
 - `USER{n}_BARK{m}_ENCRYPT`: 第n个用户的第m个bark是否启用加密（true/false）
 - `USER{n}_BARK{m}_ENCRYPT_KEY`: 第n个用户的第m个bark加密密钥（仅在启用加密时需要）
 - `USER{n}_BARK{m}_ENCRYPT_IV`: 第n个用户的第m个bark加密向量（仅在启用加密时需要）
+- `USER{n}_BARK{m}_ICON`: 第n个用户的第m个bark推送图标URL（可选，如果不设置会使用默认图标）
 
 ### 兼容性
 
@@ -84,7 +90,39 @@ USER1_BARK_SERVER=https://api.day.app/your_old_bark_key
 USER1_BARK_ENCRYPT=false
 USER1_BARK_ENCRYPT_KEY=
 USER1_BARK_ENCRYPT_IV=
+USER1_BARK_ICON=https://example.com/old_icon.png
 ```
+
+## 图标配置说明
+
+### 图标优先级
+
+1. **用户特定图标** (`USER{n}_BARK{m}_ICON`): 最高优先级，为特定用户的特定bark配置设置图标
+2. **默认图标** (`BARK_DEFAULT_ICON`): 中等优先级，全局默认图标
+3. **内置默认图标**: 最低优先级，系统内置的默认图标
+
+### 图标配置示例
+
+```bash
+# 全局默认图标
+BARK_DEFAULT_ICON=https://example.com/default_icon.png
+
+# 用户1的bark1使用自定义图标
+USER1_BARK1_ICON=https://example.com/user1_icon.png
+
+# 用户1的bark2不设置图标，将使用全局默认图标
+# USER1_BARK2_ICON=  # 不设置
+
+# 用户2的bark1使用自定义图标
+USER2_BARK1_ICON=https://example.com/user2_icon.png
+```
+
+### 图标要求
+
+- 图标URL必须是可访问的HTTP/HTTPS链接
+- 建议使用PNG或JPG格式
+- 图标尺寸建议为256x256像素或更大
+- 图标文件大小建议不超过1MB
 
 ## 状态显示格式
 

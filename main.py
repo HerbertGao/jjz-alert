@@ -35,7 +35,8 @@ def main():
                               encrypt=bark_config.get('bark_encrypt', False),
                               encrypt_key=bark_config.get('bark_encrypt_key'),
                               encrypt_iv=bark_config.get('bark_encrypt_iv'),
-                              level=BarkLevel.CRITICAL)
+                              level=BarkLevel.CRITICAL,
+                              icon=bark_config.get('bark_icon'))
                     print(f'[INFO] 用户{idx} Bark{bark_idx}推送结果: {result}')
                 continue
             all_status = parse_status(data)
@@ -66,7 +67,8 @@ def main():
                                   encrypt=bark_config.get('bark_encrypt', False),
                                   encrypt_key=bark_config.get('bark_encrypt_key'),
                                   encrypt_iv=bark_config.get('bark_encrypt_iv'),
-                                  level=level)
+                                  level=level,
+                                  icon=bark_config.get('bark_icon'))
                         print(f'[INFO] 用户{idx} Bark{bark_idx} {info["plate"]} 推送结果: {result}')
             else:
                 print(f'[WARN] 用户{idx} 未获取到任何进京证信息')

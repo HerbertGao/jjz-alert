@@ -8,6 +8,7 @@ JJZ-Alert 是一个自动化进京证有效期提醒工具，支持多用户配�
 
 - 多用户、多 Token 支持
 - 支持一个jjz_token对应多个bark配置
+- **支持为每个用户配置单独的推送图标**
 - 自动查询进京证状态
 - Bark 推送（支持加密）
 - 自动添加推送图标
@@ -66,14 +67,17 @@ USER1_JJZ_TOKEN=你的进京证Token
 # 用户1的多个bark配置
 USER1_BARK1_SERVER=https://api.day.app/你的deviceKey1
 USER1_BARK1_ENCRYPT=false
+USER1_BARK1_ICON=https://example.com/icon1.png
 
 USER1_BARK2_SERVER=https://api.day.app/你的deviceKey2
 USER1_BARK2_ENCRYPT=true
 USER1_BARK2_ENCRYPT_KEY=16位密钥
 USER1_BARK2_ENCRYPT_IV=16位IV
+USER1_BARK2_ICON=https://example.com/icon2.png
 
 USER1_BARK3_SERVER=https://api.day.app/你的deviceKey3
 USER1_BARK3_ENCRYPT=false
+# 不设置USER1_BARK3_ICON，将使用默认图标
 ```
 
 ### 3. 运行
@@ -99,11 +103,28 @@ python main.py
 
 ## 推送图标功能
 
-所有Bark推送都会自动添加默认图标，让通知更加美观：
+所有Bark推送都会自动添加图标，让通知更加美观：
 
-- 默认使用进京证相关的图标
-- 可通过 `BARK_DEFAULT_ICON` 环境变量自定义图标URL
+- **全局默认图标**：可通过 `BARK_DEFAULT_ICON` 环境变量设置
+- **用户特定图标**：每个用户可以为每个bark配置设置单独的图标
+- **图标优先级**：用户特定图标 > 全局默认图标 > 内置默认图标
 - 支持任何可访问的图片URL
+
+### 图标配置示例
+
+```ini
+# 全局默认图标
+BARK_DEFAULT_ICON=https://example.com/default_icon.png
+
+# 用户1的bark1使用自定义图标
+USER1_BARK1_ICON=https://example.com/user1_icon.png
+
+# 用户1的bark2不设置图标，将使用全局默认图标
+# USER1_BARK2_ICON=  # 不设置
+
+# 用户2的bark1使用自定义图标
+USER2_BARK1_ICON=https://example.com/user2_icon.png
+```
 
 ## 状态显示格式
 

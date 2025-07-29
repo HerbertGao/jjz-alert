@@ -19,10 +19,9 @@ def push_bark(title, subtitle, body, server, encrypt=False, encrypt_key=None, en
     url = server.rstrip('/')
     query = {}
 
-    # 添加默认的icon参数
-    default_icon = get_default_icon()
+    # 如果没有传入icon参数，则使用默认图标
     if 'icon' not in kwargs:
-        kwargs['icon'] = default_icon
+        kwargs['icon'] = get_default_icon()
 
     if encrypt:
         payload = {}
