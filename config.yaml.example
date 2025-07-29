@@ -11,58 +11,78 @@ global:
   # Bark推送默认图标（可选）
   bark_default_icon: "https://pp.myapp.com/ma_icon/0/icon_42285886_1752238397/256"
 
-# 用户配置（数组形式）
-users:
-  # 用户1配置
-  - name: "user1"
+# 进京证账户配置（用于抓取数据）
+# 每个账户可以绑定多个车牌号，系统会抓取该账户下的所有车辆信息
+jjz_accounts:
+  # 账户1配置
+  - name: "账户1"
     jjz:
-      token: "your_jjz_token_here"
       url: "https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList"
-    
+      token: "your_jjz_token_1_here"
+  
+  # 账户2配置
+  - name: "账户2"
+    jjz:
+      url: "https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList"
+      token: "your_jjz_token_2_here"
+
+# 车牌号配置（用于推送通知）
+# 每个车牌号可以配置独立的图标和推送设备
+plate_configs:
+  # 车牌号1配置
+  - plate: "京A12345"
+    plate_icon: "https://example.com/plate1_icon.png"  # 车牌号专用图标
     bark_configs:
-      # Bark配置1 - 使用自定义图标
+      # Bark配置1
       - server: "https://api.day.app/your_device_key_1"
         encrypt: false
-        icon: "https://example.com/user1_icon1.png"
       
-      # Bark配置2 - 使用自定义图标
+      # Bark配置2
       - server: "https://api.day.app/your_device_key_2"
         encrypt: true
         encrypt_key: "your_16_char_key"
         encrypt_iv: "your_16_char_iv"
-        icon: "https://example.com/user1_icon2.png"
+
+  # 车牌号2配置
+  - plate: "京B67890"
+    plate_icon: "https://example.com/plate2_icon.png"  # 车牌号专用图标
+    bark_configs:
+      # Bark配置1
+      - server: "https://api.day.app/your_device_key_1"
+        encrypt: false
       
-      # Bark配置3 - 不设置图标，将使用默认图标
+      # Bark配置2
+      - server: "https://api.day.app/your_device_key_2"
+        encrypt: true
+        encrypt_key: "your_16_char_key"
+        encrypt_iv: "your_16_char_iv"
+
+  # 车牌号3配置（使用默认图标）
+  - plate: "京C11111"
+    # plate_icon: 不设置，将使用全局默认图标
+    bark_configs:
       - server: "https://api.day.app/your_device_key_3"
         encrypt: false
-        # icon: 不设置，将使用全局默认图标
-
-  # 用户2配置
-  - name: "user2"
-    jjz:
-      token: "your_jjz_token_2_here"
-      url: "https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList"
-    
-    bark_configs:
-      # 用户2的bark配置 - 使用自定义图标
-      - server: "https://api.day.app/your_device_key_4"
-        encrypt: false
-        icon: "https://example.com/user2_icon.png"
-
-  # 用户3配置示例
-  # - name: "user3"
-  #   jjz:
-  #     token: "your_jjz_token_3_here"
-  #     url: "https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList"
-  #   bark_configs:
-  #     - server: "https://api.day.app/your_device_key_5"
-  #       encrypt: false
-  #       icon: "https://example.com/user3_icon.png"
 
 # 配置说明：
-# 1. 用户特定图标优先级最高：users[].bark_configs[].icon
-# 2. 全局默认图标：global.bark_default_icon
-# 3. 内置默认图标：系统内置图标（最低优先级）
+# 1. jjz_accounts：进京证账户配置，用于抓取数据
+#    - 每个账户可以绑定多个车牌号
+#    - 系统会抓取该账户下的所有车辆信息
+#    - 不包含特定车牌号配置
+#
+# 2. plate_configs：车牌号配置，用于推送通知
+#    - 每个车牌号可以配置独立的图标和推送设备
+#    - 系统会根据查询结果匹配对应的车牌号配置
+#
+# 3. 工作流程：
+#    - 遍历所有进京证账户，抓取每个账户下的所有车辆信息
+#    - 根据车牌号匹配对应的plate_configs配置
+#    - 使用匹配的配置进行推送通知
+#
+# 4. 图标优先级：
+#    - 车牌号专用图标：plate_configs[].plate_icon（最高优先级）
+#    - 全局默认图标：global.bark_default_icon
+#    - 内置默认图标：系统内置图标（最低优先级）
 #
 # 图标要求：
 # - 必须是可访问的HTTP/HTTPS链接
@@ -76,9 +96,7 @@ users:
 # - encrypt_key 和 encrypt_iv 必须是16位字符
 # - 仅在 encrypt: true 时需要设置
 #
-# 数组配置优势：
-# - 更规范的配置结构
-# - 支持动态数量的用户和bark配置
-# - 便于程序处理和遍历
-# - 支持配置验证和类型检查
-# - 简洁的配置格式，无需冗余的name字段 
+# 跨账号匹配说明：
+# - 系统会查询所有进京证账户下的所有车辆
+# - 根据车牌号匹配对应的plate_configs配置
+# - 支持跨账号匹配，即A账户的车牌号可以匹配B账户的进京证信息 
