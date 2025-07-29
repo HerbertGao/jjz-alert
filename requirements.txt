@@ -1,3 +1,4 @@
 python-dotenv
 apscheduler
-curl_cffi 
+curl_cffi
+urllib3 
