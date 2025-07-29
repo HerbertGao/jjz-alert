@@ -1,6 +1,7 @@
 from config.config import get_users, get_remind_times, get_remind_enable
 from service.jjz_checker import check_jjz_status
 from service.bark_pusher import push_bark, BarkLevel
+from service.traffic_limiter import traffic_limiter
 from utils.parse import parse_status
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -48,11 +49,15 @@ def main():
                     # 格式化状态显示
                     status_display = format_status_display(info['status'])
                     
+                    # 检查是否限行
+                    is_limited = traffic_limiter.check_plate_limited(info['plate'])
+                    plate_display = f"{info['plate']} （今日限行）" if is_limited else info['plate']
+                    
                     # 根据状态决定是否显示有效期和剩余天数
                     if info['status'] == '审核通过(生效中)':
-                        msg = f"车牌 {info['plate']} 的进京证（{jjz_type_short}）状态：{status_display}，有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
+                        msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{status_display}，有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
                     else:
-                        msg = f"车牌 {info['plate']} 的进京证（{jjz_type_short}）状态：{status_display}。"
+                        msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{status_display}。"
                     level = BarkLevel.CRITICAL if info['status'] != '审核通过(生效中)' else BarkLevel.ACTIVE
                     
                     # 向所有bark配置发送通知
