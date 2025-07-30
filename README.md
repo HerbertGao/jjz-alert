@@ -59,7 +59,7 @@ jjz_accounts:
     jjz:
       token: "your_jjz_token_2_here"
       url: "https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList"
-
+    
 # 车牌号配置（用于推送通知）
 # 每个车牌号可以配置独立的图标和推送设备
 plate_configs:

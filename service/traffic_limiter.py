@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from datetime import datetime, date
 from typing import Dict, List, Optional
 from utils.http import http_get
@@ -8,25 +9,11 @@ class TrafficLimiter:
     def __init__(self):
         self._cache = None
         self._cache_date = None
+        self._cache_status = "uninitialized"  # uninitialized, loading, ready, error
+        self._last_update_time = None
+        self._retry_count = 0
+        self._max_retries = 3
         self._limit_rules_url = "https://yw.jtgl.beijing.gov.cn/jgjxx/services/getRuleWithWeek"
-        self._headers = {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'DNT': '1',
-            'Pragma': 'no-cache',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'cross-site',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0',
-            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Microsoft Edge";v="138"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"macOS"',
-            'Cookie': "_yfx_session_10018414=%7B%22_yfx_firsttime%22%3A%221730079911306%22%2C%22_yfx_lasttime%22%3A%221746677494678%22%2C%22_yfx_visittime%22%3A%221746677494678%22%2C%22_yfx_lastvisittime%22%3A%221746677494678%22%2C%22_yfx_domidgroup%22%3A%221746677494678%22%2C%22_yfx_domallsize%22%3A%22100%22%2C%22_yfx_cookie%22%3A%2220241028094511308301592835466746%22%2C%22_yfx_returncount%22%3A%227%22%2C%22_yfx_searchid%22%3A%221731738394012910%22%7D; sensorsdata2015jssdkcross=%7B%22distinct_id%22%3A%221983713a3004e5-0ee8477f7b2a568-7e433c49-2732424-1983713a301242b%22%7D; _abfpc=5127967bfcf3ae464885b1fdbc4eb03b9c673402_2.0; cna=9c3b19a172af5f7b88e48b51a7dd9df9; _yfx_session_sdzc=%7B%22_yfx_firsttime%22%3A%221753270687054%22%2C%22_yfx_lasttime%22%3A%221753771245282%22%2C%22_yfx_visittime%22%3A%221753771245282%22%2C%22_yfx_lastvisittime%22%3A%221753771245282%22%2C%22_yfx_domidgroup%22%3A%221753771245282%22%2C%22_yfx_domallsize%22%3A%22100%22%2C%22_yfx_cookie%22%3A%2220250723193807057354726895751186%22%2C%22_yfx_userid%22%3A%22868cc808-d2e5-11e9-a53f-24ddeafd3717%22%2C%22_yfx_returncount%22%3A%222%22%7D"
-        }
     
     def _is_same_day(self, date1: date, date2: date) -> bool:
         """检查两个日期是否为同一天"""
@@ -92,11 +79,13 @@ class TrafficLimiter:
     def _fetch_limit_rules(self) -> Optional[List[Dict]]:
         """从API获取限行规则"""
         try:
-            resp = http_get(self._limit_rules_url, verify=False, headers=self._headers)
+            print(f'[INFO] 正在获取限行规则... (重试次数: {self._retry_count})')
+            resp = http_get(self._limit_rules_url, verify=False)
             resp.raise_for_status()
             data = resp.json()
             
             if data.get('state') == 'success' and 'result' in data:
+                print(f'[INFO] 成功获取限行规则，共 {len(data["result"])} 条')
                 return data['result']
             else:
                 print(f'[ERROR] 获取限行规则失败: {data.get("resultMsg", "未知错误")}')
@@ -105,24 +94,75 @@ class TrafficLimiter:
             print(f'[ERROR] 获取限行规则异常: {e}')
             return None
     
-
-    
     def _update_cache_if_needed(self):
         """如果需要，更新缓存"""
         today = date.today()
         
         # 如果缓存不存在或不是今天的，则更新缓存
         if not self._cache or not self._cache_date or not self._is_same_day(self._cache_date, today):
-            print('[INFO] 更新尾号限行规则缓存')
-            rules = self._fetch_limit_rules()
-            if rules:
-                self._cache = rules
-                self._cache_date = today
-                print(f'[INFO] 成功缓存 {len(rules)} 条限行规则')
-            else:
-                print('[WARN] 获取限行规则失败，使用空缓存')
-                self._cache = []
-                self._cache_date = today
+            self._update_cache()
+    
+    def _update_cache(self):
+        """更新缓存"""
+        self._cache_status = "loading"
+        self._retry_count = 0
+        
+        while self._retry_count < self._max_retries:
+            try:
+                rules = self._fetch_limit_rules()
+                if rules:
+                    self._cache = rules
+                    self._cache_date = date.today()
+                    self._last_update_time = time.time()
+                    self._cache_status = "ready"
+                    print(f'[INFO] 成功缓存 {len(rules)} 条限行规则')
+                    return
+                else:
+                    self._retry_count += 1
+                    if self._retry_count < self._max_retries:
+                        print(f'[WARN] 获取限行规则失败，{self._retry_count}/{self._max_retries} 次重试')
+                        time.sleep(2)  # 等待2秒后重试
+                    else:
+                        print('[ERROR] 获取限行规则失败，已达到最大重试次数')
+                        self._cache_status = "error"
+                        # 使用空缓存，避免程序崩溃
+                        self._cache = []
+                        self._cache_date = date.today()
+                        self._last_update_time = time.time()
+            except Exception as e:
+                self._retry_count += 1
+                print(f'[ERROR] 更新缓存异常: {e}')
+                if self._retry_count < self._max_retries:
+                    print(f'[WARN] 准备第 {self._retry_count}/{self._max_retries} 次重试')
+                    time.sleep(2)
+                else:
+                    print('[ERROR] 更新缓存失败，已达到最大重试次数')
+                    self._cache_status = "error"
+                    # 使用空缓存，避免程序崩溃
+                    self._cache = []
+                    self._cache_date = date.today()
+                    self._last_update_time = time.time()
+    
+    def preload_cache(self):
+        """预加载缓存"""
+        """预加载缓存 - 在程序启动时主动加载限行规则"""
+        print('[INFO] 开始预加载尾号限行规则缓存')
+        self._update_cache()
+        
+        if self._cache_status == "ready":
+            print('[INFO] 尾号限行规则缓存预加载成功')
+        else:
+            print('[WARN] 尾号限行规则缓存预加载失败，将在使用时重试')
+    
+    def get_cache_status(self) -> Dict:
+        """获取缓存状态信息"""
+        return {
+            'status': self._cache_status,
+            'cache_date': self._cache_date.isoformat() if self._cache_date else None,
+            'cache_count': len(self._cache) if self._cache else 0,
+            'last_update': self._last_update_time,
+            'retry_count': self._retry_count
+        }
     
     def check_plate_limited(self, plate: str) -> bool:
         """检查车牌是否限行"""
