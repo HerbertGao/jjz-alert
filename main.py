@@ -97,44 +97,58 @@ def main():
     
     print(f'[INFO] 总共获取到 {len(all_jjz_data)} 条进京证记录')
     
-    # 步骤6: 遍历进京证列表，查找车牌号并推送
-    print('[INFO] 步骤6: 遍历进京证列表，查找车牌号并推送')
+    # 步骤6: 按照 plate_configs 推送通知，避免重复推送并过滤未配置车牌
+    print('[INFO] 步骤6: 按照 plate_configs 推送通知')
     
     if not all_jjz_data:
         print('[WARN] 未获取到任何进京证数据，跳过推送')
         return
     
-    for info_idx, info in enumerate(all_jjz_data, 1):
-        plate = info['plate']
-        print(f'[INFO] 处理第 {info_idx}/{len(all_jjz_data)} 条记录，车牌号: {plate}')
+    # 将进京证信息按车牌号分组，方便后续选择需要推送的那一条
+    plate_to_infos = {}
+    for info in all_jjz_data:
+        plate_to_infos.setdefault(info['plate'], []).append(info)
+    
+    # 仅遍历配置文件中出现的车牌号，避免处理未配置的车牌
+    for plate_config in plate_configs:
+        plate = plate_config['plate']
+        infos = plate_to_infos.get(plate, [])
         
-        # 查找该车牌号对应的配置
-        plate_config = plate_config_dict.get(plate)
-        
-        if not plate_config:
-            print(f'[WARN] 车牌号 {plate} 未在配置中找到对应设置，跳过推送')
+        if not infos:
+            print(f'[WARN] 未找到车牌 {plate} 的进京证信息，跳过')
             continue
         
+        # 选取需要推送的一条记录：
+        # 1. 优先选择 "审核通过(生效中)" 且剩余天数最长的记录；
+        # 2. 如果没有生效中的，则选择 end_date 最新(最接近当前日期) 的记录
+        active_infos = [i for i in infos if i['status'] == '审核通过(生效中)']
+        if active_infos:
+            selected = sorted(active_infos, key=lambda x: (x['end_date'] or ''), reverse=True)[0]
+        else:
+            selected = sorted(infos, key=lambda x: (x['end_date'] or ''), reverse=True)[0]
+        
+        print(f'[INFO] 准备推送车牌 {plate} 的进京证信息: {selected}')
+        
         # 提取括号内的内容
-        jjz_type_short = info['jjz_type']
+        jjz_type_short = selected['jjz_type']
         if '（' in jjz_type_short and '）' in jjz_type_short:
             jjz_type_short = jjz_type_short.split('（')[1].split('）')[0]
         
         # 格式化状态显示
-        status_display = format_status_display(info['status'])
+        status_display = format_status_display(selected['status'])
         
         # 检查是否限行
         is_limited = traffic_limiter.check_plate_limited(plate)
         plate_display = f"{plate} （今日限行）" if is_limited else plate
         
         # 根据状态决定是否显示有效期和剩余天数
-        if info['status'] == '审核通过(生效中)':
-            msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{status_display}，有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
+        if selected['status'] == '审核通过(生效中)':
+            msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{status_display}，有效期 {selected['start_date']} 至 {selected['end_date']}，剩余 {selected['days_left']} 天。"
         else:
             msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{status_display}。"
-        level = BarkLevel.CRITICAL if info['status'] != '审核通过(生效中)' else BarkLevel.ACTIVE
+        level = BarkLevel.CRITICAL if selected['status'] != '审核通过(生效中)' else BarkLevel.ACTIVE
         
-        # 使用车牌号专用图标向所有bark配置发送通知
+        # 使用车牌号专用图标向所有 bark 配置发送通知
         for bark_idx, bark_config in enumerate(plate_config['bark_configs'], 1):
             result = push_bark('进京证状态', None, msg, bark_config['bark_server'],
                       encrypt=bark_config.get('bark_encrypt', False),
