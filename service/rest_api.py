@@ -139,7 +139,8 @@ def run_api(host: str | None = None, port: int | None = None):
 
     import uvicorn
 
-    uvicorn.run(app, host=host, port=port)
+    print(f"[INFO] REST API 服务开始监听 {host}:{port}")
+    uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False)
 
 
 if __name__ == "__main__":

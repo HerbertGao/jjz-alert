@@ -164,6 +164,7 @@ if __name__ == '__main__':
     if is_remind_enabled() and is_api_enabled():
         api_thread = Thread(target=run_api, daemon=True)
         api_thread.start()
+        print('[INFO] 已在后台启动 REST API 服务')
 
     if is_remind_enabled():
         # 启动定时任务（阻塞）
