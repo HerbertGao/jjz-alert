@@ -7,6 +7,11 @@ global:
   remind:
     enable: true
     times: ["08:00", "12:00", "18:00"]
+    # REST API（可选）
+    api:
+      enable: false  # 开启后将同时启动 REST 接口
+      host: "0.0.0.0"  # 监听地址
+      port: 8000       # 监听端口
   
   # Bark推送默认图标（可选）
   bark_default_icon: "https://pp.myapp.com/ma_icon/0/icon_42285886_1752238397/256"

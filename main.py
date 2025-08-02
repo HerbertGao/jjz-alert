@@ -1,4 +1,4 @@
-from config.config import get_jjz_accounts, get_plate_configs, get_remind_times, get_remind_enable
+from config.config import get_jjz_accounts, get_plate_configs, get_remind_times, is_remind_enabled
 from service.jjz_checker import check_jjz_status
 from service.bark_pusher import push_bark, BarkLevel
 from service.traffic_limiter import traffic_limiter
@@ -157,7 +157,17 @@ def schedule_jobs():
     scheduler.start()
 
 if __name__ == '__main__':
-    if get_remind_enable():
+    from threading import Thread
+    from service.rest_api import run_api, is_api_enabled
+
+    # 若提醒功能开启，同时满足 API 开关，则后台启动 REST API
+    if is_remind_enabled() and is_api_enabled():
+        api_thread = Thread(target=run_api, daemon=True)
+        api_thread.start()
+
+    if is_remind_enabled():
+        # 启动定时任务（阻塞）
         schedule_jobs()
     else:
+        # 仅执行一次查询
         main() 

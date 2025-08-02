@@ -11,14 +11,17 @@ def load_yaml_config(config_file='config.yaml'):
         print(f'[WARN] 无法加载YAML配置文件 {config_file}: {e}')
     return None
 
-def get_remind_enable():
+def is_remind_enabled():
     """获取定时提醒开关状态"""
     yaml_config = load_yaml_config()
     if yaml_config and 'global' in yaml_config and 'remind' in yaml_config['global']:
         return yaml_config['global']['remind'].get('enable', True)
-    
+
     # 默认值
     return True
+
+# 兼容旧名称
+get_remind_enable = is_remind_enabled
 
 def get_remind_times():
     """获取定时提醒时间列表"""
