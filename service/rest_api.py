@@ -29,7 +29,7 @@ app = FastAPI(title="JJZ Alert API", version="1.0.0")
 
 
 class QueryRequest(BaseModel):
-    plate: str = Field(..., description="车牌号，如 京A12345")
+    plates: List[str] = Field(..., min_items=1, description="车牌号列表，如 [\"京A12345\", \"津B67890\"]")
 
 
 @app.get("/health")
@@ -39,9 +39,11 @@ def health() -> Dict[str, str]:
 
 
 @app.post("/query")
-def query_plate(request: QueryRequest):
-    """Trigger a single query & push for the specified plate number"""
-    plate_number = request.plate.upper().strip()
+def query_plates(request: QueryRequest):
+    """Trigger query & push for one or multiple plate numbers"""
+    input_plates = [p.strip().upper() for p in request.plates if p.strip()]
+    if not input_plates:
+        raise HTTPException(status_code=400, detail="plates 不能为空")
 
     # Check if API is enabled
     if not is_api_enabled():
@@ -54,8 +56,9 @@ def query_plate(request: QueryRequest):
     plate_configs = get_plate_configs()
     plate_config_dict = {cfg["plate"].upper(): cfg for cfg in plate_configs}
 
-    if plate_number not in plate_config_dict:
-        raise HTTPException(status_code=404, detail=f"未找到车牌 {plate_number} 的配置")
+    missing = [p for p in input_plates if p not in plate_config_dict]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"未找到车牌配置: {', '.join(missing)}")
 
     # Preload traffic-limiter cache to speed up check
     traffic_limiter.preload_cache()
@@ -69,47 +72,51 @@ def query_plate(request: QueryRequest):
         status_data = parse_status(data)
         all_jjz_data.extend(status_data)
 
-    # Filter for the requested plate
-    target_records = [info for info in all_jjz_data if info["plate"].upper() == plate_number]
-    if not target_records:
-        raise HTTPException(status_code=404, detail="未查询到对应进京证信息")
+    response_data: Dict[str, Any] = {}
 
-    # Push notifications for each record (usually 1)
-    plate_cfg = plate_config_dict[plate_number]
-    push_results = []
-    for info in target_records:
-        jjz_type_short = info["jjz_type"]
-        if "（" in jjz_type_short and "）" in jjz_type_short:
-            jjz_type_short = jjz_type_short.split("（")[1].split("）")[0]
+    for plate_number in input_plates:
+        target_records = [info for info in all_jjz_data if info["plate"].upper() == plate_number]
+        plate_cfg = plate_config_dict[plate_number]
+        push_results = []
 
-        is_limited = traffic_limiter.check_plate_limited(plate_number)
-        plate_display = f"{plate_number} （今日限行）" if is_limited else plate_number
+        for info in target_records:
+            jjz_type_short = info["jjz_type"]
+            if "（" in jjz_type_short and "）" in jjz_type_short:
+                jjz_type_short = jjz_type_short.split("（")[1].split("）")[0]
 
-        if info["status"] == "审核通过(生效中)":
-            msg = (
-                f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{info['status']}，"
-                f"有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
-            )
-            level = BarkLevel.ACTIVE
-        else:
-            msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{info['status']}。"
-            level = BarkLevel.CRITICAL
+            is_limited = traffic_limiter.check_plate_limited(plate_number)
+            plate_display = f"{plate_number} （今日限行）" if is_limited else plate_number
 
-        for bark_cfg in plate_cfg["bark_configs"]:
-            result = push_bark(
-                "进京证状态",
-                None,
-                msg,
-                bark_cfg["bark_server"],
-                encrypt=bark_cfg.get("bark_encrypt", False),
-                encrypt_key=bark_cfg.get("bark_encrypt_key"),
-                encrypt_iv=bark_cfg.get("bark_encrypt_iv"),
-                level=level,
-                icon=plate_cfg.get("plate_icon", get_default_icon()),
-            )
-            push_results.append(result)
+            if info["status"] == "审核通过(生效中)":
+                msg = (
+                    f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{info['status']}，"
+                    f"有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
+                )
+                level = BarkLevel.ACTIVE
+            else:
+                msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{info['status']}。"
+                level = BarkLevel.CRITICAL
 
-    return {"plate": plate_number, "records": len(target_records), "push_results": push_results}
+            for bark_cfg in plate_cfg["bark_configs"]:
+                result = push_bark(
+                    "进京证状态",
+                    None,
+                    msg,
+                    bark_cfg["bark_server"],
+                    encrypt=bark_cfg.get("bark_encrypt", False),
+                    encrypt_key=bark_cfg.get("bark_encrypt_key"),
+                    encrypt_iv=bark_cfg.get("bark_encrypt_iv"),
+                    level=level,
+                    icon=plate_cfg.get("plate_icon", get_default_icon()),
+                )
+                push_results.append(result)
+
+        response_data[plate_number] = {
+            "records": len(target_records),
+            "push_results": push_results,
+        }
+
+    return response_data
 
 
 def is_api_enabled() -> bool:
