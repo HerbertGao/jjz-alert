@@ -79,37 +79,53 @@ def query_plates(request: QueryRequest):
         plate_cfg = plate_config_dict[plate_number]
         push_results = []
 
-        for info in target_records:
-            jjz_type_short = info["jjz_type"]
-            if "（" in jjz_type_short and "）" in jjz_type_short:
-                jjz_type_short = jjz_type_short.split("（")[1].split("）")[0]
+        # 若未找到记录，直接返回空结果
+        if not target_records:
+            response_data[plate_number] = {"records": 0, "push_results": []}
+            continue
 
-            is_limited = traffic_limiter.check_plate_limited(plate_number)
-            plate_display = f"{plate_number} （今日限行）" if is_limited else plate_number
+        # 选取需要推送的一条记录：
+        # 1. 优先选择 "审核通过(生效中)" 且剩余天数最长的记录；
+        # 2. 否则选择 end_date 最新的记录
+        active_infos = [rec for rec in target_records if rec["status"] == "审核通过(生效中)"]
+        if active_infos:
+            selected = sorted(active_infos, key=lambda x: (x["end_date"] or ""), reverse=True)[0]
+        else:
+            selected = sorted(target_records, key=lambda x: (x["end_date"] or ""), reverse=True)[0]
 
-            if info["status"] == "审核通过(生效中)":
-                msg = (
-                    f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{info['status']}，"
-                    f"有效期 {info['start_date']} 至 {info['end_date']}，剩余 {info['days_left']} 天。"
-                )
-                level = BarkLevel.ACTIVE
-            else:
-                msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{info['status']}。"
-                level = BarkLevel.CRITICAL
+        # 记录调试信息
+        print(f"[INFO] REST API 推送，车牌 {plate_number} 选中记录: {selected}")
 
-            for bark_cfg in plate_cfg["bark_configs"]:
-                result = push_bark(
-                    "进京证状态",
-                    None,
-                    msg,
-                    bark_cfg["bark_server"],
-                    encrypt=bark_cfg.get("bark_encrypt", False),
-                    encrypt_key=bark_cfg.get("bark_encrypt_key"),
-                    encrypt_iv=bark_cfg.get("bark_encrypt_iv"),
-                    level=level,
-                    icon=plate_cfg.get("plate_icon", get_default_icon()),
-                )
-                push_results.append(result)
+        jjz_type_short = selected["jjz_type"]
+        if "（" in jjz_type_short and "）" in jjz_type_short:
+            jjz_type_short = jjz_type_short.split("（")[1].split("）")[0]
+
+        is_limited = traffic_limiter.check_plate_limited(plate_number)
+        plate_display = f"{plate_number} （今日限行）" if is_limited else plate_number
+
+        if selected["status"] == "审核通过(生效中)":
+            msg = (
+                f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{selected['status']}，"
+                f"有效期 {selected['start_date']} 至 {selected['end_date']}，剩余 {selected['days_left']} 天。"
+            )
+            level = BarkLevel.ACTIVE
+        else:
+            msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{selected['status']}。"
+            level = BarkLevel.CRITICAL
+
+        for bark_cfg in plate_cfg["bark_configs"]:
+            result = push_bark(
+                "进京证状态",
+                None,
+                msg,
+                bark_cfg["bark_server"],
+                encrypt=bark_cfg.get("bark_encrypt", False),
+                encrypt_key=bark_cfg.get("bark_encrypt_key"),
+                encrypt_iv=bark_cfg.get("bark_encrypt_iv"),
+                level=level,
+                icon=plate_cfg.get("plate_icon", get_default_icon()),
+            )
+            push_results.append(result)
 
         response_data[plate_number] = {
             "records": len(target_records),
