@@ -15,13 +15,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from service.jjz_checker import check_jjz_status
-from service.bark_pusher import push_bark, BarkLevel
 from service.traffic_limiter import traffic_limiter
+from service.push_utils import select_record, push_plate
 from utils.parse import parse_status
 from config.config import (
     get_jjz_accounts,
     get_plate_configs,
-    get_default_icon,
     load_yaml_config,
 )
 
@@ -77,9 +76,6 @@ def query_plates(request: QueryRequest):
     for plate_number in input_plates:
         target_records = [info for info in all_jjz_data if info["plate"].upper() == plate_number]
         plate_cfg = plate_config_dict[plate_number]
-        push_results = []
-
-        from service.push_utils import select_record, push_plate  # 避免循环引用
 
         if not target_records:
             response_data[plate_number] = {"records": 0, "push_results": []}
