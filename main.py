@@ -5,7 +5,7 @@ import logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-import utils.logger  # noqa: F401  # pylint: disable=unused-import
+import utils.logger 
 from config.config import (get_admin_bark_configs, get_jjz_accounts,
                            get_plate_configs, get_remind_times,
                            is_remind_enabled)
@@ -126,12 +126,13 @@ def main():
         selected = select_record(infos)
         logging.info(f'准备推送车牌 {plate} 的进京证信息: {selected}')
 
-        # 推送当日信息
-        push_results_today = push_plate(selected, plate_config)
-        for idx, res in enumerate(push_results_today, 1):
-            logging.info(f'车牌{plate} 当日 Bark{idx} 推送结果: {res}')
+        # 若为 20:30 之前，则正常推送当日信息
+        if not send_next_day:
+            push_results_today = push_plate(selected, plate_config)
+            for idx, res in enumerate(push_results_today, 1):
+                logging.info(f'车牌{plate} 当日 Bark{idx} 推送结果: {res}')
 
-        # 如需推送次日信息
+        # 20:30 之后仅推送次日信息
         if send_next_day:
             # 查找次日适用的进京证记录
             tomorrow_records = [r for r in infos if (r.get('start_date') and r.get('end_date') and r['start_date'] <= tomorrow_str <= r['end_date'])]
