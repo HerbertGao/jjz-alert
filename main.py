@@ -1,116 +1,169 @@
-from config.config import get_jjz_accounts, get_plate_configs, get_remind_times, is_remind_enabled
-from service.jjz_checker import check_jjz_status
-from service.bark_pusher import push_bark, BarkLevel
-from service.traffic_limiter import traffic_limiter
-from utils.parse import parse_status
+# 初始化日志（需在其他自定义模块之前导入）
+import datetime
+import logging
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
+
+import utils.logger  # noqa: F401  # pylint: disable=unused-import
+from config.config import (get_admin_bark_configs, get_jjz_accounts,
+                           get_plate_configs, get_remind_times,
+                           is_remind_enabled)
+from service.bark_pusher import BarkLevel, push_bark
+from service.jjz_checker import check_jjz_status
+from service.traffic_limiter import traffic_limiter
+from utils.parse import parse_status
 
 
 def main():
     """
     主函数 - 按照优化后的执行顺序处理进京证查询和推送
     """
-    print('[INFO] 开始执行进京证查询和推送任务')
+    logging.info('开始执行进京证查询和推送任务')
     
     # 步骤1: 读取进京证账户配置
-    print('[INFO] 步骤1: 读取进京证账户配置')
+    logging.info('步骤1: 读取进京证账户配置')
     jjz_accounts = get_jjz_accounts()
-    print(f'[INFO] 读取到 {len(jjz_accounts)} 个进京证账户配置')
+    logging.info(f'读取到 {len(jjz_accounts)} 个进京证账户配置')
     
     if not jjz_accounts:
-        print('[ERROR] 未配置任何进京证账户')
+        logging.error('未配置任何进京证账户')
         return
     
     # 步骤2: 读取车牌号配置
-    print('[INFO] 步骤2: 读取车牌号配置')
+    logging.info('步骤2: 读取车牌号配置')
     plate_configs = get_plate_configs()
-    print(f'[INFO] 读取到 {len(plate_configs)} 个车牌号配置')
+    logging.info(f'读取到 {len(plate_configs)} 个车牌号配置')
+
+    # 读取管理员 Bark 配置
+    admin_bark_configs = get_admin_bark_configs()
+    logging.info('读取到 %s 个管理员 Bark 配置', len(admin_bark_configs))
     
     if not plate_configs:
-        print('[ERROR] 未配置任何车牌号')
+        logging.error('未配置任何车牌号')
+        # 若有管理员 Bark，发送提醒
+        if admin_bark_configs:
+            for idx, bark_cfg in enumerate(admin_bark_configs, 1):
+                push_bark('配置错误', None, '系统未配置任何车牌号，无法查询进京证', bark_cfg['bark_server'],
+                          encrypt=bark_cfg.get('bark_encrypt', False),
+                          encrypt_key=bark_cfg.get('bark_encrypt_key'),
+                          encrypt_iv=bark_cfg.get('bark_encrypt_iv'),
+                          level=BarkLevel.CRITICAL)
         return
     
     # 步骤3: 创建车牌号配置的查找字典
-    print('[INFO] 步骤3: 创建车牌号配置的查找字典')
+    logging.info('步骤3: 创建车牌号配置的查找字典')
     plate_config_dict = {config['plate']: config for config in plate_configs}
-    print(f'[INFO] 创建了包含 {len(plate_config_dict)} 个车牌号的查找字典')
+    logging.info(f'创建了包含 {len(plate_config_dict)} 个车牌号的查找字典')
     
     # 步骤4: 读取尾号限行规则（并缓存）
-    print('[INFO] 步骤4: 读取尾号限行规则（并缓存）')
+    logging.info('步骤4: 读取尾号限行规则（并缓存）')
     traffic_limiter.preload_cache()
     
     # 显示缓存状态
     cache_status = traffic_limiter.get_cache_status()
-    print(f'[INFO] 缓存状态: {cache_status["status"]}')
-    print(f'[INFO] 缓存日期: {cache_status["cache_date"]}')
-    print(f'[INFO] 缓存规则数: {cache_status["cache_count"]}')
+    logging.info(f'缓存状态: {cache_status["status"]}')
+    logging.info(f'缓存日期: {cache_status["cache_date"]}')
+    logging.info(f'缓存规则数: {cache_status["cache_count"]}')
     
-    # 步骤5: 遍历所有进京证账户获取全部进京证数据（创建列表）
-    print('[INFO] 步骤5: 遍历所有进京证账户获取全部进京证数据')
+    # 步骤5: 遍历所有进京证账户获取全部进京证数据
+    logging.info('步骤5: 遍历所有进京证账户获取全部进京证数据')
     all_jjz_data = []  # 存储所有进京证数据
     
     for account_idx, account in enumerate(jjz_accounts, 1):
-        print(f'[INFO] 查询账户 {account_idx}/{len(jjz_accounts)}: {account["name"]}')
+        logging.info(f'查询账户 {account_idx}/{len(jjz_accounts)}: {account["name"]}')
         
         try:
             # 查询该账户下的所有车辆信息
             data = check_jjz_status(account['jjz_url'], account['jjz_token'])
+            logging.debug(f'账户 {account["name"]} API原始返回: {data}')
             if 'error' in data:
-                print(f'[ERROR] 账户 {account["name"]} 查询失败: {data["error"]}')
-                # 向所有车牌号配置发送错误通知
-                for plate_config in plate_configs:
-                    for bark_idx, bark_config in enumerate(plate_config['bark_configs'], 1):
-                        result = push_bark('进京证查询失败', None, data['error'], bark_config['bark_server'],
-                                  encrypt=bark_config.get('bark_encrypt', False),
-                                  encrypt_key=bark_config.get('bark_encrypt_key'),
-                                  encrypt_iv=bark_config.get('bark_encrypt_iv'),
-                                  level=BarkLevel.CRITICAL,
-                                  icon=plate_config['plate_icon'])
-                        print(f'[INFO] 车牌{plate_config["plate"]} Bark{bark_idx}推送结果: {result}')
+                logging.error(f'账户 {account["name"]} 查询失败: {data["error"]}')
+                # 向管理员发送错误通知
+                from service.push_utils import push_admin
+                push_admin('进京证查询失败', data['error'])
                 continue
             
             # 解析查询结果并添加到总列表
             account_status = parse_status(data)
             if account_status:
-                print(f'[INFO] 账户 {account["name"]} 查询到 {len(account_status)} 条进京证记录')
+                logging.info(f'账户 {account["name"]} 查询到 {len(account_status)} 条进京证记录')
                 all_jjz_data.extend(account_status)
             else:
-                print(f'[WARN] 账户 {account["name"]} 未获取到任何进京证信息')
+                logging.warning(f'账户 {account["name"]} 未获取到任何进京证信息')
                 
         except Exception as e:
-            print(f'[ERROR] 账户 {account["name"]} 处理异常: {e}')
+            logging.error(f'账户 {account["name"]} 处理异常: {e}')
     
-    print(f'[INFO] 总共获取到 {len(all_jjz_data)} 条进京证记录')
+    logging.info(f'总共获取到 {len(all_jjz_data)} 条进京证记录')
     
-    # 步骤6: 按照 plate_configs 推送通知（通过 push_utils 统一逻辑）
-    print('[INFO] 步骤6: 按照 plate_configs 推送通知（统一逻辑）')
+    # 步骤6: 开始推送通知
+    logging.info('步骤6: 开始推送通知')
 
     if not all_jjz_data:
-        print('[WARN] 未获取到任何进京证数据，跳过推送')
+        logging.warning('未获取到任何进京证数据，跳过推送')
         return
 
     # 使用公共工具按车牌分组
-    from service.push_utils import group_by_plate, select_record, push_plate  # 避免循环引用
+    from service.push_utils import (group_by_plate, push_plate,  # 避免循环引用
+                                    select_record)
 
     plate_to_infos = group_by_plate(all_jjz_data)
+
+    now = datetime.datetime.now()
+    send_next_day = now.hour > 20 or (now.hour == 20 and now.minute >= 30)
+    today_str = datetime.date.today().strftime('%Y-%m-%d')
+    tomorrow_date = datetime.date.today() + datetime.timedelta(days=1)
+    tomorrow_str = tomorrow_date.strftime('%Y-%m-%d')
 
     for plate_config in plate_configs:
         plate = plate_config['plate']
         infos = plate_to_infos.get(plate, [])
         if not infos:
-            print(f'[WARN] 未找到车牌 {plate} 的进京证信息，跳过')
+            logging.warning(f'未找到车牌 {plate} 的进京证信息，跳过')
             continue
 
         selected = select_record(infos)
-        print(f'[INFO] 准备推送车牌 {plate} 的进京证信息: {selected}')
+        logging.info(f'准备推送车牌 {plate} 的进京证信息: {selected}')
 
-        push_results = push_plate(selected, plate_config)
-        for idx, res in enumerate(push_results, 1):
-            print(f'[INFO] 车牌{plate} Bark{idx} 推送结果: {res}')
+        # 推送当日信息
+        push_results_today = push_plate(selected, plate_config)
+        for idx, res in enumerate(push_results_today, 1):
+            logging.info(f'车牌{plate} 当日 Bark{idx} 推送结果: {res}')
 
-    print('[INFO] 进京证查询和推送任务执行完成')
+        # 如需推送次日信息
+        if send_next_day:
+            # 查找次日适用的进京证记录
+            tomorrow_records = [r for r in infos if (r.get('start_date') and r.get('end_date') and r['start_date'] <= tomorrow_str <= r['end_date'])]
+            if tomorrow_records:
+                # 优先选择待生效的，其次选择其他，仍按剩余天数排序
+                tomorrow_active = [r for r in tomorrow_records if r['status'].startswith('审核通过')]
+                candidate_list = tomorrow_active or tomorrow_records
+                # 同 select_record 排序逻辑
+                tomorrow_selected = sorted(candidate_list, key=lambda x: (x.get('end_date') or ''), reverse=True)[0]
+                logging.info(f'准备推送车牌 {plate} 的次日进京证信息: {tomorrow_selected}')
+                push_results_tomorrow = push_plate(tomorrow_selected, plate_config, target_date=tomorrow_date)
+                for idx, res in enumerate(push_results_tomorrow, 1):
+                    logging.info(f'车牌{plate} 次日 Bark{idx} 推送结果: {res}')
+            else:
+                # 无次日记录，且当日证仅到今日，需要提醒办理
+                if selected.get('end_date') == today_str:
+                    warn_msg = f"车牌 {plate} 明日尚未查询到进京证信息，请注意及时办理进京证。"
+                    for bark_cfg in plate_config['bark_configs']:
+                        warn_res = push_bark(
+                            '进京证提醒',
+                            None,
+                            warn_msg,
+                            bark_cfg['bark_server'],
+                            encrypt=bark_cfg.get('bark_encrypt', False),
+                            encrypt_key=bark_cfg.get('bark_encrypt_key'),
+                            encrypt_iv=bark_cfg.get('bark_encrypt_iv'),
+                            level=BarkLevel.CRITICAL,
+                            icon=plate_config.get('plate_icon')
+                        )
+                        logging.info(f'车牌{plate} 次日提醒 Bark 推送结果: {warn_res}')
+
+    logging.info('进京证查询和推送任务执行完成')
 
 def schedule_jobs():
     scheduler = BlockingScheduler()
@@ -118,19 +171,20 @@ def schedule_jobs():
     for hour, minute in remind_times:
         trigger = CronTrigger(hour=hour, minute=minute)
         scheduler.add_job(main, trigger, misfire_grace_time=None)
-        print(f'[INFO] 已添加定时任务: 每天 {hour:02d}:{minute:02d}')
-    print('[INFO] 定时任务调度器启动')
+        logging.info(f'已添加定时任务: 每天 {hour:02d}:{minute:02d}')
+    logging.info('定时任务调度器启动')
     scheduler.start()
 
 if __name__ == '__main__':
     from threading import Thread
-    from service.rest_api import run_api, is_api_enabled
+
+    from service.rest_api import is_api_enabled, run_api
 
     # 若提醒功能开启，同时满足 API 开关，则后台启动 REST API
     if is_remind_enabled() and is_api_enabled():
         api_thread = Thread(target=run_api, daemon=True)
         api_thread.start()
-        print('[INFO] 已在后台启动 REST API 服务')
+        logging.info('已在后台启动 REST API 服务')
 
     if is_remind_enabled():
         # 启动定时任务（阻塞）

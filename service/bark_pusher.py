@@ -1,8 +1,11 @@
+import logging
 from enum import Enum
 from urllib.parse import urlencode
+
+from config.config import get_default_icon
 from utils.crypto import encrypt_body
 from utils.http import http_get
-from config.config import get_default_icon
+
 
 class BarkLevel(Enum):
     CRITICAL = 'critical'
@@ -53,12 +56,12 @@ def push_bark(title, subtitle, body, server, encrypt=False, encrypt_key=None, en
 
     if query:
         url = f"{url}?{urlencode(query)}"
-    print(debug_info)
+    logging.debug(debug_info)
     try:
         resp = http_get(url)
-        print(f'[DEBUG] Bark响应: status={resp.status_code}, text={resp.text}')
+        logging.debug(f'Bark响应: status={resp.status_code}, text={resp.text}')
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
-        print(f'[DEBUG] Bark推送异常: {e}')
+        logging.debug(f'Bark推送异常: {e}')
         return {"error": str(e)} 

@@ -1,5 +1,6 @@
 from utils.http import http_post
 
+
 def check_jjz_status(url, token):
     headers = {
         "Authorization": token,

@@ -1,9 +1,12 @@
 import json
+import logging
 import re
 import time
-from datetime import datetime, date
+from datetime import date, datetime
 from typing import Dict, List, Optional
+
 from utils.http import http_get
+
 
 class TrafficLimiter:
     def __init__(self):
@@ -79,19 +82,19 @@ class TrafficLimiter:
     def _fetch_limit_rules(self) -> Optional[List[Dict]]:
         """从API获取限行规则"""
         try:
-            print(f'[INFO] 正在获取限行规则... (重试次数: {self._retry_count})')
+            logging.info(f'正在获取限行规则... (重试次数: {self._retry_count})')
             resp = http_get(self._limit_rules_url, verify=False)
             resp.raise_for_status()
             data = resp.json()
             
             if data.get('state') == 'success' and 'result' in data:
-                print(f'[INFO] 成功获取限行规则，共 {len(data["result"])} 条')
+                logging.info(f'成功获取限行规则，共 {len(data["result"])} 条')
                 return data['result']
             else:
-                print(f'[ERROR] 获取限行规则失败: {data.get("resultMsg", "未知错误")}')
+                logging.error(f'获取限行规则失败: {data.get("resultMsg", "未知错误")}')
                 return None
         except Exception as e:
-            print(f'[ERROR] 获取限行规则异常: {e}')
+            logging.error(f'获取限行规则异常: {e}')
             return None
     
     def _update_cache_if_needed(self):
@@ -115,15 +118,15 @@ class TrafficLimiter:
                     self._cache_date = date.today()
                     self._last_update_time = time.time()
                     self._cache_status = "ready"
-                    print(f'[INFO] 成功缓存 {len(rules)} 条限行规则')
+                    logging.info(f'成功缓存 {len(rules)} 条限行规则')
                     return
                 else:
                     self._retry_count += 1
                     if self._retry_count < self._max_retries:
-                        print(f'[WARN] 获取限行规则失败，{self._retry_count}/{self._max_retries} 次重试')
+                        logging.warning(f'获取限行规则失败，{self._retry_count}/{self._max_retries} 次重试')
                         time.sleep(2)  # 等待2秒后重试
                     else:
-                        print('[ERROR] 获取限行规则失败，已达到最大重试次数')
+                        logging.error('获取限行规则失败，已达到最大重试次数')
                         self._cache_status = "error"
                         # 使用空缓存，避免程序崩溃
                         self._cache = []
@@ -131,12 +134,12 @@ class TrafficLimiter:
                         self._last_update_time = time.time()
             except Exception as e:
                 self._retry_count += 1
-                print(f'[ERROR] 更新缓存异常: {e}')
+                logging.error(f'更新缓存异常: {e}')
                 if self._retry_count < self._max_retries:
-                    print(f'[WARN] 准备第 {self._retry_count}/{self._max_retries} 次重试')
+                    logging.warning(f'准备第 {self._retry_count}/{self._max_retries} 次重试')
                     time.sleep(2)
                 else:
-                    print('[ERROR] 更新缓存失败，已达到最大重试次数')
+                    logging.error('更新缓存失败，已达到最大重试次数')
                     self._cache_status = "error"
                     # 使用空缓存，避免程序崩溃
                     self._cache = []
@@ -146,13 +149,13 @@ class TrafficLimiter:
     def preload_cache(self):
         """预加载缓存"""
         """预加载缓存 - 在程序启动时主动加载限行规则"""
-        print('[INFO] 开始预加载尾号限行规则缓存')
+        logging.info('开始预加载尾号限行规则缓存')
         self._update_cache()
         
         if self._cache_status == "ready":
-            print('[INFO] 尾号限行规则缓存预加载成功')
+            logging.info('尾号限行规则缓存预加载成功')
         else:
-            print('[WARN] 尾号限行规则缓存预加载失败，将在使用时重试')
+            logging.warning('尾号限行规则缓存预加载失败，将在使用时重试')
     
     def get_cache_status(self) -> Dict:
         """获取缓存状态信息"""
@@ -165,9 +168,41 @@ class TrafficLimiter:
         }
     
     def check_plate_limited(self, plate: str) -> bool:
-        """检查车牌是否限行"""
+        """检查车牌是否限行（仅今日）"""
         self._update_cache_if_needed()
         return self._is_limited_today(plate)
+
+    def check_plate_limited_on(self, plate: str, target: date) -> bool:
+        """检查车牌在指定日期是否限行
+
+        如果缓存中找不到对应日期的规则，返回 False。
+        """
+        self._update_cache_if_needed()
+        if not self._cache:
+            return False
+
+        # 查找目标日期对应的限行规则
+        rule_for_day = None
+        from datetime import datetime as _dt
+        for rule in self._cache:
+            try:
+                rule_date = _dt.strptime(rule['limitedTime'], '%Y年%m月%d日').date()
+            except Exception:
+                continue
+            if self._is_same_day(rule_date, target):
+                rule_for_day = rule
+                break
+
+        if not rule_for_day or rule_for_day.get('limitedNumber') == '不限行':
+            return False
+
+        tail_number = self._get_plate_tail_number(plate)
+        limited_numbers = rule_for_day['limitedNumber']
+        if '和' in limited_numbers:
+            numbers = limited_numbers.split('和')
+            return tail_number in numbers
+        else:
+            return tail_number in limited_numbers
     
     def get_today_limit_info(self) -> Optional[Dict]:
         """获取今天的限行信息"""

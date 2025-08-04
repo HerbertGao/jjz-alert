@@ -1,5 +1,8 @@
+import logging
 import os
+
 import yaml
+
 
 def load_yaml_config(config_file='config.yaml'):
     """加载YAML配置文件"""
@@ -8,7 +11,7 @@ def load_yaml_config(config_file='config.yaml'):
             with open(config_file, 'r', encoding='utf-8') as f:
                 return yaml.safe_load(f)
     except Exception as e:
-        print(f'[WARN] 无法加载YAML配置文件 {config_file}: {e}')
+        logging.warning('无法加载YAML配置文件 %s: %s', config_file, e)
     return None
 
 def is_remind_enabled():
@@ -38,6 +41,28 @@ def get_remind_times():
         return result
     
     # 默认值
+    return []
+
+def get_log_level():
+    """读取日志等级，默认 INFO"""
+    yaml_config = load_yaml_config()
+    if yaml_config and 'global' in yaml_config and 'log' in yaml_config['global']:
+        return str(yaml_config['global']['log'].get('level', 'INFO')).upper()
+    return 'INFO'
+
+def get_admin_bark_configs():
+    """获取管理员 Bark 配置列表"""
+    yaml_config = load_yaml_config()
+    if yaml_config and 'global' in yaml_config and 'admin_bark_configs' in yaml_config['global']:
+        bark_list = []
+        for bark_config in yaml_config['global']['admin_bark_configs']:
+            bark_list.append({
+                'bark_server': bark_config['server'].rstrip('/'),
+                'bark_encrypt': bark_config.get('encrypt', False),
+                'bark_encrypt_key': bark_config.get('encrypt_key'),
+                'bark_encrypt_iv': bark_config.get('encrypt_iv'),
+            })
+        return bark_list
     return []
 
 def get_default_icon():
@@ -115,14 +140,3 @@ def parse_plate_configs(plate_configs):
                 })
     
     return plate_configs_list
-
-# 兼容旧版本的函数
-def get_users():
-    """兼容旧版本的get_users函数"""
-    print('[WARN] get_users() 函数已废弃，请使用 get_jjz_accounts() 和 get_plate_configs()')
-    return []
-
-def parse_yaml_users(users_config):
-    """兼容旧版本的parse_yaml_users函数"""
-    print('[WARN] parse_yaml_users() 函数已废弃')
-    return [] 

@@ -1,5 +1,5 @@
-from curl_cffi import requests
 import urllib3
+from curl_cffi import requests
 
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

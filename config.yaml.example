@@ -3,6 +3,15 @@
 
 # 全局配置
 global:
+  # 日志等级（可选）：DEBUG / INFO / WARN / ERROR / CRITICAL
+  log:
+    level: INFO
+
+  # 管理员 Bark 配置（仅接收系统错误）
+  admin_bark_configs:
+    - server: "https://api.day.app/your_admin_device_key"
+      encrypt: false
+
   # 定时提醒相关配置
   remind:
     enable: true

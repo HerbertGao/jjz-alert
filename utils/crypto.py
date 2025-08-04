@@ -1,6 +1,7 @@
-import tempfile
-import subprocess
 import json
+import subprocess
+import tempfile
+
 
 def encrypt_body(payload_dict, key, iv):
     json_str = json.dumps(payload_dict, ensure_ascii=False, separators=(',', ':'))

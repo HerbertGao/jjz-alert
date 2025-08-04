@@ -8,11 +8,11 @@ from __future__ import annotations
 3. 调用 bark 接口完成推送。
 """
 
-from typing import Dict, List, Any, Tuple
+from typing import Any, Dict, List, Tuple
 
-from service.bark_pusher import push_bark, BarkLevel
+from config.config import get_admin_bark_configs, get_default_icon
+from service.bark_pusher import BarkLevel, push_bark
 from service.traffic_limiter import traffic_limiter
-from config.config import get_default_icon
 
 # ----------------------------- 通用工具 ----------------------------- #
 
@@ -54,16 +54,25 @@ def select_record(records: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 # ----------------------------- 推送核心 ----------------------------- #
 
-def build_message(record: Dict[str, Any]) -> Tuple[str, BarkLevel]:
+from datetime import date
+
+
+def build_message(record: Dict[str, Any], target_date: date | None = None) -> Tuple[str, BarkLevel]:
     """生成推送消息文本及级别"""
     plate: str = record["plate"]
     jjz_type_short = record["jjz_type"]
     if "（" in jjz_type_short and "）" in jjz_type_short:
         jjz_type_short = jjz_type_short.split("（")[1].split("）")[0]
 
-    # 限行检测
-    is_limited = traffic_limiter.check_plate_limited(plate)
-    plate_display = f"{plate} （今日限行）" if is_limited else plate
+    # 根据目标日期判断限行
+    if target_date is None or target_date == date.today():
+        is_limited = traffic_limiter.check_plate_limited(plate)
+        limited_tag = "今日限行"
+    else:
+        is_limited = traffic_limiter.check_plate_limited_on(plate, target_date)
+        limited_tag = target_date.strftime("%m-%d限行")
+
+    plate_display = f"{plate} （{limited_tag}）" if is_limited else plate
 
     status_display = format_status_display(record["status"])
 
@@ -79,9 +88,27 @@ def build_message(record: Dict[str, Any]) -> Tuple[str, BarkLevel]:
     return msg, level
 
 
-def push_plate(record: Dict[str, Any], plate_cfg: Dict[str, Any]) -> List[Any]:
+def push_admin(title: str, body: str, level: BarkLevel = BarkLevel.CRITICAL):
+    """向管理员 Bark 发送通知。若未配置管理员，则记录 warning。"""
+    admin_configs = get_admin_bark_configs()
+    if not admin_configs:
+        from logging import warning
+        warning('未配置管理员 Bark，无法发送管理员通知: %s - %s', title, body)
+        return []
+    results = []
+    for cfg in admin_configs:
+        res = push_bark(title, None, body, cfg['bark_server'],
+                        encrypt=cfg.get('bark_encrypt', False),
+                        encrypt_key=cfg.get('bark_encrypt_key'),
+                        encrypt_iv=cfg.get('bark_encrypt_iv'),
+                        level=level)
+        results.append(res)
+    return results
+
+
+def push_plate(record: Dict[str, Any], plate_cfg: Dict[str, Any], target_date: date | None = None) -> List[Any]:
     """向该车牌配置的所有 bark 服务推送消息，返回结果列表"""
-    msg, level = build_message(record)
+    msg, level = build_message(record, target_date)
     results: List[Any] = []
     for bark_cfg in plate_cfg["bark_configs"]:
         result = push_bark(

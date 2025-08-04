@@ -9,20 +9,18 @@ POST /query              Body: {"plate": "京A12345"}
                         Trigger a query for the specified plate and send Bark push
 """
 
-from typing import List, Dict, Any
+import logging
+from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+import utils.logger  # noqa: F401
+from config.config import get_jjz_accounts, get_plate_configs, load_yaml_config
 from service.jjz_checker import check_jjz_status
+from service.push_utils import push_plate, select_record
 from service.traffic_limiter import traffic_limiter
-from service.push_utils import select_record, push_plate
 from utils.parse import parse_status
-from config.config import (
-    get_jjz_accounts,
-    get_plate_configs,
-    load_yaml_config,
-)
 
 app = FastAPI(title="JJZ Alert API", version="1.0.0")
 
@@ -82,7 +80,7 @@ def query_plates(request: QueryRequest):
             continue
 
         selected = select_record(target_records)
-        print(f"[INFO] REST API 推送，车牌 {plate_number} 选中记录: {selected}")
+        logging.info(f"REST API 推送，车牌 {plate_number} 选中记录: {selected}")
 
         push_results = push_plate(selected, plate_cfg)
 
@@ -110,7 +108,7 @@ def run_api(host: str | None = None, port: int | None = None):
     - 在配置被禁用时直接返回。
     """
     if not is_api_enabled():
-        print("[WARN] REST API 接口在配置中被禁用，未启动服务")
+        logging.warning("REST API 接口在配置中被禁用，未启动服务")
         return
 
     # 从配置读取默认 host/port
@@ -121,7 +119,7 @@ def run_api(host: str | None = None, port: int | None = None):
 
     import uvicorn
 
-    print(f"[INFO] REST API 服务开始监听 {host}:{port}")
+    logging.info(f"REST API 服务开始监听 {host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False)
 
 

@@ -1,8 +1,10 @@
 import datetime
+import logging
+
 
 def parse_status(data):
     if 'data' not in data or 'bzclxx' not in data['data']:
-        print('[警告] 未找到 data.bzclxx 字段，原始返回：', data)
+        logging.warning('未找到 data.bzclxx 字段，原始返回: %s', data)
         return None
     all_status = []
     for car in data['data']['bzclxx']:
@@ -22,7 +24,7 @@ def parse_status(data):
                 else:
                     days_left = '无'
             except Exception as e:
-                print(f'[警告] 日期解析错误 {end_date}，异常：{e}')
+                logging.warning('日期解析错误 %s，异常：%s', end_date, e)
                 days_left = '日期格式错误'
             all_status.append({
                 'plate': plate,
