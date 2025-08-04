@@ -12,6 +12,7 @@ from config.config import (get_admin_bark_configs, get_jjz_accounts,
 from service.bark_pusher import BarkLevel, push_bark
 from service.jjz_checker import check_jjz_status
 from service.traffic_limiter import traffic_limiter
+from service.push_utils import push_admin
 from utils.parse import parse_status
 
 
@@ -51,11 +52,7 @@ def main():
                           level=BarkLevel.CRITICAL)
         return
     
-    # 步骤3: 创建车牌号配置的查找字典
-    logging.info('步骤3: 创建车牌号配置的查找字典')
-    plate_config_dict = {config['plate']: config for config in plate_configs}
-    logging.info(f'创建了包含 {len(plate_config_dict)} 个车牌号的查找字典')
-    
+
     # 步骤4: 读取尾号限行规则（并缓存）
     logging.info('步骤4: 读取尾号限行规则（并缓存）')
     traffic_limiter.preload_cache()
@@ -80,7 +77,6 @@ def main():
             if 'error' in data:
                 logging.error(f'账户 {account["name"]} 查询失败: {data["error"]}')
                 # 向管理员发送错误通知
-                from service.push_utils import push_admin
                 push_admin('进京证查询失败', data['error'])
                 continue
             
