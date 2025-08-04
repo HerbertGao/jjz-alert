@@ -12,7 +12,7 @@ from config.config import (get_admin_bark_configs, get_jjz_accounts,
 from service.bark_pusher import BarkLevel, push_bark
 from service.jjz_checker import check_jjz_status
 from service.traffic_limiter import traffic_limiter
-from service.push_utils import push_admin
+from service.push_utils import (group_by_plate, push_plate, select_record, push_admin)
 from utils.parse import parse_status
 
 
@@ -101,8 +101,6 @@ def main():
         return
 
     # 使用公共工具按车牌分组
-    from service.push_utils import (group_by_plate, push_plate,  # 避免循环引用
-                                    select_record)
 
     plate_to_infos = group_by_plate(all_jjz_data)
 
