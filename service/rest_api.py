@@ -12,6 +12,7 @@ POST /query              Body: {"plate": "京A12345"}
 import logging
 from typing import Any, Dict, List
 
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -116,8 +117,6 @@ def run_api(host: str | None = None, port: int | None = None):
     api_conf = conf.get("global", {}).get("remind", {}).get("api", {})
     host = host or api_conf.get("host", "0.0.0.0")
     port = port or api_conf.get("port", 8000)
-
-    import uvicorn
 
     logging.info(f"REST API 服务开始监听 {host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False)
