@@ -169,8 +169,9 @@ def main():
                 ):
                     logging.info(f"车牌{plate} 次日 Bark{idx} 推送结果: {res}")
             else:
-                # 无次日记录，且当日证仅到今日，需要提醒办理
-                if selected.get("end_date") == today_str:
+                # 无次日记录，且最后一次证的截止日期小于或等于今日，需要提醒办理
+                end_date_str = selected.get("end_date") or ""
+                if end_date_str and end_date_str <= today_str:
                     warn_msg = (
                         f"车牌 {plate} 明日尚未查询到进京证信息，请注意及时办理进京证。"
                     )
