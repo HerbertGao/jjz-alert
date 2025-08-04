@@ -9,6 +9,7 @@ from __future__ import annotations
 """
 
 import logging
+from datetime import date
 from typing import Any, Dict, List, Tuple
 
 from config.config import get_admin_bark_configs, get_default_icon
@@ -16,6 +17,7 @@ from service.bark_pusher import BarkLevel, push_bark
 from service.traffic_limiter import traffic_limiter
 
 # ----------------------------- 通用工具 ----------------------------- #
+
 
 def format_status_display(status: str) -> str:
     """格式化状态显示
@@ -55,10 +57,10 @@ def select_record(records: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 # ----------------------------- 推送核心 ----------------------------- #
 
-from datetime import date
 
-
-def build_message(record: Dict[str, Any], target_date: date | None = None) -> Tuple[str, BarkLevel]:
+def build_message(
+    record: Dict[str, Any], target_date: date | None = None
+) -> Tuple[str, BarkLevel]:
     """生成推送消息文本及级别"""
     plate: str = record["plate"]
     jjz_type_short = record["jjz_type"]
@@ -84,7 +86,9 @@ def build_message(record: Dict[str, Any], target_date: date | None = None) -> Tu
         )
         level = BarkLevel.ACTIVE
     else:
-        msg = f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{status_display}。"
+        msg = (
+            f"车牌 {plate_display} 的进京证（{jjz_type_short}）状态：{status_display}。"
+        )
         level = BarkLevel.CRITICAL
     return msg, level
 
@@ -93,20 +97,27 @@ def push_admin(title: str, body: str, level: BarkLevel = BarkLevel.CRITICAL):
     """向管理员 Bark 发送通知。若未配置管理员，则记录 warning。"""
     admin_configs = get_admin_bark_configs()
     if not admin_configs:
-        logging.warning('未配置管理员 Bark，无法发送管理员通知: %s - %s', title, body)
+        logging.warning("未配置管理员 Bark，无法发送管理员通知: %s - %s", title, body)
         return []
     results = []
     for cfg in admin_configs:
-        res = push_bark(title, None, body, cfg['bark_server'],
-                        encrypt=cfg.get('bark_encrypt', False),
-                        encrypt_key=cfg.get('bark_encrypt_key'),
-                        encrypt_iv=cfg.get('bark_encrypt_iv'),
-                        level=level)
+        res = push_bark(
+            title,
+            None,
+            body,
+            cfg["bark_server"],
+            encrypt=cfg.get("bark_encrypt", False),
+            encrypt_key=cfg.get("bark_encrypt_key"),
+            encrypt_iv=cfg.get("bark_encrypt_iv"),
+            level=level,
+        )
         results.append(res)
     return results
 
 
-def push_plate(record: Dict[str, Any], plate_cfg: Dict[str, Any], target_date: date | None = None) -> List[Any]:
+def push_plate(
+    record: Dict[str, Any], plate_cfg: Dict[str, Any], target_date: date | None = None
+) -> List[Any]:
     """向该车牌配置的所有 bark 服务推送消息，返回结果列表"""
     msg, level = build_message(record, target_date)
     results: List[Any] = []

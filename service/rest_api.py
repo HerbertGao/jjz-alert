@@ -9,6 +9,7 @@ POST /query              Body: {"plate": "京A12345"}
                         Trigger a query for the specified plate and send Bark push
 """
 
+import utils.logger
 import logging
 from typing import Any, Dict, List
 
@@ -16,7 +17,6 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-import utils.logger  # noqa: F401
 from config.config import get_jjz_accounts, get_plate_configs, load_yaml_config
 from service.jjz_checker import check_jjz_status
 from service.push_utils import push_plate, select_record

@@ -13,6 +13,7 @@ class BarkLevel(Enum):
     TIME_SENSITIVE = 'timeSensitive'
     PASSIVE = 'passive'
 
+
 def push_bark(title, subtitle, body, server, encrypt=False, encrypt_key=None, encrypt_iv=None, level=None, **kwargs):
     """
     普通推送：URL拼接title/subtitle/body及其它参数。
@@ -64,4 +65,4 @@ def push_bark(title, subtitle, body, server, encrypt=False, encrypt_key=None, en
         return resp.json()
     except Exception as e:
         logging.debug(f'Bark推送异常: {e}')
-        return {"error": str(e)} 
+        return {"error": str(e)}
