@@ -9,7 +9,7 @@ from __future__ import annotations
 """
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Dict, List, Tuple
 
 from config.config import get_admin_bark_configs, get_default_icon
@@ -67,10 +67,15 @@ def build_message(
     if "（" in jjz_type_short and "）" in jjz_type_short:
         jjz_type_short = jjz_type_short.split("（")[1].split("）")[0]
 
-    # 根据目标日期判断限行
+        # 根据目标日期判断限行
     if target_date is None or target_date == date.today():
+        # 今日
         is_limited = traffic_limiter.check_plate_limited(plate)
         limited_tag = "今日限行"
+    elif target_date == date.today() + timedelta(days=1):
+        # 明日
+        is_limited = traffic_limiter.check_plate_limited_on(plate, target_date)
+        limited_tag = "明日限行"
     else:
         is_limited = traffic_limiter.check_plate_limited_on(plate, target_date)
         limited_tag = target_date.strftime("%m-%d限行")
