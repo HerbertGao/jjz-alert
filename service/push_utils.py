@@ -8,6 +8,7 @@ from __future__ import annotations
 3. 调用 bark 接口完成推送。
 """
 
+import logging
 from typing import Any, Dict, List, Tuple
 
 from config.config import get_admin_bark_configs, get_default_icon
@@ -92,8 +93,7 @@ def push_admin(title: str, body: str, level: BarkLevel = BarkLevel.CRITICAL):
     """向管理员 Bark 发送通知。若未配置管理员，则记录 warning。"""
     admin_configs = get_admin_bark_configs()
     if not admin_configs:
-        from logging import warning
-        warning('未配置管理员 Bark，无法发送管理员通知: %s - %s', title, body)
+        logging.warning('未配置管理员 Bark，无法发送管理员通知: %s - %s', title, body)
         return []
     results = []
     for cfg in admin_configs:
