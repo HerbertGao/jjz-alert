@@ -183,10 +183,9 @@ class TrafficLimiter:
 
         # 查找目标日期对应的限行规则
         rule_for_day = None
-        from datetime import datetime as _dt
         for rule in self._cache:
             try:
-                rule_date = _dt.strptime(rule['limitedTime'], '%Y年%m月%d日').date()
+                rule_date = datetime.strptime(rule['limitedTime'], '%Y年%m月%d日').date()
             except Exception:
                 continue
             if self._is_same_day(rule_date, target):
