@@ -3,6 +3,11 @@ import os
 
 import yaml
 
+# 加密相关默认值
+DEFAULT_ENCRYPT_ALGORITHM = 'AES128'
+DEFAULT_ENCRYPT_MODE = 'CBC'
+DEFAULT_ENCRYPT_PADDING = 'pkcs7'
+
 
 def load_yaml_config(config_file='config.yaml'):
     """加载YAML配置文件"""
@@ -59,11 +64,11 @@ def get_admin_bark_configs():
             bark_list.append({
                 'bark_server': bark_config['server'].rstrip('/'),
                 'bark_encrypt': bark_config.get('encrypt', False),
+                'bark_encrypt_algorithm': bark_config.get('encrypt_algorithm', DEFAULT_ENCRYPT_ALGORITHM),
+                'bark_encrypt_mode': bark_config.get('encrypt_mode', DEFAULT_ENCRYPT_MODE),
+                'bark_encrypt_padding': bark_config.get('encrypt_padding', DEFAULT_ENCRYPT_PADDING),
                 'bark_encrypt_key': bark_config.get('encrypt_key'),
                 'bark_encrypt_iv': bark_config.get('encrypt_iv'),
-                'bark_encrypt_algorithm': bark_config.get('encrypt_algorithm'),
-                'bark_encrypt_mode': bark_config.get('encrypt_mode'),
-                'bark_encrypt_padding': bark_config.get('encrypt_padding'),
             })
         return bark_list
     return []
@@ -131,9 +136,9 @@ def parse_plate_configs(plate_configs):
                     bark_configs.append({
                         'bark_server': bark_config['server'].rstrip('/'),
                         'bark_encrypt': bark_config.get('encrypt', False),
-                        'bark_encrypt_algorithm': bark_config.get('encrypt_algorithm'),
-                        'bark_encrypt_mode': bark_config.get('encrypt_mode'),
-                        'bark_encrypt_padding': bark_config.get('encrypt_padding'),
+                        'bark_encrypt_algorithm': bark_config.get('encrypt_algorithm', DEFAULT_ENCRYPT_ALGORITHM),
+                        'bark_encrypt_mode': bark_config.get('encrypt_mode', DEFAULT_ENCRYPT_MODE),
+                        'bark_encrypt_padding': bark_config.get('encrypt_padding', DEFAULT_ENCRYPT_PADDING),
                         'bark_encrypt_key': bark_config.get('encrypt_key'),
                         'bark_encrypt_iv': bark_config.get('encrypt_iv'),
                     })

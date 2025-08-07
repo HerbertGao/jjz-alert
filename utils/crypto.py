@@ -20,6 +20,14 @@ def encrypt_body(
     """
 
     # 构造 openssl cipher 名称，例如 aes-128-cbc
+    # 若调用方传入 None，则使用默认值
+    if not algorithm:
+        algorithm = "AES128"
+    if not mode:
+        mode = "CBC"
+    if not padding:
+        padding = "pkcs7"
+
     alg = algorithm.upper()
     mode_u = mode.upper()
 
