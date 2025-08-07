@@ -74,6 +74,9 @@ plate_configs:
       # Bark配置2
       - server: "https://api.day.app/your_device_key_2"
         encrypt: true
+        encrypt_algorithm: "AES128"        # 可选，默认 AES128
+        encrypt_mode: "CBC"                # 可选，默认 CBC
+        encrypt_padding: "pkcs7"           # 可选，默认 pkcs7
         encrypt_key: "your_16_char_key"
         encrypt_iv: "your_16_char_iv"
 
@@ -88,6 +91,9 @@ plate_configs:
       # Bark配置2
       - server: "https://api.day.app/your_device_key_2"
         encrypt: true
+        encrypt_algorithm: "AES128"        # 可选，默认 AES128
+        encrypt_mode: "CBC"                # 可选，默认 CBC
+        encrypt_padding: "pkcs7"           # 可选，默认 pkcs7
         encrypt_key: "your_16_char_key"
         encrypt_iv: "your_16_char_iv"
 
@@ -213,6 +219,9 @@ docker run -d \
 
 - `server`: bark服务器地址
 - `encrypt`: 是否启用加密（true/false）
+- `encrypt_algorithm`: 加密算法，可选 AES128 / AES192 / AES256（默认 AES128）
+- `encrypt_mode`: 工作模式，可选 CBC / ECB / GCM（默认 CBC）
+- `encrypt_padding`: 填充方式，默认为 pkcs7
 - `encrypt_key`: 加密密钥（仅在启用加密时需要）
 - `encrypt_iv`: 加密向量（仅在启用加密时需要）
 
@@ -254,6 +263,9 @@ global:
 如果您的Bark服务启用了加密，需要配置以下参数：
 
 - `encrypt`: 设置为 true
+- `encrypt_algorithm`: 加密算法，可选 AES128 / AES192 / AES256（默认 AES128）
+- `encrypt_mode`: 工作模式，可选 CBC / ECB / GCM（默认 CBC）
+- `encrypt_padding`: 填充方式，默认为 pkcs7
 - `encrypt_key`: 16位字符的加密密钥
 - `encrypt_iv`: 16位字符的加密向量
 
@@ -263,6 +275,9 @@ global:
 bark_configs:
   - server: "https://api.day.app/your_key"
     encrypt: true
+    encrypt_algorithm: "AES128"  # 可选，默认 AES128
+    encrypt_mode: "CBC"          # 可选，默认 CBC
+    encrypt_padding: "pkcs7"     # 可选，默认 pkcs7
     encrypt_key: "your_16_char_key"
     encrypt_iv: "your_16_char_iv"
 ```

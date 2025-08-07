@@ -54,6 +54,9 @@ plate_configs:
       # Bark配置2
       - server: "https://api.day.app/your_device_key_2"
         encrypt: true
+        encrypt_algorithm: "AES128"        # 可选，默认 AES128
+        encrypt_mode: "CBC"                # 可选，默认 CBC
+        encrypt_padding: "pkcs7"           # 可选，默认 pkcs7
         encrypt_key: "your_16_char_key"
         encrypt_iv: "your_16_char_iv"
 
@@ -68,6 +71,9 @@ plate_configs:
       # Bark配置2
       - server: "https://api.day.app/your_device_key_2"
         encrypt: true
+        encrypt_algorithm: "AES128"        # 可选，默认 AES128
+        encrypt_mode: "CBC"                # 可选，默认 CBC
+        encrypt_padding: "pkcs7"           # 可选，默认 pkcs7
         encrypt_key: "your_16_char_key"
         encrypt_iv: "your_16_char_iv"
 

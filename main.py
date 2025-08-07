@@ -58,6 +58,9 @@ def main():
                     encrypt=bark_cfg.get("bark_encrypt", False),
                     encrypt_key=bark_cfg.get("bark_encrypt_key"),
                     encrypt_iv=bark_cfg.get("bark_encrypt_iv"),
+                    encrypt_algorithm=bark_cfg.get("bark_encrypt_algorithm"),
+                    encrypt_mode=bark_cfg.get("bark_encrypt_mode"),
+                    encrypt_padding=bark_cfg.get("bark_encrypt_padding"),
                     level=BarkLevel.CRITICAL,
                 )
         return
@@ -184,6 +187,9 @@ def main():
                             encrypt=bark_cfg.get("bark_encrypt", False),
                             encrypt_key=bark_cfg.get("bark_encrypt_key"),
                             encrypt_iv=bark_cfg.get("bark_encrypt_iv"),
+                            encrypt_algorithm=bark_cfg.get("bark_encrypt_algorithm"),
+                            encrypt_mode=bark_cfg.get("bark_encrypt_mode"),
+                            encrypt_padding=bark_cfg.get("bark_encrypt_padding"),
                             level=BarkLevel.CRITICAL,
                             icon=plate_cfg.get("plate_icon"),
                         )

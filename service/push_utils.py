@@ -114,6 +114,9 @@ def push_admin(title: str, body: str, level: BarkLevel = BarkLevel.CRITICAL):
             encrypt=cfg.get("bark_encrypt", False),
             encrypt_key=cfg.get("bark_encrypt_key"),
             encrypt_iv=cfg.get("bark_encrypt_iv"),
+            encrypt_algorithm=cfg.get("bark_encrypt_algorithm"),
+            encrypt_mode=cfg.get("bark_encrypt_mode"),
+            encrypt_padding=cfg.get("bark_encrypt_padding"),
             level=level,
         )
         results.append(res)
@@ -135,6 +138,9 @@ def push_plate(
             encrypt=bark_cfg.get("bark_encrypt", False),
             encrypt_key=bark_cfg.get("bark_encrypt_key"),
             encrypt_iv=bark_cfg.get("bark_encrypt_iv"),
+            encrypt_algorithm=bark_cfg.get("bark_encrypt_algorithm"),
+            encrypt_mode=bark_cfg.get("bark_encrypt_mode"),
+            encrypt_padding=bark_cfg.get("bark_encrypt_padding"),
             level=level,
             icon=plate_cfg.get("plate_icon", get_default_icon()),
         )

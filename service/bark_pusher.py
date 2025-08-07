@@ -14,7 +14,7 @@ class BarkLevel(Enum):
     PASSIVE = 'passive'
 
 
-def push_bark(title, subtitle, body, server, encrypt=False, encrypt_key=None, encrypt_iv=None, level=None, **kwargs):
+def push_bark(title, subtitle, body, server, encrypt=False, encrypt_key=None, encrypt_iv=None, encrypt_algorithm="AES128", encrypt_mode="CBC", encrypt_padding="pkcs7", level=None, **kwargs):
     """
     普通推送：URL拼接title/subtitle/body及其它参数。
     加密推送：所有参数组装成json后加密，密文作为ciphertext参数，URL仅拼接title。
@@ -40,9 +40,18 @@ def push_bark(title, subtitle, body, server, encrypt=False, encrypt_key=None, en
         for k, v in kwargs.items():
             if v is not None:
                 payload[k] = v
-        ciphertext = encrypt_body(payload, encrypt_key, encrypt_iv)
+        ciphertext = encrypt_body(
+            payload,
+            encrypt_key,
+            encrypt_iv,
+            encrypt_algorithm,
+            encrypt_mode,
+            encrypt_padding,
+        )
         url = f"{url}/{title}" if title else url
         query['ciphertext'] = ciphertext
+        if encrypt_iv:
+            query['iv'] = encrypt_iv
         debug_info = f'[DEBUG] Bark加密推送: url={url}, body={body}, ciphertext={ciphertext}, payload={payload}'
     else:
         if level_value:

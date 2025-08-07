@@ -61,6 +61,9 @@ def get_admin_bark_configs():
                 'bark_encrypt': bark_config.get('encrypt', False),
                 'bark_encrypt_key': bark_config.get('encrypt_key'),
                 'bark_encrypt_iv': bark_config.get('encrypt_iv'),
+                'bark_encrypt_algorithm': bark_config.get('encrypt_algorithm'),
+                'bark_encrypt_mode': bark_config.get('encrypt_mode'),
+                'bark_encrypt_padding': bark_config.get('encrypt_padding'),
             })
         return bark_list
     return []
@@ -128,6 +131,9 @@ def parse_plate_configs(plate_configs):
                     bark_configs.append({
                         'bark_server': bark_config['server'].rstrip('/'),
                         'bark_encrypt': bark_config.get('encrypt', False),
+                        'bark_encrypt_algorithm': bark_config.get('encrypt_algorithm'),
+                        'bark_encrypt_mode': bark_config.get('encrypt_mode'),
+                        'bark_encrypt_padding': bark_config.get('encrypt_padding'),
                         'bark_encrypt_key': bark_config.get('encrypt_key'),
                         'bark_encrypt_iv': bark_config.get('encrypt_iv'),
                     })
