@@ -1,6 +1,7 @@
 import json
 import subprocess
 import tempfile
+import hashlib
 
 
 def encrypt_body(
@@ -56,4 +57,16 @@ def encrypt_body(
         elif mode_u != "ECB":
             raise ValueError("当前模式需要 iv，但未提供")
         ciphertext = subprocess.check_output(cmd).decode()
-    return ciphertext 
+    return ciphertext
+
+
+def generate_md5(text: str) -> str:
+    """生成字符串的MD5值
+    
+    Args:
+        text: 要计算MD5的字符串
+        
+    Returns:
+        MD5哈希值的十六进制字符串
+    """
+    return hashlib.md5(text.encode('utf-8')).hexdigest() 
