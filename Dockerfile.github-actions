@@ -1,4 +1,4 @@
-# 使用 Python 3.12 作为基础镜像
+# 使用 Python 3.13 作为基础镜像
 FROM python:3.13-slim
 
 # 设置构建参数
