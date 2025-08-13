@@ -15,8 +15,38 @@ from typing import Any, Dict, List, Tuple
 from config.config import get_admin_bark_configs, get_default_icon
 from service.bark_pusher import BarkLevel, push_bark
 from service.traffic_limiter import traffic_limiter
+from utils.crypto import generate_md5
 
 # ----------------------------- 通用工具 ----------------------------- #
+
+
+def extract_device_key_from_server(server_url: str) -> str:
+    """从Bark服务器URL中提取device_key
+    
+    Args:
+        server_url
+        
+    Returns:
+        device_key
+    """
+    # 移除末尾的斜杠
+    url = server_url.rstrip('/')
+    # 获取最后一个斜杠后的部分
+    return url.split('/')[-1]
+
+
+def generate_push_id(plate: str, device_key: str) -> str:
+    """生成推送ID，为车牌号拼接device_key的MD5值
+    
+    Args:
+        plate: 车牌号
+        device_key: 设备密钥
+        
+    Returns:
+        MD5哈希值
+    """
+    combined = f"{plate}{device_key}"
+    return generate_md5(combined)
 
 
 def format_status_display(status: str) -> str:
@@ -106,6 +136,10 @@ def push_admin(title: str, body: str, level: BarkLevel = BarkLevel.CRITICAL):
         return []
     results = []
     for cfg in admin_configs:
+        # 生成管理员推送ID（使用特殊标识）
+        device_key = extract_device_key_from_server(cfg["bark_server"])
+        admin_push_id = generate_push_id("ADMIN", device_key)
+        
         res = push_bark(
             title,
             None,
@@ -118,6 +152,7 @@ def push_admin(title: str, body: str, level: BarkLevel = BarkLevel.CRITICAL):
             encrypt_mode=cfg.get("bark_encrypt_mode"),
             encrypt_padding=cfg.get("bark_encrypt_padding"),
             level=level,
+            push_id=admin_push_id,
         )
         results.append(res)
     return results
@@ -129,7 +164,13 @@ def push_plate(
     """向该车牌配置的所有 bark 服务推送消息，返回结果列表"""
     msg, level = build_message(record, target_date)
     results: List[Any] = []
+    plate = record["plate"]
+    
     for bark_cfg in plate_cfg["bark_configs"]:
+        # 生成推送ID
+        device_key = extract_device_key_from_server(bark_cfg["bark_server"])
+        push_id = generate_push_id(plate, device_key)
+        
         result = push_bark(
             "进京证状态",
             None,
@@ -143,6 +184,7 @@ def push_plate(
             encrypt_padding=bark_cfg.get("bark_encrypt_padding"),
             level=level,
             icon=plate_cfg.get("plate_icon", get_default_icon()),
+            push_id=push_id,
         )
         results.append(result)
     return results

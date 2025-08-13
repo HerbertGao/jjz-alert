@@ -16,7 +16,7 @@ from config.config import (
 )
 from service.bark_pusher import BarkLevel, push_bark
 from service.jjz_checker import check_jjz_status
-from service.push_utils import group_by_plate, push_admin, push_plate, select_record
+from service.push_utils import group_by_plate, push_admin, push_plate, select_record, extract_device_key_from_server, generate_push_id
 from service.traffic_limiter import traffic_limiter
 from utils.parse import parse_status
 
@@ -50,6 +50,10 @@ def main():
         # 若有管理员 Bark，发送提醒
         if admin_bark_configs:
             for idx, bark_cfg in enumerate(admin_bark_configs, 1):
+                # 生成管理员推送ID（使用特殊标识）
+                device_key = extract_device_key_from_server(bark_cfg["bark_server"])
+                admin_push_id = generate_push_id("ADMIN", device_key)
+                
                 push_bark(
                     "配置错误",
                     None,
@@ -62,6 +66,7 @@ def main():
                     encrypt_mode=bark_cfg.get("bark_encrypt_mode"),
                     encrypt_padding=bark_cfg.get("bark_encrypt_padding"),
                     level=BarkLevel.CRITICAL,
+                    push_id=admin_push_id,
                 )
         return
 
@@ -179,6 +184,10 @@ def main():
                         f"车牌 {plate} 明日尚未查询到进京证信息，请注意及时办理进京证。"
                     )
                     for bark_cfg in plate_cfg["bark_configs"]:
+                        # 生成推送ID
+                        device_key = extract_device_key_from_server(bark_cfg["bark_server"])
+                        push_id = generate_push_id(plate, device_key)
+                        
                         warn_res = push_bark(
                             "进京证提醒",
                             None,
@@ -192,6 +201,7 @@ def main():
                             encrypt_padding=bark_cfg.get("bark_encrypt_padding"),
                             level=BarkLevel.CRITICAL,
                             icon=plate_cfg.get("plate_icon"),
+                            push_id=push_id,
                         )
                         logging.info(f"车牌{plate} 次日提醒 Bark 推送结果: {warn_res}")
 
