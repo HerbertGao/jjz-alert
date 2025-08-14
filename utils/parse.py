@@ -34,4 +34,4 @@ def parse_status(data):
                 'days_left': days_left,
                 'jjz_type': jjz_type
             })
-    return all_status 
+    return all_status

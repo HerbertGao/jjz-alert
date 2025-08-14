@@ -1,16 +1,16 @@
+import hashlib
 import json
 import subprocess
 import tempfile
-import hashlib
 
 
 def encrypt_body(
-    payload_dict,
-    key: str,
-    iv: str | None,
-    algorithm: str = "AES128",
-    mode: str = "CBC",
-    padding: str = "pkcs7",
+        payload_dict,
+        key: str,
+        iv: str | None,
+        algorithm: str = "AES128",
+        mode: str = "CBC",
+        padding: str = "pkcs7",
 ):
     """将 payload_dict 加密并返回 Base64 字符串
 
@@ -69,4 +69,4 @@ def generate_md5(text: str) -> str:
     Returns:
         MD5哈希值的十六进制字符串
     """
-    return hashlib.md5(text.encode('utf-8')).hexdigest() 
+    return hashlib.md5(text.encode('utf-8')).hexdigest()

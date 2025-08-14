@@ -132,6 +132,7 @@ dmypy.json
 *.log
 .DS_Store
 config.yaml
+config.yaml.*.backup
 .idea/
 .vscode/ 
 .history/

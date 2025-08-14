@@ -2,7 +2,7 @@ name: Docker Image Build
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ '**' ]
   workflow_dispatch:
     inputs:
       version:
@@ -22,30 +22,69 @@ jobs:
     - name: Log into GitHub Container Registry
       run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+    - name: Determine version and tags
+      run: |
+        # 获取分支名，移除 refs/heads/ 前缀
+        BRANCH_NAME=${GITHUB_REF#refs/heads/}
+        # 将分支名中的特殊字符替换为连字符，确保标签有效
+        SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9.-]/-/g')
+        
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ inputs.version }}"
+        elif [ "$BRANCH_NAME" = "master" ]; then
+          VERSION="${{ github.sha }}"
+        else
+          VERSION="$SAFE_BRANCH_NAME"
+        fi
+        echo "IMAGE_VERSION=$VERSION" >> $GITHUB_ENV
+        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
     - name: Build and push Docker image
       run: |
         PLATFORMS=linux/arm64,linux/amd64
         DOCKER_IMAGE=ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
         ARCH_TAGS="arm64 amd64"
-        VERSION=${{ inputs.version || github.sha }}
+        VERSION=${{ env.IMAGE_VERSION }}
+        BRANCH_NAME=${{ env.BRANCH_NAME }}
         echo "DOCKER_IMAGE_LOWERCASE=$DOCKER_IMAGE" >> $GITHUB_ENV
-        echo "IMAGE_VERSION=$VERSION" >> $GITHUB_ENV
-        docker buildx build --platform $PLATFORMS \
-          -f Dockerfile.github-actions \
-          -t $DOCKER_IMAGE:latest \
-          -t $DOCKER_IMAGE:${VERSION} \
-          --push .
+        
+        # 构建基础镜像标签
+        if [ "$BRANCH_NAME" = "master" ]; then
+          # master分支打latest标签
+          docker buildx build --platform $PLATFORMS \
+            -f Dockerfile.github-actions \
+            -t $DOCKER_IMAGE:latest \
+            -t $DOCKER_IMAGE:${VERSION} \
+            --push .
+        else
+          # 其他分支只打分支名标签
+          docker buildx build --platform $PLATFORMS \
+            -f Dockerfile.github-actions \
+            -t $DOCKER_IMAGE:${VERSION} \
+            --push .
+        fi
+        
+        # 构建架构特定镜像
         for ARCH in $ARCH_TAGS; do
           if [ "$ARCH" == "arm64" ]; then
             TAG_ARCH="aarch64"
           else
             TAG_ARCH=$ARCH
           fi
-          docker buildx build --platform linux/${ARCH} \
-            -f Dockerfile.github-actions \
-            -t ${DOCKER_IMAGE}-${TAG_ARCH}:latest \
-            -t ${DOCKER_IMAGE}-${TAG_ARCH}:${VERSION} \
-            --push .
+          if [ "$BRANCH_NAME" = "master" ]; then
+            # master分支的架构镜像也打latest标签
+            docker buildx build --platform linux/${ARCH} \
+              -f Dockerfile.github-actions \
+              -t ${DOCKER_IMAGE}-${TAG_ARCH}:latest \
+              -t ${DOCKER_IMAGE}-${TAG_ARCH}:${VERSION} \
+              --push .
+          else
+            # 其他分支的架构镜像只打分支名标签
+            docker buildx build --platform linux/${ARCH} \
+              -f Dockerfile.github-actions \
+              -t ${DOCKER_IMAGE}-${TAG_ARCH}:${VERSION} \
+              --push .
+          fi
         done
 
     - name: Run security scan

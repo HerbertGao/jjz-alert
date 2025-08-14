@@ -1,12 +1,57 @@
 services:
+  # JJZ-Alert主应用服务
   jjz-alert:
-    image: ghcr.io/herbertgao/jjz-alert:latest
-    restart: unless-stopped # 只需要单次推送则设置为 no
+    image: ghcr.io/herbertgao/jjz-alert:v2.0-dev
+    restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
+      # Redis连接配置
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     ports:
       - "8000:8000"
-    # 如需自定义命令可取消注释
-    # command: ["python", "main.py"] 
+    depends_on:
+      - redis
+    networks:
+      - jjz-network
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis数据存储服务
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/etc/redis/redis.conf:ro
+    ports:
+      - "6379:6379"
+    networks:
+      - jjz-network
+    command: redis-server /etc/redis/redis.conf
+    # Redis健康检查
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+# 数据卷
+volumes:
+  redis_data:
+    driver: local
+
+# 网络配置
+networks:
+  jjz-network:
+    driver: bridge
