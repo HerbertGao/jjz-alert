@@ -20,7 +20,6 @@ from pydantic import BaseModel, Field
 
 from config.config_v2 import config_manager
 from service.jjz.jjz_service import JJZService
-from service.notification.unified_pusher import unified_pusher, PushPriority
 from service.traffic import traffic_limiter
 from utils.logger import get_structured_logger
 from utils.parse import parse_status
@@ -406,27 +405,23 @@ async def query_plates(request: QueryRequest):
         selected = max(target_records, key=lambda x: x.get("apply_time", ""))
         logging.info(f"REST API 推送，车牌 {plate_number} 选中记录: {selected}")
 
-        # 构建推送内容
-        title = f"{plate_config.display_name or plate_number}进京证状态"
+        # 使用与main.py完全相同的推送逻辑
+        from service.notification.push_helpers import push_jjz_status
 
-        # 构建推送内容（简化版本）
-        jjz_type = selected.get("jjz_type", "未知")
-        status = selected.get("status", "未知")
-        start_date = selected.get("start_date", "未知")
-        end_date = selected.get("end_date", "未知")
-        remaining_days = selected.get("remaining_days", "未知")
+        # 将parse_status返回的数据转换为push_jjz_status期望的格式
+        jjz_data = {
+            "status": "valid",  # API推送默认为有效状态
+            "jjzzlmc": selected.get("jjz_type", ""),
+            "blztmc": selected.get("status", ""),
+            "valid_start": selected.get("start_date", "未知"),
+            "valid_end": selected.get("end_date", "未知"),
+            "days_remaining": selected.get("days_left"),
+            "sycs": selected.get("sycs", "")
+        }
 
-        body = f"车牌 {plate_number} 的进京证（{jjz_type}）状态：{status}，有效期 {start_date} 至 {end_date}，剩余 {remaining_days} 天。"
-
-        # 执行推送
+        # 执行推送 - 使用与main.py完全相同的函数
         try:
-            push_result = await unified_pusher.push(
-                plate_config=plate_config,
-                title=title,
-                body=body,
-                priority=PushPriority.NORMAL,
-                icon=plate_config.icon
-            )
+            push_result = await push_jjz_status(plate_config, jjz_data)
 
             response_data[plate_number] = {
                 "records": len(target_records),
