@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7-labs
 # 使用 Python 3.13 作为基础镜像
 FROM python:3.13-slim
 
@@ -19,24 +20,17 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV TZ=Asia/Shanghai
 ENV VERSION=${VERSION}
+# 优化：关闭pip版本检查
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_INPUT=1
 
 # 优化：先复制requirements文件，利用Docker层缓存
 COPY requirements-prod.txt .
 
-# 优化：安装系统依赖和Python依赖，合并RUN命令减少层数
-# 预安装编译依赖，安装Python包后清理
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        gcc \
-        g++ \
-        libffi-dev \
-        && \
-    pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements-prod.txt && \
-    apt-get remove -y gcc g++ libffi-dev && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+# 优化：仅使用二进制wheel，并启用pip缓存加速
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install --only-binary=:all: -r requirements-prod.txt
 
 # 复制项目文件
 COPY . .
