@@ -1,0 +1,14 @@
+curl-cffi==0.13.0
+apscheduler==3.11.0
+PyYAML==6.0.2
+urllib3
+fastapi
+uvicorn
+pydantic
+# Redis相关依赖
+redis>=5.0.0
+aioredis>=2.0.0
+# Apprise多通道推送
+apprise-herbertgao>=1.9.5
+# Home Assistant集成
+aiohttp>=3.8.0

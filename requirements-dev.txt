@@ -1,0 +1,9 @@
+# 生产环境依赖
+-r requirements-prod.txt
+
+# 测试相关依赖
+pytest>=7.0.0
+pytest-asyncio>=0.20.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+fakeredis>=2.10.0

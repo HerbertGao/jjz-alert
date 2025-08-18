@@ -18,6 +18,10 @@ jobs:
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+      with:
+        # 启用缓存功能
+        driver-opts: |
+          image=moby/buildkit:v0.12.0
 
     - name: Log into GitHub Container Registry
       run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -48,23 +52,27 @@ jobs:
         BRANCH_NAME=${{ env.BRANCH_NAME }}
         echo "DOCKER_IMAGE_LOWERCASE=$DOCKER_IMAGE" >> $GITHUB_ENV
         
-        # 构建基础镜像标签
+        # 优化：使用缓存构建多架构镜像
         if [ "$BRANCH_NAME" = "master" ]; then
           # master分支打latest标签
           docker buildx build --platform $PLATFORMS \
             -f Dockerfile.github-actions \
             -t $DOCKER_IMAGE:latest \
             -t $DOCKER_IMAGE:${VERSION} \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
             --push .
         else
           # 其他分支只打分支名标签
           docker buildx build --platform $PLATFORMS \
             -f Dockerfile.github-actions \
             -t $DOCKER_IMAGE:${VERSION} \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
             --push .
         fi
         
-        # 构建架构特定镜像
+        # 优化：使用缓存构建架构特定镜像
         for ARCH in $ARCH_TAGS; do
           if [ "$ARCH" == "arm64" ]; then
             TAG_ARCH="aarch64"
@@ -77,12 +85,16 @@ jobs:
               -f Dockerfile.github-actions \
               -t ${DOCKER_IMAGE}-${TAG_ARCH}:latest \
               -t ${DOCKER_IMAGE}-${TAG_ARCH}:${VERSION} \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
               --push .
           else
             # 其他分支的架构镜像只打分支名标签
             docker buildx build --platform linux/${ARCH} \
               -f Dockerfile.github-actions \
               -t ${DOCKER_IMAGE}-${TAG_ARCH}:${VERSION} \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
               --push .
           fi
         done
