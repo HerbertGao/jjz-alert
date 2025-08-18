@@ -1,3 +1,6 @@
+# 初始化日志（需在其他自定义模块之前导入）
+import utils.logger
+
 """
 RESTful API for querying JJZ status for a single plate and pushing notification.
 该 API 受 `global.remind.enable` 和 `global.remind.api.enable` 双重控制；只有两者均为 true 时才会启动。

@@ -17,20 +17,13 @@ class ApprisePusher:
 
     def __init__(self):
         self.apprise_instance = None
-        # 延迟初始化，不在构造函数中立即初始化
+        # 兼容旧逻辑的属性占位；实际发送时改为每次调用使用独立实例，避免并发污染
 
     def _init_apprise(self):
-        """初始化Apprise实例"""
+        """（保留以兼容）初始化Apprise实例。注意：发送时不复用该实例。"""
         try:
             self.apprise_instance = apprise.Apprise()
-
-            # 验证实例是否真的可用（显式判断是否为None，避免Apprise实例因__len__==0被判定为False）
-            if self.apprise_instance is not None:
-                return True
-            else:
-                logging.error("apprise实例创建失败")
-                return False
-
+            return self.apprise_instance is not None
         except Exception as e:
             logging.error(f"Apprise实例初始化失败: {e}")
             self.apprise_instance = None
@@ -56,31 +49,19 @@ class ApprisePusher:
             推送结果
         """
         try:
-            if self.apprise_instance is None:
-                init_success = self._init_apprise()
-                if not init_success:
-                    logging.error("apprise_instance初始化失败")
-                    return {
-                        'success': False,
-                        'error': 'Apprise实例初始化失败',
-                        'valid_urls': 0,
-                        'invalid_urls': len(urls),
-                        'url_results': []
-                    }
-
             # 使用传入的标题
             final_title = title
 
-            # 清除之前的URL配置
-            self.apprise_instance.clear()
+            # 为本次发送创建独立的Apprise实例，避免并发时共享实例被clear()/add()互相影响
+            apobj = apprise.Apprise()
 
-            # 添加URL配置并记录结果
+            # 添加URL配置并记录结果（基于本地实例）
             valid_urls = []
             invalid_urls = []
             url_results = []
 
             for url in urls:
-                if self.apprise_instance.add(url):
+                if apobj.add(url):
                     valid_urls.append(url)
                     url_results.append({
                         'url': self._mask_url(url),
@@ -119,7 +100,7 @@ class ApprisePusher:
             loop = asyncio.get_event_loop()
             success = await loop.run_in_executor(
                 None,
-                self.apprise_instance.notify,
+                apobj.notify,
                 body,
                 final_title
             )

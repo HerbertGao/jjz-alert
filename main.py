@@ -1,4 +1,5 @@
 # 初始化日志（需在其他自定义模块之前导入）
+import utils.logger
 
 import asyncio
 import logging
