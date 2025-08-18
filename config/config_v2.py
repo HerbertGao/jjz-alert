@@ -210,13 +210,22 @@ class ConfigManager:
         if "global" in v1_config:
             global_data = v1_config["global"]
 
-            # 定时提醒配置
+            # 定时提醒配置（含 API 配置）
             if "remind" in global_data:
                 remind_data = global_data["remind"]
+                # 基础 remind
                 config.global_config.remind = RemindConfig(
                     enable=remind_data.get("enable", True),
                     times=remind_data.get("times", ["08:00", "12:00", "18:00"]),
                 )
+                # 嵌套的 API 配置（host/port/enable）
+                if isinstance(remind_data.get("api"), dict):
+                    api_data = remind_data.get("api", {})
+                    config.global_config.remind.api = APIConfig(
+                        enable=api_data.get("enable", True),
+                        host=api_data.get("host", config.global_config.remind.api.host),
+                        port=api_data.get("port", config.global_config.remind.api.port),
+                    )
 
             # 日志配置
             if "log" in global_data:
@@ -262,13 +271,22 @@ class ConfigManager:
         if "global" in v2_config:
             global_data = v2_config["global"]
 
-            # 定时提醒配置
+            # 定时提醒配置（含 API 配置）
             if "remind" in global_data:
                 remind_data = global_data["remind"]
+                # 基础 remind
                 config.global_config.remind = RemindConfig(
                     enable=remind_data.get("enable", True),
                     times=remind_data.get("times", ["08:00", "12:00", "18:00"]),
                 )
+                # 嵌套的 API 配置（host/port/enable）
+                if isinstance(remind_data.get("api"), dict):
+                    api_data = remind_data.get("api", {})
+                    config.global_config.remind.api = APIConfig(
+                        enable=api_data.get("enable", config.global_config.remind.api.enable),
+                        host=api_data.get("host", config.global_config.remind.api.host),
+                        port=api_data.get("port", config.global_config.remind.api.port),
+                    )
 
             # Redis配置
             if "redis" in global_data:

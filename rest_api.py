@@ -463,6 +463,23 @@ def is_api_enabled() -> bool:
         return False
 
 
-def run_api(host: str = "127.0.0.1", port: int = 8000):
-    """启动REST API服务"""
-    uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False)
+def run_api(host: str = None, port: int = None):
+    """启动REST API服务
+    优先级：显式参数 > 配置 global.remind.api.(host/port) > 默认 0.0.0.0:8000
+    """
+    cfg_host, cfg_port = None, None
+    try:
+        app_config = config_manager.load_config()
+        if (
+            app_config and app_config.global_config and app_config.global_config.remind
+            and app_config.global_config.remind.api
+        ):
+            cfg_host = app_config.global_config.remind.api.host
+            cfg_port = app_config.global_config.remind.api.port
+    except Exception:
+        pass
+
+    final_host = host or cfg_host or "0.0.0.0"
+    final_port = port or cfg_port or 8000
+
+    uvicorn.run(app, host=final_host, port=final_port, log_level="warning", access_log=False)
