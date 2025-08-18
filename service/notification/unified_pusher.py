@@ -142,7 +142,12 @@ class UnifiedPusher:
         """
         try:
             # 标准化参数
+            original_priority = priority
             priority = self._normalize_priority(priority)
+
+            # 添加优先级调试日志
+            logging.debug(
+                f"[PRIORITY_DEBUG] 车牌 {plate_config.plate} - 原始优先级: {original_priority}, 标准化后: {priority}")
 
             # 设置默认group为车牌号
             if group is None:
@@ -162,6 +167,10 @@ class UnifiedPusher:
 
             # 根据优先级调整推送参数
             push_params = self._adjust_params_by_priority(push_params, priority)
+
+            # 记录调整后的推送参数
+            logging.debug(
+                f"[PRIORITY_DEBUG] 车牌 {plate_config.plate} - 调整后的推送参数: priority={push_params.get('priority')}, sound={push_params.get('sound')}")
 
             # 发送推送
             return await self._send_notifications(

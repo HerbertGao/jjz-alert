@@ -109,6 +109,12 @@ class ApprisePusher:
             # 执行推送
             start_time = datetime.now()
 
+            # 添加详细的推送参数日志
+            logging.debug(f"[APPRISE_DEBUG] 准备推送 - 标题: {final_title}")
+            logging.debug(f"[APPRISE_DEBUG] 推送内容: {body[:100]}...")  # 只显示前100字符
+            logging.debug(f"[APPRISE_DEBUG] 推送参数: {kwargs}")
+            logging.debug(f"[APPRISE_DEBUG] 有效URL数量: {len(valid_urls)}")
+
             # 在线程池中执行同步的Apprise推送
             loop = asyncio.get_event_loop()
             success = await loop.run_in_executor(

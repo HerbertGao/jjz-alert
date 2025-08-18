@@ -19,10 +19,7 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from config.config_v2 import config_manager
-from service.jjz.jjz_service import JJZService
-from service.traffic import traffic_limiter
 from utils.logger import get_structured_logger
-from utils.parse import parse_status
 
 app = FastAPI(title="JJZ Alert API", version="2.0.0")
 
@@ -358,89 +355,69 @@ async def query_plates(request: QueryRequest):
     if not is_api_enabled():
         raise HTTPException(status_code=403, detail="REST API 已关闭，请在配置中启用后再试")
 
-    # 获取v2.0配置
+    # 使用统一的推送服务
+    from service.notification.jjz_push_service import jjz_push_service
+
     try:
-        app_config = config_manager.load_config()
-        jjz_accounts = app_config.jjz_accounts
-        if not jjz_accounts:
-            raise HTTPException(status_code=500, detail="未配置任何进京证账户")
+        # 执行统一的推送工作流
+        workflow_result = await jjz_push_service.execute_push_workflow(
+            plate_numbers=input_plates,
+            force_refresh=False,  # API推送不强制刷新缓存
+            include_ha_sync=True
+        )
 
-        # 获取车牌配置
-        plate_configs = app_config.plates
-        plate_dict = {p.plate.upper(): p for p in plate_configs}
+        # 转换为API响应格式
+        response_data: Dict[str, Any] = {}
 
-    except Exception as e:
-        logging.error(f"获取v2.0配置失败: {e}")
-        raise HTTPException(status_code=500, detail="配置加载失败")
+        # 检查是否有配置错误
+        if not workflow_result["success"] and workflow_result["errors"]:
+            # 检查是否是配置相关错误
+            config_errors = [err for err in workflow_result["errors"] if "配置" in err or "未找到车牌配置" in err]
+            if config_errors:
+                if "未找到车牌配置" in config_errors[0]:
+                    raise HTTPException(status_code=404, detail=config_errors[0])
+                else:
+                    raise HTTPException(status_code=500, detail=config_errors[0])
 
-    missing = [p for p in input_plates if p not in plate_dict]
-    if missing:
-        raise HTTPException(status_code=404, detail=f"未找到车牌配置: {', '.join(missing)}")
+        # 为每个请求的车牌生成响应
+        for plate in input_plates:
+            plate_result = workflow_result["plate_results"].get(plate)
 
-    # Preload traffic-limiter cache to speed up check
-    traffic_limiter.preload_cache()
+            if plate_result:
+                response_data[plate] = {
+                    "success": plate_result["success"],
+                    "jjz_status": plate_result["jjz_status"],
+                    "traffic_status": plate_result["traffic_status"],
+                    "push_results": plate_result["push_result"],
+                    "error": plate_result.get("error")
+                }
+            else:
+                # 车牌未在结果中找到，可能是配置问题
+                response_data[plate] = {
+                    "success": False,
+                    "jjz_status": None,
+                    "traffic_status": None,
+                    "push_results": None,
+                    "error": "车牌处理失败或未找到配置"
+                }
 
-    # Collect all jjz data
-    jjz_service = JJZService()
-    all_jjz_data: List[Dict[str, Any]] = []
-
-    for account in jjz_accounts:
-        data = jjz_service._check_jjz_status(account.jjz.url, account.jjz.token)
-        if "error" in data:
-            raise HTTPException(status_code=502, detail=f"账户 {account.name} 查询失败: {data['error']}")
-        status_data = parse_status(data)
-        all_jjz_data.extend(status_data)
-
-    response_data: Dict[str, Any] = {}
-
-    for plate_number in input_plates:
-        target_records = [info for info in all_jjz_data if info["plate"].upper() == plate_number]
-        plate_config = plate_dict[plate_number]
-
-        if not target_records:
-            response_data[plate_number] = {"records": 0, "push_results": []}
-            continue
-
-        # 选择最新的记录
-        selected = max(target_records, key=lambda x: x.get("apply_time", ""))
-        logging.info(f"REST API 推送，车牌 {plate_number} 选中记录: {selected}")
-
-        # 使用与main.py完全相同的推送逻辑
-        from service.notification.push_helpers import push_jjz_status
-
-        # 将parse_status返回的数据转换为push_jjz_status期望的格式
-        jjz_data = {
-            "status": "valid",  # API推送默认为有效状态
-            "jjzzlmc": selected.get("jjz_type", ""),
-            "blztmc": selected.get("status", ""),
-            "valid_start": selected.get("start_date", "未知"),
-            "valid_end": selected.get("end_date", "未知"),
-            "days_remaining": selected.get("days_left"),
-            "sycs": selected.get("sycs", "")
+        # 添加总体统计信息
+        response_data["_summary"] = {
+            "total_plates": workflow_result["total_plates"],
+            "success_plates": workflow_result["success_plates"],
+            "failed_plates": workflow_result["failed_plates"],
+            "ha_sync_result": workflow_result["ha_sync_result"],
+            "workflow_success": workflow_result["success"]
         }
 
-        # 执行推送 - 使用与main.py完全相同的函数
-        try:
-            push_result = await push_jjz_status(plate_config, jjz_data)
+        return response_data
 
-            response_data[plate_number] = {
-                "records": len(target_records),
-                "selected_record": selected,
-                "push_results": push_result
-            }
-
-        except Exception as e:
-            logging.error(f"推送失败: {e}")
-            response_data[plate_number] = {
-                "records": len(target_records),
-                "selected_record": selected,
-                "push_results": {
-                    "success": False,
-                    "error": str(e)
-                }
-            }
-
-    return response_data
+    except HTTPException:
+        # 重新抛出HTTP异常
+        raise
+    except Exception as e:
+        logging.error(f"API推送工作流执行失败: {e}")
+        raise HTTPException(status_code=500, detail=f"推送执行失败: {str(e)}")
 
 
 def is_api_enabled() -> bool:
@@ -471,8 +448,8 @@ def run_api(host: str = None, port: int = None):
     try:
         app_config = config_manager.load_config()
         if (
-            app_config and app_config.global_config and app_config.global_config.remind
-            and app_config.global_config.remind.api
+                app_config and app_config.global_config and app_config.global_config.remind
+                and app_config.global_config.remind.api
         ):
             cfg_host = app_config.global_config.remind.api.host
             cfg_port = app_config.global_config.remind.api.port

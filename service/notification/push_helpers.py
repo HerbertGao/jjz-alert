@@ -51,8 +51,13 @@ async def push_jjz_status(
             format_jjz_error_content,
         )
 
+        # 添加状态和优先级判断的调试日志
+        logging.debug(
+            f"[STATUS_DEBUG] 车牌 {plate} - JJZ状态: {status}, 有效期: {valid_end}, 剩余天数: {days_remaining}")
+
         if status == JJZStatusEnum.VALID.value:
             priority = PushPriority.NORMAL
+            logging.debug(f"[STATUS_DEBUG] 车牌 {plate} - 状态为VALID，设置优先级为NORMAL")
             body = format_jjz_push_content(
                 display_name=display_name,
                 jjzzlmc=jjz_data.get("jjzzlmc", ""),
@@ -66,10 +71,12 @@ async def push_jjz_status(
 
         elif status == JJZStatusEnum.EXPIRED.value:
             priority = PushPriority.HIGH
+            logging.debug(f"[STATUS_DEBUG] 车牌 {plate} - 状态为EXPIRED，设置优先级为HIGH")
             body = format_jjz_expired_content(display_name, sycs)
 
         elif status == JJZStatusEnum.PENDING.value:
             priority = PushPriority.HIGH
+            logging.debug(f"[STATUS_DEBUG] 车牌 {plate} - 状态为PENDING，设置优先级为HIGH")
             apply_time = jjz_data.get("apply_time", "未知")
             body = format_jjz_pending_content(
                 display_name=display_name,
@@ -79,6 +86,7 @@ async def push_jjz_status(
 
         else:
             priority = PushPriority.NORMAL
+            logging.debug(f"[STATUS_DEBUG] 车牌 {plate} - 状态为{status}，设置优先级为NORMAL")
             error_msg = jjz_data.get("error_message", "")
             body = format_jjz_error_content(
                 display_name=display_name,
