@@ -29,7 +29,7 @@ from config.migration import ConfigMigration
 from config.validation import ConfigValidator
 from config import config_manager
 from service.notification.adapter import notification_adapter
-from service.homeassistant import ha_sync_service, get_ha_client
+from service.homeassistant import ha_sync_service
 
 
 async def cmd_migrate(args):
@@ -196,13 +196,13 @@ async def cmd_status(args):
                 else:
                     print(f"   状态: ❌ 连接失败")
                     print(f"   错误: {connection_status.get('error', 'unknown')}")
-                
+
                 config_info = ha_status.get('config', {})
                 print(f"   URL: {config_info.get('url')}")
                 print(f"   实体前缀: {config_info.get('entity_prefix')}")
                 print(f"   查询后同步: {'✅' if config_info.get('sync_after_query') else '❌'}")
                 print(f"   车牌设备模式: {'✅' if config_info.get('create_device_per_plate') else '❌'}")
-                
+
                 last_sync = ha_status.get('last_sync_time')
                 if last_sync:
                     print(f"   最后同步: {last_sync}")
@@ -220,13 +220,13 @@ async def cmd_status(args):
 async def cmd_ha_test(args):
     """测试Home Assistant连接"""
     print("🏠 测试Home Assistant连接...")
-    
+
     try:
         config_manager.config_file = args.config
         config_manager._config = None  # 重置缓存
-        
+
         result = await ha_sync_service.test_connection()
-        
+
         if result['success']:
             print(f"✅ 连接成功!")
             print(f"   版本: {result.get('version', 'unknown')}")
@@ -234,7 +234,7 @@ async def cmd_ha_test(args):
         else:
             print(f"❌ 连接失败!")
             print(f"   错误: {result.get('error', 'unknown')}")
-            
+
     except Exception as e:
         print(f"❌ 测试异常: {e}")
 
@@ -242,84 +242,84 @@ async def cmd_ha_test(args):
 async def cmd_ha_sync(args):
     """手动同步数据到Home Assistant"""
     print("🏠 手动同步数据到Home Assistant...")
-    
+
     try:
         config_manager.config_file = args.config
         config_manager._config = None  # 重置缓存
-        
+
         # 检查HA是否启用
         from config import get_homeassistant_config
         ha_config = get_homeassistant_config()
-        
+
         if not ha_config.enabled:
             print("❌ Home Assistant集成未启用")
             return
-            
+
         # 模拟主流程数据获取（简化版）
         from service.jjz.jjz_service import jjz_service
         from service.traffic.traffic_service import traffic_service
         from config import get_plates_v2
-        
+
         print("📊 获取车牌数据...")
         plates_config = get_plates_v2()
-        
+
         if not plates_config:
             print("❌ 未配置任何车牌")
             return
-            
+
         jjz_results = {}
         traffic_results = {}
-        
+
         for plate_config in plates_config:
             plate = plate_config.plate
             print(f"   查询车牌: {plate}")
-            
+
             try:
                 # 获取进京证状态
                 jjz_status = await jjz_service.get_jjz_status(plate)
                 jjz_results[plate] = jjz_status
-                
+
                 # 获取限行状态
                 traffic_status = await traffic_service.check_plate_limited(plate)
                 traffic_results[plate] = traffic_status
-                
+
             except Exception as e:
                 print(f"   ⚠️ 车牌 {plate} 数据获取失败: {e}")
-        
+
         if not jjz_results or not traffic_results:
             print("❌ 没有有效数据可同步")
             return
-            
+
         print(f"🔄 同步 {len(jjz_results)} 个车牌数据到Home Assistant...")
-        
+
         # 执行同步
         result = await ha_sync_service.sync_from_query_results(jjz_results, traffic_results)
-        
+
         # 显示结果
         success_count = result.get('success_plates', 0)
         total_count = result.get('total_plates', 0)
         success_rate = result.get('success_rate', 0)
-        
+
         if success_count > 0:
             print(f"✅ 同步完成: {success_count}/{total_count} 车牌成功 ({success_rate}%)")
-            
+
             if args.verbose:
                 print(f"\n📋 详细结果:")
                 for plate_result in result.get('plate_results', []):
                     plate = plate_result.get('plate_number')
                     success = plate_result.get('success')
                     entity_count = plate_result.get('entity_count', 0)
-                    
+
                     status_icon = "✅" if success else "❌"
                     print(f"   {status_icon} {plate}: {entity_count} 个实体")
-                    
+
                     if not success and plate_result.get('error'):
                         print(f"      错误: {plate_result['error']}")
         else:
             print(f"❌ 同步失败")
             for error in result.get('errors', []):
                 print(f"   错误: {error}")
-                
+
     except Exception as e:
         print(f"❌ 同步异常: {e}")
 
@@ -327,34 +327,34 @@ async def cmd_ha_sync(args):
 async def cmd_ha_cleanup(args):
     """清理Home Assistant过期实体"""
     print("🏠 清理Home Assistant过期实体...")
-    
+
     try:
         config_manager.config_file = args.config
         config_manager._config = None  # 重置缓存
-        
+
         if not args.force:
             confirm = input("⚠️ 这将删除不在当前配置中的HA实体，确认继续? (y/N): ")
             if confirm.lower() != 'y':
                 print("❌ 取消操作")
                 return
-        
+
         result = await ha_sync_service.cleanup_stale_entities()
-        
+
         if result['success']:
             deleted_count = result.get('deleted_count', 0)
             total_found = result.get('total_found', 0)
-            
+
             print(f"✅ 清理完成!")
             print(f"   发现实体: {total_found} 个")
             print(f"   删除实体: {deleted_count} 个")
-            
+
             if result.get('errors'):
                 print(f"⚠️ 部分删除失败:")
                 for error in result['errors'][:5]:  # 只显示前5个错误
                     print(f"   - {error}")
         else:
             print(f"❌ 清理失败: {result.get('error')}")
-            
+
     except Exception as e:
         print(f"❌ 清理异常: {e}")
 
@@ -420,13 +420,13 @@ def main():
     # Home Assistant相关命令
     ha_parser = subparsers.add_parser('ha', help='Home Assistant相关操作')
     ha_subparsers = ha_parser.add_subparsers(dest='ha_command', help='HA子命令')
-    
+
     # HA连接测试
     ha_test_parser = ha_subparsers.add_parser('test', help='测试HA连接')
-    
+
     # HA手动同步
     ha_sync_parser = ha_subparsers.add_parser('sync', help='手动同步数据到HA')
-    
+
     # HA实体清理
     ha_cleanup_parser = ha_subparsers.add_parser('cleanup', help='清理HA过期实体')
     ha_cleanup_parser.add_argument('--force', action='store_true', help='强制执行，不询问确认')

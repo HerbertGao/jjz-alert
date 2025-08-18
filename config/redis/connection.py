@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any
 
 import redis
 import redis.asyncio as aioredis
-from redis.exceptions import ConnectionError, TimeoutError, RedisError
+from redis.exceptions import ConnectionError, TimeoutError
 
 from config import get_redis_config, RedisConfig
 

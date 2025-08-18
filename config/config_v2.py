@@ -77,18 +77,18 @@ class HomeAssistantConfig:
     url: str = "http://homeassistant.local:8123"
     token: str = ""
     entity_prefix: str = "jjz_alert"
-    
+
     # 同步配置
-    sync_after_query: bool = True          # 查询后同步（推荐）
-    
+    sync_after_query: bool = True  # 查询后同步（推荐）
+
     # 错误处理
-    retry_count: int = 3                   # 同步失败重试次数
-    timeout: int = 30                      # 请求超时(秒)
-    
+    retry_count: int = 3  # 同步失败重试次数
+    timeout: int = 30  # 请求超时(秒)
+
     # 设备和实体创建策略
-    create_device_per_plate: bool = True   # 为每个车牌创建独立设备
+    create_device_per_plate: bool = True  # 为每个车牌创建独立设备
     device_manufacturer: str = "JJZ Alert"  # 设备制造商
-    device_model: str = "Beijing Vehicle"   # 设备型号
+    device_model: str = "Beijing Vehicle"  # 设备型号
 
 
 @dataclass
@@ -291,20 +291,20 @@ class ConfigManager:
             # Home Assistant配置
             if "homeassistant" in global_data:
                 ha_data = global_data["homeassistant"]
-                
+
                 config.global_config.homeassistant = HomeAssistantConfig(
                     enabled=ha_data.get("enabled", False),
                     url=ha_data.get("url", "http://homeassistant.local:8123"),
                     token=ha_data.get("token", ""),
                     entity_prefix=ha_data.get("entity_prefix", "jjz_alert"),
-                    
+
                     # 同步配置
                     sync_after_query=ha_data.get("sync_after_query", True),
-                    
+
                     # 错误处理
                     retry_count=ha_data.get("retry_count", 3),
                     timeout=ha_data.get("timeout", 30),
-                    
+
                     # 设备创建策略
                     create_device_per_plate=ha_data.get("create_device_per_plate", True),
                     device_manufacturer=ha_data.get("device_manufacturer", "JJZ Alert"),

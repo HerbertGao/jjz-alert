@@ -6,8 +6,8 @@ Home Assistant同步服务
 
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
 from datetime import datetime
+from typing import Dict, Any, List, Optional
 
 from config import get_homeassistant_config, get_plates_v2
 from service.jjz.jjz_service import JJZStatus
@@ -28,10 +28,10 @@ class HomeAssistantSyncService:
         """获取HA客户端"""
         if not self.config.enabled:
             return None
-            
+
         if self._client is None:
             self._client = await get_ha_client()
-            
+
         return self._client
 
     async def test_connection(self) -> Dict[str, Any]:
@@ -51,12 +51,12 @@ class HomeAssistantSyncService:
                 }
 
             result = await client.test_connection()
-            
+
             if result['success']:
                 logging.info(f"Home Assistant连接测试成功: {result.get('version', 'unknown')}")
             else:
                 logging.error(f"Home Assistant连接测试失败: {result.get('error', 'unknown')}")
-                
+
             return result
 
         except Exception as e:
@@ -68,14 +68,14 @@ class HomeAssistantSyncService:
             }
 
     async def sync_plate_data(
-        self,
-        plate_number: str,
-        display_name: str,
-        jjz_status: JJZStatus,
-        traffic_status: PlateTrafficStatus
+            self,
+            plate_number: str,
+            display_name: str,
+            jjz_status: JJZStatus,
+            traffic_status: PlateTrafficStatus
     ) -> Dict[str, Any]:
         """同步单个车牌数据到Home Assistant"""
-        
+
         sync_result = {
             'plate_number': plate_number,
             'display_name': display_name,
@@ -107,7 +107,7 @@ class HomeAssistantSyncService:
             for attempt in range(self.config.retry_count):
                 try:
                     result = await client.sync_plate_device(plate_device)
-                    
+
                     # 更新同步结果
                     sync_result.update({
                         'success': result['success_count'] > 0,
@@ -117,18 +117,18 @@ class HomeAssistantSyncService:
                         'entity_results': result['entity_results'],
                         'attempt': attempt + 1
                     })
-                    
+
                     if result['errors']:
                         sync_result['error'] = '; '.join(result['errors'][:3])  # 只显示前3个错误
-                    
+
                     # 如果成功或者是最后一次尝试，跳出重试循环
                     if result['success_count'] > 0 or attempt == self.config.retry_count - 1:
                         break
-                        
+
                     # 重试前等待
                     if attempt < self.config.retry_count - 1:
                         await asyncio.sleep(2)
-                        
+
                 except HomeAssistantAPIError as e:
                     if "Authentication failed" in str(e) or "Access forbidden" in str(e):
                         # 认证错误不重试
@@ -139,12 +139,14 @@ class HomeAssistantSyncService:
                         sync_result['error'] = str(e)
                     else:
                         # 继续重试
-                        logging.warning(f"车牌 {plate_number} HA同步失败，尝试 {attempt + 1}/{self.config.retry_count}: {e}")
+                        logging.warning(
+                            f"车牌 {plate_number} HA同步失败，尝试 {attempt + 1}/{self.config.retry_count}: {e}")
                         await asyncio.sleep(2)
 
             # 记录同步结果
             if sync_result['success']:
-                logging.info(f"车牌 {plate_number} HA同步成功: {sync_result['success_entities']}/{sync_result['entity_count']} 实体")
+                logging.info(
+                    f"车牌 {plate_number} HA同步成功: {sync_result['success_entities']}/{sync_result['entity_count']} 实体")
             else:
                 logging.error(f"车牌 {plate_number} HA同步失败: {sync_result.get('error', 'unknown')}")
 
@@ -156,11 +158,11 @@ class HomeAssistantSyncService:
         return sync_result
 
     async def sync_multiple_plates(
-        self,
-        plates_data: List[Dict[str, Any]]
+            self,
+            plates_data: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """批量同步多个车牌数据"""
-        
+
         batch_result = {
             'total_plates': len(plates_data),
             'success_plates': 0,
@@ -198,7 +200,7 @@ class HomeAssistantSyncService:
             # 统计结果
             for i, result in enumerate(results):
                 plate_data = plates_data[i]
-                
+
                 if isinstance(result, Exception):
                     error_msg = f"车牌 {plate_data['plate_number']} 同步异常: {result}"
                     batch_result['errors'].append(error_msg)
@@ -216,12 +218,14 @@ class HomeAssistantSyncService:
                         batch_result['failed_plates'] += 1
 
             # 记录批量同步结果
-            success_rate = (batch_result['success_plates'] / batch_result['total_plates'] * 100) if batch_result['total_plates'] > 0 else 0
-            
+            success_rate = (batch_result['success_plates'] / batch_result['total_plates'] * 100) if batch_result[
+                                                                                                        'total_plates'] > 0 else 0
+
             batch_result['end_time'] = datetime.now().isoformat()
             batch_result['success_rate'] = round(success_rate, 1)
 
-            logging.info(f"HA批量同步完成: {batch_result['success_plates']}/{batch_result['total_plates']} 车牌成功 ({success_rate:.1f}%)")
+            logging.info(
+                f"HA批量同步完成: {batch_result['success_plates']}/{batch_result['total_plates']} 车牌成功 ({success_rate:.1f}%)")
 
         except Exception as e:
             error_msg = f"批量同步异常: {e}"
@@ -231,12 +235,12 @@ class HomeAssistantSyncService:
         return batch_result
 
     async def sync_from_query_results(
-        self,
-        jjz_results: Dict[str, JJZStatus],
-        traffic_results: Dict[str, PlateTrafficStatus]
+            self,
+            jjz_results: Dict[str, JJZStatus],
+            traffic_results: Dict[str, PlateTrafficStatus]
     ) -> Dict[str, Any]:
         """从查询结果同步数据"""
-        
+
         # 获取配置的车牌信息
         plates_config = get_plates_v2()
         plate_info_map = {plate.plate: plate for plate in plates_config}
@@ -246,7 +250,7 @@ class HomeAssistantSyncService:
         for plate_number in jjz_results.keys():
             if plate_number not in traffic_results:
                 continue
-                
+
             plate_config = plate_info_map.get(plate_number)
             display_name = plate_config.display_name if plate_config else plate_number
 
@@ -267,11 +271,11 @@ class HomeAssistantSyncService:
 
         # 执行批量同步
         result = await self.sync_multiple_plates(plates_data)
-        
+
         # 更新最后同步时间
         if result['success_plates'] > 0:
             self._last_sync_time = datetime.now()
-            
+
         return result
 
     async def cleanup_stale_entities(self) -> Dict[str, Any]:
@@ -296,9 +300,9 @@ class HomeAssistantSyncService:
 
             # 执行清理
             result = await client.cleanup_stale_entities(current_plates)
-            
+
             logging.info(f"HA实体清理完成: 删除 {result['deleted_count']} 个过期实体")
-            
+
             return {
                 'success': True,
                 'deleted_count': result['deleted_count'],
@@ -357,17 +361,17 @@ ha_sync_service = HomeAssistantSyncService()
 
 
 async def sync_to_homeassistant(
-    jjz_results: Dict[str, JJZStatus],
-    traffic_results: Dict[str, PlateTrafficStatus]
+        jjz_results: Dict[str, JJZStatus],
+        traffic_results: Dict[str, PlateTrafficStatus]
 ) -> Optional[Dict[str, Any]]:
     """便捷函数：同步查询结果到Home Assistant"""
     try:
         config = get_homeassistant_config()
         if not config.enabled or not config.sync_after_query:
             return None
-            
+
         return await ha_sync_service.sync_from_query_results(jjz_results, traffic_results)
-        
+
     except Exception as e:
         logging.error(f"同步到Home Assistant失败: {e}")
         return None
@@ -377,17 +381,17 @@ async def get_ha_service_status() -> Dict[str, Any]:
     """获取Home Assistant服务状态（供健康检查使用）"""
     try:
         config = get_homeassistant_config()
-        
+
         if not config.enabled:
             return {
                 "status": "disabled",
                 "enabled": False,
                 "message": "Home Assistant集成未启用"
             }
-        
+
         # 获取详细状态
         sync_status = await ha_sync_service.get_sync_status()
-        
+
         # 判断总体状态
         if sync_status.get('connection_status', {}).get('success', False):
             status = "healthy"
@@ -395,7 +399,7 @@ async def get_ha_service_status() -> Dict[str, Any]:
             status = "error"
         else:
             status = "disabled"
-        
+
         return {
             "status": status,
             "enabled": sync_status.get('enabled', False),
@@ -405,7 +409,7 @@ async def get_ha_service_status() -> Dict[str, Any]:
             "sync_after_query": config.sync_after_query,
             "entity_prefix": config.entity_prefix
         }
-        
+
     except Exception as e:
         logging.error(f"获取HA服务状态失败: {e}")
         return {

@@ -155,8 +155,6 @@ class ApprisePusher:
                 'url_results': []
             }
 
-
-
     def _mask_url(self, url: str) -> str:
         """遮蔽URL中的敏感信息"""
         try:

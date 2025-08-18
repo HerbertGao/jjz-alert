@@ -95,7 +95,7 @@ class ConfigValidator:
             # 检查URL格式是否符合HA规范
             if not (ha_config.url.startswith('http://') or ha_config.url.startswith('https://')):
                 self.errors.append("Home Assistant URL必须以http://或https://开头")
-            
+
             # 检查是否包含端口
             if ':8123' not in ha_config.url and 'homeassistant.local' in ha_config.url:
                 self.warnings.append("Home Assistant URL建议包含端口号:8123")

@@ -11,8 +11,8 @@ POST /query              Body: {"plates": ["京A12345", "津B67890"]}
 """
 
 import logging
-from typing import Any, Dict, List
 import time
+from typing import Any, Dict, List
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
@@ -22,8 +22,8 @@ from config.config_v2 import config_manager
 from service.jjz.jjz_service import JJZService
 from service.notification.unified_pusher import unified_pusher, PushPriority
 from service.traffic import traffic_limiter
+from utils.logger import get_structured_logger
 from utils.parse import parse_status
-from utils.logger import get_structured_logger, LogCategory
 
 app = FastAPI(title="JJZ Alert API", version="2.0.0")
 
@@ -35,12 +35,12 @@ structured_logger = get_structured_logger("rest_api")
 async def log_requests(request: Request, call_next):
     """记录API请求的结构化日志"""
     start_time = time.time()
-    
+
     response = await call_next(request)
-    
+
     process_time = time.time() - start_time
     response_time_ms = round(process_time * 1000, 2)
-    
+
     # 记录API调用日志
     structured_logger.log_api_call(
         method=request.method,
@@ -53,7 +53,7 @@ async def log_requests(request: Request, call_next):
             "client_ip": request.client.host if request.client else None
         }
     )
-    
+
     return response
 
 
@@ -66,15 +66,15 @@ async def health() -> Dict[str, Any]:
     """Enhanced health check endpoint with comprehensive system status"""
     from datetime import datetime
     import time
-    
+
     start_time = time.time()
     timestamp = datetime.now().isoformat()
-    
+
     try:
         # 检查配置状态
         app_config = config_manager.load_config()
         config_status = "ok" if app_config.jjz_accounts else "no_accounts"
-        
+
         health_data = {
             "status": "ok",
             "version": "2.0.0",
@@ -88,7 +88,7 @@ async def health() -> Dict[str, Any]:
             },
             "services": {}
         }
-        
+
         # 检查Redis连接
         try:
             from config.redis.connection import redis_manager
@@ -104,14 +104,14 @@ async def health() -> Dict[str, Any]:
                 "error": str(e),
                 "connected": False
             }
-        
+
         # 检查缓存服务
         try:
             from service.cache.cache_service import CacheService
             cache_service = CacheService()
             cache_info = await cache_service.get_cache_info()
             cache_stats = await cache_service.get_cache_stats(days=1)
-            
+
             health_data["services"]["cache"] = {
                 "status": "ok",
                 "total_keys": cache_info.get("key_counts", {}).get("total", 0),
@@ -124,7 +124,7 @@ async def health() -> Dict[str, Any]:
                 "status": "error",
                 "error": str(e)
             }
-        
+
         # 检查JJZ服务
         try:
             from service.jjz.jjz_service import jjz_service
@@ -139,7 +139,7 @@ async def health() -> Dict[str, Any]:
                 "status": "error",
                 "error": str(e)
             }
-        
+
         # 检查推送服务
         try:
             from service.notification.unified_pusher import unified_pusher
@@ -153,7 +153,7 @@ async def health() -> Dict[str, Any]:
                 "status": "error",
                 "error": str(e)
             }
-        
+
         # 检查Home Assistant集成
         try:
             from service.homeassistant.ha_sync import get_ha_service_status
@@ -164,7 +164,7 @@ async def health() -> Dict[str, Any]:
                 "status": "error",
                 "error": str(e)
             }
-        
+
         # 检查错误处理系统
         try:
             from utils.error_handler import get_error_handling_status
@@ -175,26 +175,26 @@ async def health() -> Dict[str, Any]:
                 "status": "error",
                 "error": str(e)
             }
-        
+
         # 计算总体健康状态
         service_statuses = [
             health_data["services"].get("redis", {}).get("status") == "healthy",
             health_data["services"].get("cache", {}).get("status") == "ok",
             health_data["services"].get("jjz", {}).get("status") == "healthy"
         ]
-        
+
         if all(service_statuses):
             health_data["status"] = "healthy"
         elif any(service_statuses):
             health_data["status"] = "degraded"
         else:
             health_data["status"] = "unhealthy"
-        
+
         # 添加响应时间
         health_data["response_time_ms"] = round((time.time() - start_time) * 1000, 2)
-        
+
         return health_data
-        
+
     except Exception as e:
         logging.error(f"健康检查失败: {e}")
         return {
@@ -211,10 +211,10 @@ async def metrics() -> Dict[str, Any]:
     """监控指标端点，提供详细的系统性能和运行指标"""
     from datetime import datetime, timedelta
     import time
-    
+
     start_time = time.time()
     timestamp = datetime.now().isoformat()
-    
+
     try:
         metrics_data = {
             "timestamp": timestamp,
@@ -224,19 +224,19 @@ async def metrics() -> Dict[str, Any]:
             "business": {},
             "errors": {}
         }
-        
+
         # 系统指标
         try:
             # Redis指标
             from config.redis.connection import redis_manager
             redis_health = await redis_manager.health_check()
-            
+
             # 缓存指标
             from service.cache.cache_service import CacheService
             cache_service = CacheService()
             cache_info = await cache_service.get_cache_info()
             cache_stats = await cache_service.get_cache_stats(days=7)  # 过去7天统计
-            
+
             metrics_data["system"] = {
                 "redis": {
                     "status": redis_health.get("status", "unknown"),
@@ -254,21 +254,21 @@ async def metrics() -> Dict[str, Any]:
             }
         except Exception as e:
             metrics_data["system"]["error"] = str(e)
-        
+
         # 性能指标
         try:
             # JJZ服务指标
             from service.jjz.jjz_service import jjz_service
             jjz_status = await jjz_service.get_service_status()
-            
+
             # 推送服务指标
             from service.notification.unified_pusher import unified_pusher
             push_status = await unified_pusher.get_service_status()
-            
+
             # Home Assistant指标
             from service.homeassistant.ha_sync import get_ha_service_status
             ha_status = await get_ha_service_status()
-            
+
             metrics_data["performance"] = {
                 "jjz_service": {
                     "cached_plates": jjz_status.get("cached_plates_count", 0),
@@ -288,15 +288,15 @@ async def metrics() -> Dict[str, Any]:
             }
         except Exception as e:
             metrics_data["performance"]["error"] = str(e)
-        
+
         # 业务指标
         try:
             # 配置统计
             app_config = config_manager.load_config()
-            
+
             # 推送历史统计（过去24小时）
             yesterday = datetime.now() - timedelta(days=1)
-            
+
             metrics_data["business"] = {
                 "configuration": {
                     "total_plates": len(app_config.plates),
@@ -305,18 +305,18 @@ async def metrics() -> Dict[str, Any]:
                 },
                 "operations_24h": {
                     "estimated_queries": 0,  # 需要从日志或缓存中统计
-                    "estimated_pushes": 0,   # 需要从推送历史中统计
-                    "ha_syncs": 0           # 需要从HA同步历史中统计
+                    "estimated_pushes": 0,  # 需要从推送历史中统计
+                    "ha_syncs": 0  # 需要从HA同步历史中统计
                 }
             }
         except Exception as e:
             metrics_data["business"]["error"] = str(e)
-        
+
         # 错误指标
         try:
             from utils.error_handler import get_error_handling_status
             error_status = get_error_handling_status()
-            
+
             metrics_data["errors"] = {
                 "total_errors": error_status.get("error_collector", {}).get("total_errors", 0),
                 "error_types": error_status.get("error_collector", {}).get("error_types", {}),
@@ -333,12 +333,12 @@ async def metrics() -> Dict[str, Any]:
             }
         except Exception as e:
             metrics_data["errors"]["error"] = str(e)
-        
+
         # 添加响应时间
         metrics_data["response_time_ms"] = round((time.time() - start_time) * 1000, 2)
-        
+
         return metrics_data
-        
+
     except Exception as e:
         logging.error(f"获取监控指标失败: {e}")
         return {
@@ -386,7 +386,7 @@ async def query_plates(request: QueryRequest):
     all_jjz_data: List[Dict[str, Any]] = []
 
     for account in jjz_accounts:
-        data = jjz_service._check_jjz_status(account.jjz_url, account.jjz_token)
+        data = jjz_service._check_jjz_status(account.jjz.url, account.jjz.token)
         if "error" in data:
             raise HTTPException(status_code=502, detail=f"账户 {account.name} 查询失败: {data['error']}")
         status_data = parse_status(data)
@@ -424,7 +424,8 @@ async def query_plates(request: QueryRequest):
                 plate_config=plate_config,
                 title=title,
                 body=body,
-                priority=PushPriority.NORMAL
+                priority=PushPriority.NORMAL,
+                icon=plate_config.icon
             )
 
             response_data[plate_number] = {

@@ -4,7 +4,6 @@
 提供包括紧急程度、分类、分组、自定义图标等多种额外参数的推送服务
 """
 
-import asyncio
 import logging
 from datetime import datetime
 from enum import Enum
@@ -300,12 +299,12 @@ class UnifiedPusher:
                         notification_index=i,
                         push_params=push_params,
                     )
-                    
+
                     results["notifications"].append(result)
                     # 累加URL级别的统计
                     results["total_count"] += result.get("total_count", 0)
                     results["success_count"] += result.get("success_count", 0)
-                    
+
                 except Exception as e:
                     error_msg = f"推送任务异常: {e}"
                     logging.error(error_msg)
@@ -401,7 +400,7 @@ class UnifiedPusher:
         try:
             if not self.apprise_enabled:
                 return {
-                    "success": False, 
+                    "success": False,
                     "error": "Apprise推送已禁用",
                     "total_count": 0,
                     "success_count": 0
@@ -433,7 +432,7 @@ class UnifiedPusher:
 
             # 从Apprise结果中提取URL级别的统计
             total_count = result.get("valid_urls", 0) + result.get("invalid_urls", 0)
-            
+
             # 计算实际成功的URL数量
             success_count = 0
             if result.get("url_results"):
@@ -455,7 +454,7 @@ class UnifiedPusher:
         except Exception as e:
             logging.error(f"Apprise推送失败: {e}")
             return {
-                "success": False, 
+                "success": False,
                 "error": str(e),
                 "total_count": 0,
                 "success_count": 0
@@ -498,6 +497,7 @@ class UnifiedPusher:
                 title=test_title,
                 body=test_body,
                 priority=PushPriority.NORMAL,
+                icon=plate_config.icon
             )
 
             return result
@@ -607,12 +607,12 @@ class UnifiedPusher:
             # 获取配置信息
             from config.config_v2 import config_manager
             app_config = config_manager.load_config()
-            
+
             # 统计配置
             total_plates = len(app_config.plates)
             total_channels = 0
             apprise_channels = 0
-            
+
             for plate in app_config.plates:
                 for notification in plate.notifications:
                     if notification.type == "apprise":
@@ -620,7 +620,7 @@ class UnifiedPusher:
                         total_channels += len(notification.urls)
                     else:
                         total_channels += 1
-            
+
             # 获取Apprise支持的服务列表
             supported_services = []
             apprise_available = False
@@ -631,7 +631,7 @@ class UnifiedPusher:
                 apprise_available = True
             except Exception as e:
                 logging.warning(f"Apprise不可用: {e}")
-            
+
             # 测试Apprise推送器状态
             apprise_status = "unknown"
             try:
@@ -643,7 +643,7 @@ class UnifiedPusher:
                     apprise_status = "disabled"
             except Exception:
                 apprise_status = "error"
-            
+
             return {
                 "status": "healthy" if apprise_status == "healthy" else apprise_status,
                 "channels_available": len(supported_services),

@@ -9,16 +9,16 @@ from datetime import datetime, date
 from typing import Dict, Any, Optional
 
 from config import PlateConfig
-from service.notification.unified_pusher import unified_pusher, PushPriority
 from service.jjz.jjz_status import JJZStatusEnum
+from service.notification.unified_pusher import unified_pusher, PushPriority
 
 
 async def push_jjz_status(
-    plate_config: PlateConfig,
-    jjz_data: Dict[str, Any],
-    target_date: Optional[date] = None,
-    is_next_day: bool = False,
-    traffic_reminder: str = None,
+        plate_config: PlateConfig,
+        jjz_data: Dict[str, Any],
+        target_date: Optional[date] = None,
+        is_next_day: bool = False,
+        traffic_reminder: str = None,
 ) -> Dict[str, Any]:
     """
     推送进京证状态
@@ -114,7 +114,7 @@ async def push_jjz_status(
 
 
 async def push_jjz_reminder(
-    plate_config: PlateConfig, message: str, priority: PushPriority = PushPriority.HIGH
+        plate_config: PlateConfig, message: str, priority: PushPriority = PushPriority.HIGH
 ) -> Dict[str, Any]:
     """
     推送进京证提醒
@@ -160,10 +160,10 @@ async def push_jjz_reminder(
 
 
 async def push_admin_notification(
-    plate_configs: list,
-    title: str,
-    message: str,
-    priority: PushPriority = PushPriority.NORMAL,
+        plate_configs: list,
+        title: str,
+        message: str,
+        priority: PushPriority = PushPriority.NORMAL,
 ) -> Dict[str, Any]:
     """
     推送管理员通知

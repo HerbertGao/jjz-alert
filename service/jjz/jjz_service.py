@@ -13,11 +13,11 @@ from typing import Dict, List, Optional, Any
 from config.config_v2 import JJZAccount
 from service.cache.cache_service import CacheService
 from service.jjz.jjz_status import JJZStatusEnum
-from utils.http import http_post
 from utils.error_handler import (
-    APIError, handle_critical_error, 
+    APIError, handle_critical_error,
     is_token_error, with_retry
 )
+from utils.http import http_post
 from utils.logger import get_structured_logger, LogCategory
 
 
@@ -41,13 +41,13 @@ class JJZStatus:
         """转换为字典格式"""
         # 使用 jjz_utils 格式化进京证类型和状态描述
         from utils.jjz_utils import extract_jjz_type_from_jjzzlmc, extract_status_from_blztmc
-        
+
         # 格式化进京证类型
         formatted_jjz_type = extract_jjz_type_from_jjzzlmc(self.jjzzlmc or "")
-        
+
         # 格式化状态描述
         formatted_status_desc = extract_status_from_blztmc(self.blztmc or "未知", self.status)
-        
+
         return {
             'plate': self.plate,
             'status': self.status,
@@ -345,7 +345,7 @@ class JJZService:
     async def get_jjz_status(self, plate: str) -> JJZStatus:
         """获取进京证状态 - 每次运行主流程时都重新查询"""
         start_time = time.time()
-        
+
         try:
             # 记录开始查询
             self.structured_logger.log_structured(
@@ -355,17 +355,17 @@ class JJZService:
                 plate_number=plate,
                 operation="get_jjz_status"
             )
-            
+
             # 每次运行主流程时都从API获取最新数据
             status = await self._fetch_from_api(plate)
-            
+
             duration_ms = round((time.time() - start_time) * 1000, 2)
             success = status.status != JJZStatusEnum.ERROR.value
 
             # 查询成功后缓存数据，供推送和后续其他操作使用
             if success:
                 await self._cache_status(status)
-            
+
             # 记录业务操作结果
             self.structured_logger.log_business_operation(
                 operation="get_jjz_status",
@@ -383,7 +383,7 @@ class JJZService:
 
         except Exception as e:
             duration_ms = round((time.time() - start_time) * 1000, 2)
-            
+
             # 记录失败的业务操作
             self.structured_logger.log_business_operation(
                 operation="get_jjz_status",
@@ -395,7 +395,7 @@ class JJZService:
                     "error_type": type(e).__name__
                 }
             )
-            
+
             logging.error(f"获取进京证状态失败: plate={plate}, error={e}")
             return JJZStatus(
                 plate=plate,
@@ -421,7 +421,7 @@ class JJZService:
 
         # 记录每个车牌找到的状态
         plate_statuses = {plate: [] for plate in plates}
-        
+
         # 只遍历一次所有账户，为所有车牌收集数据
         for account in accounts:
             try:
@@ -452,7 +452,7 @@ class JJZService:
                 # 按申请时间排序，选择最新的
                 latest_status = max(statuses, key=lambda s: s.apply_time or '')
                 results[plate] = latest_status
-                
+
                 # 缓存成功查询的结果
                 if latest_status.status != JJZStatusEnum.ERROR.value:
                     await self._cache_status(latest_status)
@@ -495,7 +495,7 @@ class JJZService:
                     last_error = response_data['error']
                     error_msg = response_data['error']
                     logging.warning(f"账户 {account.name} 查询失败: {error_msg}")
-                    
+
                     # 检查是否为Token错误，需要通知管理员
                     if is_token_error(Exception(error_msg)):
                         token_error = APIError(
@@ -504,7 +504,7 @@ class JJZService:
                         )
                         await handle_critical_error(token_error, f"查询车牌{plate}进京证状态")
                     continue
-                
+
                 all_accounts_failed = False
 
                 # 解析所有进京证数据

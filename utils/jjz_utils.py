@@ -3,8 +3,6 @@
 进京证相关工具函数
 """
 
-from service.jjz.jjz_status import JJZStatusEnum
-
 
 def extract_jjz_type_from_jjzzlmc(jjzzlmc: str) -> str:
     """
@@ -61,14 +59,14 @@ def extract_status_from_blztmc(blztmc: str, status: str) -> str:
 
 
 def format_jjz_push_content(
-    display_name: str,
-    jjzzlmc: str,
-    blztmc: str,
-    status: str,
-    valid_start: str,
-    valid_end: str,
-    days_remaining: int,
-    sycs: str,
+        display_name: str,
+        jjzzlmc: str,
+        blztmc: str,
+        status: str,
+        valid_start: str,
+        valid_end: str,
+        days_remaining: int,
+        sycs: str,
 ) -> str:
     """
     格式化进京证推送内容（有效状态）
@@ -146,7 +144,7 @@ def format_jjz_pending_content(display_name: str, jjzzlmc: str, apply_time: str)
 
 
 def format_jjz_error_content(
-    display_name: str, jjzzlmc: str, status: str, error_msg: str
+        display_name: str, jjzzlmc: str, status: str, error_msg: str
 ) -> str:
     """
     格式化进京证错误推送内容
