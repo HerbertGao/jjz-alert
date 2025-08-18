@@ -34,10 +34,9 @@ class HomeAssistantClient:
     async def _get_session(self) -> aiohttp.ClientSession:
         """获取或创建HTTP会话"""
         if self._session is None or self._session.closed:
-            timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+            # 不在会话级别设置超时，而是在每个请求中单独设置
             self._session = aiohttp.ClientSession(
                 headers=self.headers,
-                timeout=timeout,
                 raise_for_status=False
             )
         return self._session
@@ -69,9 +68,10 @@ class HomeAssistantClient:
         session = await self._get_session()
 
         timeout_value = timeout or self.config.timeout
+        request_timeout = aiohttp.ClientTimeout(total=timeout_value)
 
         try:
-            async with session.request(method, url, json=data, timeout=timeout_value) as response:
+            async with session.request(method, url, json=data, timeout=request_timeout) as response:
                 response_text = await response.text()
 
                 if response.status == 200 or response.status == 201:
