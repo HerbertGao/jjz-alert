@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7-labs
 
 # 预下载 wheels（在构建机平台执行，避免 ARM64 下网络与解析开销）
-FROM python:3.13-slim AS wheelhouse
+FROM --platform=$BUILDPLATFORM python:3.13-slim AS wheelhouse
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PIP_NO_INPUT=1
 WORKDIR /wheels
 COPY requirements-prod.txt ./
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
     pip download --only-binary=:all: \
       --implementation cp --python-version 313 --abi cp313 \
@@ -32,19 +32,21 @@ ARG VERSION=latest
 ENV VERSION=${VERSION}
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PIP_NO_INPUT=1
+# 声明来自 buildx 的自动构建参数
+ARG TARGETARCH
 
 # 复制依赖与离线 wheels
 COPY requirements-prod.txt ./
 COPY --from=wheelhouse /wheels /wheels
 
 # 按平台选择对应 wheels 目录并离线安装
-# TARGETPLATFORM 取值示例：linux/amd64, linux/arm64
-RUN --mount=type=cache,target=/root/.cache/pip \
-    if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+    if [ "$TARGETARCH" = "arm64" ]; then \
       WHEELDIR=/wheels/aarch64; \
     else \
       WHEELDIR=/wheels/x86_64; \
     fi; \
+    echo "Using wheel dir: $WHEELDIR for TARGETARCH=$TARGETARCH"; \
     pip install --no-index --find-links=$WHEELDIR -r requirements-prod.txt
 
 # 复制项目文件
