@@ -1,44 +1,56 @@
 # syntax=docker/dockerfile:1.7-labs
-# 使用 Python 3.13 作为基础镜像
+
+# 预下载 wheels（在构建机平台执行，避免 ARM64 下网络与解析开销）
+FROM python:3.13-slim AS wheelhouse
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_INPUT=1
+WORKDIR /wheels
+COPY requirements-prod.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip download --only-binary=:all: \
+      --implementation cp --python-version 313 --abi cp313 \
+      --platform manylinux_2_17_x86_64 \
+      --dest /wheels/x86_64 \
+      -r requirements-prod.txt && \
+    pip download --only-binary=:all: \
+      --implementation cp --python-version 313 --abi cp313 \
+      --platform manylinux_2_17_aarch64 \
+      --dest /wheels/aarch64 \
+      -r requirements-prod.txt
+
+# 最终运行镜像
 FROM python:3.13-slim
 
-# 设置构建参数
-ARG VERSION=latest
-ARG BUILD_DATE
-ARG VCS_REF
-
-# 设置标签
-LABEL maintainer="herbertgao" \
-      version="${VERSION}" \
-      description="JJZ-Alert 进京证提醒工具"
-
-# 设置工作目录
+# 设置工作目录与环境
 WORKDIR /app
-
-# 设置环境变量
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV TZ=Asia/Shanghai
+ARG VERSION=latest
 ENV VERSION=${VERSION}
-# 优化：关闭pip版本检查
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PIP_NO_INPUT=1
 
-# 优化：先复制requirements文件，利用Docker层缓存
-COPY requirements-prod.txt .
+# 复制依赖与离线 wheels
+COPY requirements-prod.txt ./
+COPY --from=wheelhouse /wheels /wheels
 
-# 优化：仅使用二进制wheel，并启用pip缓存加速
+# 按平台选择对应 wheels 目录并离线安装
+# TARGETPLATFORM 取值示例：linux/amd64, linux/arm64
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
-    pip install --only-binary=:all: -r requirements-prod.txt
+    if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+      WHEELDIR=/wheels/aarch64; \
+    else \
+      WHEELDIR=/wheels/x86_64; \
+    fi; \
+    pip install --no-index --find-links=$WHEELDIR -r requirements-prod.txt
 
 # 复制项目文件
 COPY . .
 
-# 设置权限（如 main.py 需执行权限可加）
-# RUN chmod +x main.py
-
-# 健康检查（可根据实际情况调整）
+# 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import os; assert os.path.exists('/app/main.py')" || exit 1
 
