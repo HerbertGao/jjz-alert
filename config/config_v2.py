@@ -325,24 +325,29 @@ class ConfigManager:
             if "homeassistant" in global_data:
                 ha_data = global_data["homeassistant"]
 
+                # 读取 REST 关键参数使用 rest_*，并兼容旧字段 url/token 作为回退
+                rest_url = ha_data.get("rest_url", ha_data.get("url", "http://homeassistant.local:8123"))
+                rest_token = ha_data.get("rest_token", ha_data.get("token", ""))
+
+                # 其余 REST 参数统一使用内置默认值（不推荐用户修改）
                 config.global_config.homeassistant = HomeAssistantConfig(
                     enabled=ha_data.get("enabled", False),
                     integration_mode=ha_data.get("integration_mode", "rest"),
-                    url=ha_data.get("url", "http://homeassistant.local:8123"),
-                    token=ha_data.get("token", ""),
-                    entity_prefix=ha_data.get("entity_prefix", "jjz_alert"),
+                    url=rest_url,
+                    token=rest_token,
+                    entity_prefix="jjz_alert",
 
-                    # 同步配置
-                    sync_after_query=ha_data.get("sync_after_query", True),
+                    # 同步配置（默认值）
+                    sync_after_query=True,
 
-                    # 错误处理
-                    retry_count=ha_data.get("retry_count", 3),
-                    timeout=ha_data.get("timeout", 30),
+                    # 错误处理（默认值）
+                    retry_count=3,
+                    timeout=30,
 
-                    # 设备创建策略
-                    create_device_per_plate=ha_data.get("create_device_per_plate", True),
-                    device_manufacturer=ha_data.get("device_manufacturer", "JJZ Alert"),
-                    device_model=ha_data.get("device_model", "Beijing Vehicle"),
+                    # 设备创建策略（默认值）
+                    create_device_per_plate=True,
+                    device_manufacturer="JJZ Alert",
+                    device_model="Beijing Vehicle",
 
                     # MQTT Discovery（可选）
                     mqtt_enabled=ha_data.get("mqtt_enabled", False),

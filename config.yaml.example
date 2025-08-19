@@ -46,24 +46,12 @@ global:
   homeassistant:
     enabled: false
     # 二选一集成模式：rest 或 mqtt（默认 rest）
-    integration_mode: rest
+    integration_mode: mqtt
 
-    # ========== 当使用 REST 模式时，需配置以下参数 ==========
-    url: "http://homeassistant.local:8123"
-    token: "your_long_lived_access_token_here"
-    entity_prefix: "jjz_alert"
-
-    # 同步配置（REST）
-    sync_after_query: true               # 每次查询后同步到HA
-
-    # 错误处理（REST）
-    retry_count: 3                       # 同步失败重试次数
-    timeout: 30                          # 请求超时(秒)
-
-    # 设备创建配置（REST）
-    create_device_per_plate: true        # 为每个车牌创建独立设备
-    device_manufacturer: "JJZ Alert"     # 设备制造商
-    device_model: "Beijing Vehicle"      # 设备型号
+    # ========== 当使用 REST 模式时，仅需配置以下关键参数 ==========
+    rest_url: "http://homeassistant.local:8123"     # 兼容旧字段 url
+    rest_token: "your_long_lived_access_token_here" # 兼容旧字段 token
+    # 其他 REST 细节（如 entity_prefix/retry/timeout 等）已内置默认值，不建议修改
 
     # ========== 当使用 MQTT 模式时，需配置以下参数 ==========
     mqtt_host: "homeassistant.local"
