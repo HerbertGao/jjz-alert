@@ -12,6 +12,8 @@ aioredis>=2.0.0
 apprise-herbertgao>=1.9.5
 # Home Assistant集成
 aiohttp>=3.8.0 
+# MQTT（用于HA Discovery）
+asyncio-mqtt>=0.16.2
 # 测试相关依赖
 pytest>=7.0.0
 pytest-asyncio>=0.20.0

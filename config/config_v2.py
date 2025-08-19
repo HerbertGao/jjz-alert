@@ -90,6 +90,18 @@ class HomeAssistantConfig:
     device_manufacturer: str = "JJZ Alert"  # 设备制造商
     device_model: str = "Beijing Vehicle"  # 设备型号
 
+    # MQTT Discovery（可选）
+    mqtt_enabled: bool = False
+    mqtt_host: str = "localhost"
+    mqtt_port: int = 1883
+    mqtt_username: Optional[str] = None
+    mqtt_password: Optional[str] = None
+    mqtt_client_id: str = "jjz_alert"
+    mqtt_discovery_prefix: str = "homeassistant"
+    mqtt_base_topic: str = "jjz_alert"
+    mqtt_qos: int = 1
+    mqtt_retain: bool = True
+
 
 @dataclass
 class GlobalConfig:
