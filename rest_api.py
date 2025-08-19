@@ -347,6 +347,90 @@ async def metrics() -> Dict[str, Any]:
         }
 
 
+@app.get("/ha/entities")
+async def get_ha_entities() -> Dict[str, Any]:
+    """为 Home Assistant 提供轮询的实体状态列表
+
+    返回每个配置车牌的合并实体状态（与推送到 HA 的实体一致），包含 state 与 attributes。
+    可配合 HA 的 RESTful Sensor 周期性轮询，避免 HA 重启导致状态丢失。
+    """
+    from datetime import datetime
+    try:
+        # 加载配置的车牌
+        app_cfg = config_manager.load_config()
+        plates_cfg = app_cfg.plates
+
+        # 导入服务与模型
+        from service.jjz.jjz_service import jjz_service
+        from service.traffic.traffic_service import traffic_service
+        from service.homeassistant.ha_device import HAPlateDevice
+
+        # 批量获取当日限行状态
+        plate_numbers = [p.plate for p in plates_cfg]
+        traffic_results = await traffic_service.check_multiple_plates(plate_numbers)
+
+        entities = []
+        for plate in plates_cfg:
+            plate_no = plate.plate
+            display_name = plate.display_name or plate_no
+
+            # 优先使用缓存的 JJZ 数据，避免频繁请求外部接口
+            jjz_cached = await jjz_service.cache_service.get_jjz_data(plate_no)
+            if not jjz_cached:
+                # 缓存缺失时提供最小占位数据，确保实体存在
+                jjz_cached = {
+                    "plate": plate_no,
+                    "status": "unknown",
+                    "jjzzlmc": "",
+                    "blztmc": "未知",
+                    "valid_start": None,
+                    "valid_end": None,
+                    "days_remaining": None,
+                    "sycs": None,
+                    "data_source": "cache"
+                }
+
+            traffic_status = traffic_results.get(plate_no)
+            if traffic_status is not None:
+                traffic_dict = traffic_status.to_dict()
+            else:
+                traffic_dict = {
+                    "plate": plate_no,
+                    "date": None,
+                    "is_limited": False,
+                    "tail_number": "0",
+                    "rule": None,
+                    "error_message": "未获取到限行状态"
+                }
+
+            # 复用现有设备模型生成合并实体
+            ha_device = HAPlateDevice.from_jjz_and_traffic_data(
+                plate_number=plate_no,
+                display_name=display_name,
+                jjz_status_data=jjz_cached,
+                traffic_status_data=traffic_dict,
+            )
+            combined_state = ha_device.get_combined_sensor_state(entity_prefix=app_cfg.global_config.homeassistant.entity_prefix)
+            entities.append({
+                "entity_id": combined_state.entity_id,
+                "state": str(combined_state.state),
+                "attributes": combined_state.attributes,
+                "last_updated": combined_state.last_updated.isoformat(),
+            })
+
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "entities": entities,
+            "total": len(entities)
+        }
+
+    except Exception as e:
+        logging.error(f"获取HA轮询实体失败: {e}")
+        return {
+            "error": str(e)
+        }
+
+
 @app.post("/query")
 async def query_plates(request: QueryRequest):
     """Trigger query & push for one or multiple plate numbers"""
