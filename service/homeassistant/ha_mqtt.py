@@ -61,8 +61,8 @@ class HAMQTTPublisher:
     def enabled(self) -> bool:
         return self._cfg is not None and Client is not None
 
-    async def _log_debug(self, message: str, **kwargs):
-        """输出 debug 级别日志"""
+    def _log_debug(self, message: str, **kwargs):
+        """输出 debug 级别日志（同步函数）"""
         extra_data = " ".join([f"{k}={v}" for k, v in kwargs.items()])
         logging.debug(f"[MQTT] {message} {extra_data}".strip())
 
