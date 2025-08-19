@@ -61,12 +61,20 @@ class HAMQTTPublisher:
     def enabled(self) -> bool:
         return self._cfg is not None and Client is not None
 
+    async def _log_debug(self, message: str, **kwargs):
+        """输出 debug 级别日志"""
+        extra_data = " ".join([f"{k}={v}" for k, v in kwargs.items()])
+        logging.debug(f"[MQTT] {message} {extra_data}".strip())
+
     async def _ensure_client(self) -> Optional[Client]:
         if not self.enabled():
+            self._log_debug("MQTT 未启用或依赖缺失")
             return None
         if self._client:
+            self._log_debug("使用现有 MQTT 客户端连接")
             return self._client
         try:
+            self._log_debug("创建新的 MQTT 客户端连接", host=self._cfg.host, port=self._cfg.port, client_id=self._cfg.client_id)
             self._client = Client(
                 hostname=self._cfg.host,
                 port=self._cfg.port,
@@ -76,39 +84,50 @@ class HAMQTTPublisher:
             )
             # 设置 LWT
             await self._client.connect()
+            self._log_debug("MQTT 客户端连接成功")
             await self._publish_availability("online")
+            self._log_debug("发布在线状态")
             return self._client
         except MqttError as e:
             logging.error(f"MQTT连接失败: {e}")
+            self._log_debug("MQTT 连接失败", error=str(e))
             self._client = None
             return None
 
     async def close(self):
         try:
             if self._client:
+                self._log_debug("关闭 MQTT 客户端连接")
                 await self._publish_availability("offline")
+                self._log_debug("发布离线状态")
                 await self._client.disconnect()
                 self._client = None
+                self._log_debug("MQTT 客户端已关闭")
         except Exception:
             pass
 
     async def _publish(self, topic: str, payload: Any, qos: Optional[int] = None, retain: Optional[bool] = None):
         client = await self._ensure_client()
         if not client:
+            self._log_debug("无法获取 MQTT 客户端，跳过发布", topic=topic)
             return False
         qos_val = self._cfg.qos if qos is None else qos
         retain_val = self._cfg.retain if retain is None else retain
         try:
             if not isinstance(payload, (str, bytes)):
                 payload = json.dumps(payload, ensure_ascii=False)
+            self._log_debug("发布 MQTT 消息", topic=topic, qos=qos_val, retain=retain_val, payload_length=len(str(payload)))
             await client.publish(topic, payload, qos=qos_val, retain=retain_val)
+            self._log_debug("MQTT 消息发布成功", topic=topic)
             return True
         except MqttError as e:
             logging.error(f"MQTT发布失败 {topic}: {e}")
+            self._log_debug("MQTT 消息发布失败", topic=topic, error=str(e))
             return False
 
     async def _publish_availability(self, status: str):
         topic = f"{self._cfg.base_topic}/status"
+        self._log_debug("发布可用性状态", topic=topic, status=status)
         await self._publish(topic, status, qos=1, retain=True)
 
     def _topics_for_plate(self, plate_number: str, display_name: str) -> Dict[str, str]:
@@ -126,6 +145,8 @@ class HAMQTTPublisher:
         state_topic = f"{self._cfg.base_topic}/sensor/{object_id}/state"
         attr_topic = f"{self._cfg.base_topic}/sensor/{object_id}/attributes"
 
+        self._log_debug("生成车牌主题", plate=plate_number, object_id=object_id, entity_id=entity_id)
+
         return {
             'entity_id': entity_id,
             'config': config_topic,
@@ -140,9 +161,11 @@ class HAMQTTPublisher:
 
     async def publish_discovery_and_state(self, plate_number: str, display_name: str, state: str, attributes: Dict[str, Any]):
         if not self.enabled():
+            self._log_debug("MQTT 未启用，跳过发布", plate=plate_number)
             return False
 
         topics = self._topics_for_plate(plate_number, display_name)
+        self._log_debug("开始发布车牌 Discovery 与状态", plate=plate_number, display_name=display_name, state=state)
 
         # Discovery 配置
         device_info = {
@@ -163,12 +186,16 @@ class HAMQTTPublisher:
             "device": device_info,
         }
 
+        self._log_debug("发布 Discovery 配置", topic=topics['config'], unique_id=config_payload["unique_id"])
         # 先发布 discovery 配置（retain）
         await self._publish(topics['config'], config_payload, qos=1, retain=True)
 
+        self._log_debug("发布属性", topic=topics['attr'], attributes_count=len(attributes))
         # 再发布属性与状态（retain）
         await self._publish(topics['attr'], attributes, qos=1, retain=True)
+        self._log_debug("发布状态", topic=topics['state'], state=state)
         await self._publish(topics['state'], state, qos=1, retain=True)
+        self._log_debug("车牌 MQTT 发布完成", plate=plate_number)
         return True
 
 
