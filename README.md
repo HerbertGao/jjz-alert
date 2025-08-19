@@ -56,6 +56,7 @@ python main.py
 
 - 依赖：`asyncio-mqtt`（已在 `requirements.txt` 中加入）。如果使用 Docker，请重新构建镜像或重启容器以安装依赖。
 - 实体命名：所有 `entity_id` 均为小写，形如：`sensor.{base_topic}_{province_pinyin}_{plate_remainder}`，例如 `sensor.jjz_alert_beijing_a12345`。
+  - 通过 MQTT Discovery，我们在 config 中显式设置 `object_id` 与 `unique_id` 为 `{base_topic}_{province_pinyin}_{plate_remainder}`，以避免 HA 根据 name 自动生成冗长的实体ID。
 - 发布策略：Discovery/状态/属性/可用性均使用 QoS1 + retain。
 
 步骤一：在 Home Assistant 启用 MQTT 集成

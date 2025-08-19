@@ -188,6 +188,7 @@ class HAMQTTPublisher:
 
         config_payload = {
             "name": f"进京证与限行状态 - {display_name}",
+            "object_id": f"{self._cfg.base_topic}_{topics['object_id']}",
             "unique_id": f"{self._cfg.base_topic}_{topics['object_id']}",
             "state_topic": topics['state'],
             "json_attributes_topic": topics['attr'],
