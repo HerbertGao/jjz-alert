@@ -95,6 +95,15 @@ async def push_jjz_status(
                 error_msg=error_msg,
             )
 
+        # 根据限行提醒在正文最前拼接提示
+        try:
+            if traffic_reminder:
+                reminder_text = str(traffic_reminder).strip()
+                if reminder_text in ("今日限行", "明日限行"):
+                    body = f"【⚠️{reminder_text}】" + body
+        except Exception:
+            pass
+
         # 使用显示名称作为标题
         title = display_name
 

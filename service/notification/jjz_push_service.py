@@ -216,17 +216,38 @@ class JJZPushService:
 
                     if not send_next_day:
                         # 当日推送
-                        push_result = await push_jjz_status(plate_config, jjz_data)
+                        traffic_reminder_text = None
+                        if traffic_result and getattr(traffic_result, "is_limited", False):
+                            # 如果今天限行，则在正文最开始拼接提醒
+                            traffic_reminder_text = "今日限行"
+
+                        push_result = await push_jjz_status(
+                            plate_config,
+                            jjz_data,
+                            traffic_reminder=traffic_reminder_text,
+                        )
                     else:
                         # 次日推送逻辑
                         if (jjz_status.valid_start and jjz_status.valid_end and
                                 jjz_status.valid_start <= tomorrow_str <= jjz_status.valid_end and
                                 jjz_status.status == JJZStatusEnum.VALID.value):
                             # 次日有效，推送次日信息
+                            traffic_reminder_text = None
+                            try:
+                                # 计算明日是否限行
+                                tomorrow_limit_status = await self.traffic_service.check_plate_limited(
+                                    plate, target_date=tomorrow_date
+                                )
+                                if tomorrow_limit_status and tomorrow_limit_status.is_limited:
+                                    traffic_reminder_text = "明日限行"
+                            except Exception:
+                                traffic_reminder_text = None
+
                             push_result = await push_jjz_status(
                                 plate_config, jjz_data,
                                 target_date=tomorrow_date,
-                                is_next_day=True
+                                is_next_day=True,
+                                traffic_reminder=traffic_reminder_text,
                             )
                         else:
                             # 次日无效或过期，发送提醒
