@@ -38,7 +38,9 @@ class MQTTConfig:
 
 def _get_mqtt_config() -> Optional[MQTTConfig]:
     cfg = get_homeassistant_config()
-    if not getattr(cfg, 'mqtt_enabled', False):
+    # 新配置优先：integration_mode == 'mqtt' 则启用；否则兼容老配置 mqtt_enabled
+    mode = getattr(cfg, 'integration_mode', 'rest').lower()
+    if mode != 'mqtt' and not getattr(cfg, 'mqtt_enabled', False):
         return None
     return MQTTConfig(
         host=cfg.mqtt_host,

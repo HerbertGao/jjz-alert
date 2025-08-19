@@ -45,21 +45,36 @@ global:
   # Home Assistant集成配置（可选）
   homeassistant:
     enabled: false
+    # 二选一集成模式：rest 或 mqtt（默认 rest）
+    integration_mode: rest
+
+    # ========== 当使用 REST 模式时，需配置以下参数 ==========
     url: "http://homeassistant.local:8123"
     token: "your_long_lived_access_token_here"
     entity_prefix: "jjz_alert"
-    
-    # 同步配置 - 简单的查询后同步
-    sync_after_query: true               # 每次查询后同步到HA（推荐）
-    
-    # 错误处理
+
+    # 同步配置（REST）
+    sync_after_query: true               # 每次查询后同步到HA
+
+    # 错误处理（REST）
     retry_count: 3                       # 同步失败重试次数
     timeout: 30                          # 请求超时(秒)
-    
-    # 设备创建配置
+
+    # 设备创建配置（REST）
     create_device_per_plate: true        # 为每个车牌创建独立设备
     device_manufacturer: "JJZ Alert"     # 设备制造商
     device_model: "Beijing Vehicle"      # 设备型号
+
+    # ========== 当使用 MQTT 模式时，需配置以下参数 ==========
+    mqtt_host: "homeassistant.local"
+    mqtt_port: 1883
+    mqtt_username: "ha"
+    mqtt_password: "your_password"
+    mqtt_client_id: "jjz_alert"
+    mqtt_discovery_prefix: "homeassistant"   # 通常保持默认
+    mqtt_base_topic: "jjz_alert"             # 实体命名与主题前缀
+    mqtt_qos: 1
+    mqtt_retain: true
 
 # =============================================================================
 # 进京证账户配置（数据来源）

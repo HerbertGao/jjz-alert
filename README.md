@@ -81,8 +81,8 @@ global:
 ```yaml
 global:
   homeassistant:
-    enabled: true           # 保持现有 HA 集成开启
-    mqtt_enabled: true      # 启用 MQTT Discovery
+    enabled: true
+    integration_mode: mqtt
     mqtt_host: "mqtt-broker.local"
     mqtt_port: 1883
     mqtt_username: "user"
@@ -114,6 +114,7 @@ python main.py
 ```json
 {
   "name": "进京证与限行状态 - 我的车",
+  "object_id": "jjz_alert_beijing_a12345",
   "unique_id": "jjz_alert_beijing_a12345",
   "state_topic": "jjz_alert/sensor/beijing_a12345/state",
   "json_attributes_topic": "jjz_alert/sensor/beijing_a12345/attributes",
