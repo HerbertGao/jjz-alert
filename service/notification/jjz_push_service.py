@@ -304,15 +304,62 @@ class JJZPushService:
                         if result["error"]:
                             workflow_result["errors"].append(result["error"])
 
-            # 步骤7: HA同步（当 MQTT 未启用时才执行，以避免与 MQTT Discovery 产生重复实体）
+            # 步骤7: 根据 integration_mode 仅执行一种集成方式
             if include_ha_sync and jjz_results_for_ha:
                 try:
                     from config.config_v2 import get_homeassistant_config
                     ha_cfg = get_homeassistant_config()
-                    if getattr(ha_cfg, 'mqtt_enabled', False):
-                        logging.info("检测到已启用 MQTT Discovery，跳过基于 REST 的 HA 同步以避免实体重复")
+                    mode = getattr(ha_cfg, 'integration_mode', 'rest').lower()
+
+                    if mode == 'mqtt':
+                        # 仅 MQTT 发布
+                        if jjz_results_for_ha:
+                            logging.info("根据配置 integration_mode=mqtt，仅执行 MQTT Discovery 发布")
+                            for plate, jjz_status in jjz_results_for_ha.items():
+                                try:
+                                    plate_cfg = next((p for p in plate_configs if p.plate == plate), None)
+                                    display_name = plate_cfg.display_name if plate_cfg and plate_cfg.display_name else plate
+
+                                    traffic_status = traffic_results_for_ha.get(plate)
+                                    if jjz_status.status == JJZStatusEnum.VALID.value and traffic_status and traffic_status.is_limited:
+                                        state_str = f"限行 ({traffic_status.tail_number})"
+                                    elif jjz_status.status == JJZStatusEnum.VALID.value:
+                                        state_str = "正常通行"
+                                    else:
+                                        state_str = jjz_status.to_dict().get("status_desc_formatted", jjz_status.status)
+
+                                    attrs = {
+                                        "friendly_name": f"{display_name} 进京证与限行状态",
+                                        "plate_number": plate,
+                                        "display_name": display_name,
+                                        "jjz_status": jjz_status.status,
+                                        "jjz_status_desc": jjz_status.to_dict().get("status_desc_formatted"),
+                                        "jjz_type": jjz_status.to_dict().get("jjz_type_formatted"),
+                                        "jjz_apply_time": jjz_status.apply_time,
+                                        "jjz_valid_start": jjz_status.valid_start,
+                                        "jjz_valid_end": jjz_status.valid_end,
+                                        "jjz_days_remaining": jjz_status.days_remaining,
+                                        "jjz_remaining_count": jjz_status.sycs,
+                                        "traffic_limited_today": bool(traffic_status.is_limited) if traffic_status else False,
+                                        "traffic_limited_today_text": "限行" if (traffic_status and traffic_status.is_limited) else "不限行",
+                                        "traffic_rule_desc": (traffic_status.rule.limited_numbers if (traffic_status and traffic_status.rule) else "未知"),
+                                        "traffic_limited_tail_numbers": (traffic_status.rule.limited_numbers if (traffic_status and traffic_status.rule) else "0"),
+                                        "icon": "mdi:car",
+                                    }
+
+                                    publish_ok = await ha_mqtt_publisher.publish_discovery_and_state(
+                                        plate_number=plate,
+                                        display_name=display_name,
+                                        state=state_str,
+                                        attributes=attrs,
+                                    )
+                                    if not publish_ok:
+                                        logging.warning(f"MQTT 发布未成功: plate={plate}")
+                                except Exception as e:
+                                    logging.warning(f"MQTT单车牌发布失败 {plate}: {e}")
                     else:
-                        logging.info(f"开始HA同步，车牌数量: {len(jjz_results_for_ha)}")
+                        # 仅 REST 同步
+                        logging.info(f"根据配置 integration_mode=rest，开始HA同步，车牌数量: {len(jjz_results_for_ha)}")
                         from service.homeassistant import sync_to_homeassistant
                         ha_sync_result = await sync_to_homeassistant(jjz_results_for_ha, traffic_results_for_ha)
                         workflow_result["ha_sync_result"] = ha_sync_result
@@ -322,7 +369,7 @@ class JJZPushService:
                             total_count = ha_sync_result.get('total_plates', 0)
                             logging.info(f"HA同步完成: {success_count}/{total_count} 车牌成功")
                 except Exception as e:
-                    error_msg = f"HA同步失败: {e}"
+                    error_msg = f"HA集成阶段失败: {e}"
                     logging.error(error_msg)
                     workflow_result["errors"].append(error_msg)
 

@@ -50,6 +50,20 @@ python main.py
 - **自动注册**: 设备和实体自动注册到HA
 - **批量同步**: 高效的批量数据同步
 
+集成模式选择（二选一）
+- 在 `config.yaml` 中通过 `global.homeassistant.integration_mode` 选择集成方式：
+  - `rest`: 使用 Home Assistant REST API 同步实体（默认，向后兼容）
+  - `mqtt`: 使用 MQTT Discovery 自动发现（推荐，支持 retain 恢复）
+
+示例：
+```yaml
+global:
+  homeassistant:
+    enabled: true
+    integration_mode: mqtt   # 二选一: rest 或 mqtt
+    # REST 模式需要 url/token；MQTT 模式需要 mqtt_* 配置
+```
+
 #### 📨 Home Assistant MQTT Discovery（可选，推荐）
 
 无需在 HA 的 YAML 中声明实体。启用 MQTT 集成后，jjz-alert 会通过 MQTT Discovery 自动注册实体，并通过保留消息（retain）在 HA 重启后自动恢复状态。

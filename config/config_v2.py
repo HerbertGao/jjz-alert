@@ -74,6 +74,9 @@ class HomeAssistantConfig:
     """Home Assistant配置"""
 
     enabled: bool = False
+    # 二选一：使用 REST API 同步或 MQTT Discovery 推送
+    # 可选值: 'rest' 或 'mqtt'（默认 rest 保持向后兼容）
+    integration_mode: str = "rest"
     url: str = "http://homeassistant.local:8123"
     token: str = ""
     entity_prefix: str = "jjz_alert"
@@ -324,6 +327,7 @@ class ConfigManager:
 
                 config.global_config.homeassistant = HomeAssistantConfig(
                     enabled=ha_data.get("enabled", False),
+                    integration_mode=ha_data.get("integration_mode", "rest"),
                     url=ha_data.get("url", "http://homeassistant.local:8123"),
                     token=ha_data.get("token", ""),
                     entity_prefix=ha_data.get("entity_prefix", "jjz_alert"),
