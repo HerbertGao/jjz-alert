@@ -50,10 +50,6 @@ python main.py
 - **自动注册**: 设备和实体自动注册到HA
 - **批量同步**: 高效的批量数据同步
 
-#### 🔁 Home Assistant 轮询（REST）
-
-提示：自 v2.0 起已不再推荐使用 REST 轮询方式同步 HA 实体，相关端点已移除。请使用下方的 MQTT Discovery 方案，以获得更稳定的实体恢复能力（retain）。
-
 #### 📨 Home Assistant MQTT Discovery（可选，推荐）
 
 无需在 HA 的 YAML 中声明实体。启用 MQTT 集成后，jjz-alert 会通过 MQTT Discovery 自动注册实体，并通过保留消息（retain）在 HA 重启后自动恢复状态。
