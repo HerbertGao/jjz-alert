@@ -158,6 +158,7 @@ class HAPlateDevice:
 
             # 限行相关属性
             "traffic_limited_today": self.traffic_limited_today,
+            "traffic_limited_today_text": "限行" if self.traffic_limited_today else "不限行",
             "traffic_rule_desc": self.traffic_rule_desc,
             "traffic_limited_tail_numbers": self.traffic_limited_tail_numbers,
 
