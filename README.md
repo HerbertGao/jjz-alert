@@ -52,50 +52,98 @@ python main.py
 
 #### 🔁 Home Assistant 轮询（REST）
 
-为避免 Home Assistant 重启后实体状态丢失，系统提供 REST 轮询端点，HA 可周期性拉取最新状态：
+提示：自 v2.0 起已不再推荐使用 REST 轮询方式同步 HA 实体，相关端点已移除。请使用下方的 MQTT Discovery 方案，以获得更稳定的实体恢复能力（retain）。
 
-- 端点：`GET /ha/entities`
-- 返回：每个车牌的合并实体 `state` 与 `attributes`（与推送到 HA 的一致）
+#### 📨 Home Assistant MQTT Discovery（可选，推荐）
 
-示例返回：
+无需在 HA 的 YAML 中声明实体。启用 MQTT 集成后，jjz-alert 会通过 MQTT Discovery 自动注册实体，并通过保留消息（retain）在 HA 重启后自动恢复状态。
+
+- 依赖：`asyncio-mqtt`（已在 `requirements.txt` 中加入）。如果使用 Docker，请重新构建镜像或重启容器以安装依赖。
+- 实体命名：所有 `entity_id` 均为小写，形如：`sensor.{base_topic}_{province_pinyin}_{plate_remainder}`，例如 `sensor.jjz_alert_beijing_a12345`。
+- 发布策略：Discovery/状态/属性/可用性均使用 QoS1 + retain。
+
+步骤一：在 Home Assistant 启用 MQTT 集成
+- 确保 HA 已连接到你的 MQTT Broker（可以通过 HA 前端“设置 -> 设备与服务 -> 添加集成 -> MQTT”完成）。
+
+步骤二：在 jjz-alert 的 `config.yaml` 中开启 MQTT Discovery
+
+```yaml
+global:
+  homeassistant:
+    enabled: true           # 保持现有 HA 集成开启
+    mqtt_enabled: true      # 启用 MQTT Discovery
+    mqtt_host: "mqtt-broker.local"
+    mqtt_port: 1883
+    mqtt_username: "user"
+    mqtt_password: "pass"
+    mqtt_client_id: "jjz_alert"
+    mqtt_discovery_prefix: "homeassistant"  # HA 默认
+    mqtt_base_topic: "jjz_alert"            # 影响 entity_id 与主题前缀
+    mqtt_qos: 1
+    mqtt_retain: true
+```
+
+步骤三：触发一次推送/同步（会发布 Discovery 与最新状态）
+- 运行主程序或执行统一推送工作流（含 HA 同步）：
+
+```bash
+python main.py
+# 或调用 REST /query 触发一次工作流
+# curl -X POST http://<jjz-alert-host>:8000/query -H 'Content-Type: application/json' -d '{"plates":["京A12345"]}'
+```
+
+发布的 MQTT 主题（默认 `mqtt_base_topic=jjz_alert`, `mqtt_discovery_prefix=homeassistant`）
+- Discovery 配置：`homeassistant/sensor/jjz_alert_{object_id}/config`
+- 状态：`jjz_alert/sensor/{object_id}/state`
+- 属性：`jjz_alert/sensor/{object_id}/attributes`
+- 可用性：`jjz_alert/status`
+
+示例 Discovery payload（JSON）：
 
 ```json
 {
-  "timestamp": "2025-08-19T12:34:56.789012",
-  "entities": [
-    {
-      "entity_id": "sensor.jjz_alert_jing_A12345",
-      "state": "正常通行",
-      "attributes": {
-        "traffic_limited_today": false,
-        "traffic_limited_today_text": "不限行",
-        "jjz_status": "valid",
-        "jjz_status_desc": "生效中",
-        "jjz_type": "六环外"
-      },
-      "last_updated": "2025-08-19T12:34:56.123456"
-    }
-  ],
-  "total": 1
+  "name": "进京证与限行状态 - 我的车",
+  "unique_id": "jjz_alert_beijing_a12345",
+  "state_topic": "jjz_alert/sensor/beijing_a12345/state",
+  "json_attributes_topic": "jjz_alert/sensor/beijing_a12345/attributes",
+  "availability_topic": "jjz_alert/status",
+  "icon": "mdi:car",
+  "device": {
+    "identifiers": ["jjz_alert_jinga12345"],
+    "name": "进京证监控 我的车",
+    "model": "Beijing Vehicle",
+    "manufacturer": "JJZ Alert",
+    "sw_version": "2.0"
+  }
 }
 ```
 
-HA 配置（RESTful Sensor 示例）：
+示例属性 payload（JSON）：
 
-```yaml
-sensor:
-  - platform: rest
-    name: JJZ 合并实体列表
-    resource: http://<jjz-alert-host>:8000/ha/entities
-    method: GET
-    scan_interval: 120
-    value_template: "{{ value_json.total }}"
-    json_attributes_path: "$.entities"
-    json_attributes:
-      - entities
+```json
+{
+  "friendly_name": "我的车 进京证与限行状态",
+  "plate_number": "京A12345",
+  "display_name": "我的车",
+  "jjz_status": "valid",
+  "jjz_status_desc": "生效中",
+  "jjz_type": "六环外",
+  "jjz_valid_start": "2025-08-18",
+  "jjz_valid_end": "2025-08-22",
+  "jjz_days_remaining": 4,
+  "jjz_remaining_count": "2",
+  "traffic_limited_today": false,
+  "traffic_limited_today_text": "不限行",
+  "traffic_rule_desc": "2和7",
+  "traffic_limited_tail_numbers": "2和7",
+  "icon": "mdi:car"
+}
 ```
 
-你也可以为特定车牌单独建 REST 传感器，从 `entities` 数组中按 `entity_id` 过滤提取目标实体的 `state` 与 `attributes`。
+常见问题与排查
+- 在 MQTT Explorer 等工具中检查上述主题是否存在且为保留消息（Retain）。
+- 变更了 `mqtt_base_topic` 或 `object_id` 后，HA 可能残留旧实体；可清理对应的保留消息后重新发布（向相同主题发布空载荷/空 JSON，retain=true）。
+- 确认 HA 的 MQTT 集成已连接到同一 Broker（HA 日志与“设置 -> 设备与服务 -> MQTT”页面可见）。
 
 ## 🔧 CLI工具
 

@@ -339,7 +339,7 @@ class JJZPushService:
                             else:
                                 state_str = jjz_status.to_dict().get("status_desc_formatted", jjz_status.status)
 
-                            # 属性与 rest_api /ha/entities 对齐
+                            # 属性与此前 REST 轮询返回结构保持一致（已移除 REST 轮询端点）
                             attrs = {
                                 "friendly_name": f"{display_name} 进京证与限行状态",
                                 "plate_number": plate,
