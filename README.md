@@ -87,11 +87,6 @@ global:
     mqtt_port: 1883
     mqtt_username: "user"
     mqtt_password: "pass"
-    mqtt_client_id: "jjz_alert"
-    mqtt_discovery_prefix: "homeassistant"  # HA 默认
-    mqtt_base_topic: "jjz_alert"            # 影响 entity_id 与主题前缀
-    mqtt_qos: 1
-    mqtt_retain: true
 ```
 
 步骤三：触发一次推送/同步（会发布 Discovery 与最新状态）
