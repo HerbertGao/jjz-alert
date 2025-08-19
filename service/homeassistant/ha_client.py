@@ -141,7 +141,10 @@ class HomeAssistantClient:
         """注册设备到Home Assistant"""
         # Home Assistant会在首次接收到实体状态时自动创建设备
         # 这里我们通过设置一个临时实体来触发设备创建
-        temp_entity_id = f"sensor.{device_info.identifiers}_device_info"
+        # entity_id 必须小写且只包含 a-z0-9_
+        import re
+        safe_identifiers = re.sub(r'[^a-z0-9_]', '_', str(device_info.identifiers).lower())
+        temp_entity_id = f"sensor.{safe_identifiers}_device_info"
 
         device_data = device_info.to_dict()
         attributes = {
@@ -319,7 +322,11 @@ class HomeAssistantClient:
                 from utils.plate_utils import extract_province_from_plate
                 province_chinese, province_pinyin = extract_province_from_plate(plate)
                 plate_remainder = plate[1:] if len(plate) > 1 else ""
-                current_prefixes.add(f'sensor.{prefix}_{province_pinyin}_{plate_remainder}')
+                # 全部小写并清洗非法字符
+                import re
+                safe_prefix = re.sub(r'[^a-z0-9_]', '_', prefix.lower())
+                safe_remainder = re.sub(r'[^a-z0-9_]', '_', plate_remainder.lower())
+                current_prefixes.add(f'sensor.{safe_prefix}_{province_pinyin}_{safe_remainder}')
 
             # 找出需要删除的实体
             entities_to_delete = []

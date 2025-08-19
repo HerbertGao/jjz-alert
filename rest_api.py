@@ -410,7 +410,7 @@ async def get_ha_entities() -> Dict[str, Any]:
                 jjz_status_data=jjz_cached,
                 traffic_status_data=traffic_dict,
             )
-            combined_state = ha_device.get_combined_sensor_state(entity_prefix=app_cfg.global_config.homeassistant.entity_prefix)
+            combined_state = ha_device.get_combined_sensor_state(entity_prefix=(app_cfg.global_config.homeassistant.entity_prefix or 'jjz_alert'))
             entities.append({
                 "entity_id": combined_state.entity_id,
                 "state": str(combined_state.state),

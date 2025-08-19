@@ -50,6 +50,53 @@ python main.py
 - **自动注册**: 设备和实体自动注册到HA
 - **批量同步**: 高效的批量数据同步
 
+#### 🔁 Home Assistant 轮询（REST）
+
+为避免 Home Assistant 重启后实体状态丢失，系统提供 REST 轮询端点，HA 可周期性拉取最新状态：
+
+- 端点：`GET /ha/entities`
+- 返回：每个车牌的合并实体 `state` 与 `attributes`（与推送到 HA 的一致）
+
+示例返回：
+
+```json
+{
+  "timestamp": "2025-08-19T12:34:56.789012",
+  "entities": [
+    {
+      "entity_id": "sensor.jjz_alert_jing_A12345",
+      "state": "正常通行",
+      "attributes": {
+        "traffic_limited_today": false,
+        "traffic_limited_today_text": "不限行",
+        "jjz_status": "valid",
+        "jjz_status_desc": "生效中",
+        "jjz_type": "六环外"
+      },
+      "last_updated": "2025-08-19T12:34:56.123456"
+    }
+  ],
+  "total": 1
+}
+```
+
+HA 配置（RESTful Sensor 示例）：
+
+```yaml
+sensor:
+  - platform: rest
+    name: JJZ 合并实体列表
+    resource: http://<jjz-alert-host>:8000/ha/entities
+    method: GET
+    scan_interval: 120
+    value_template: "{{ value_json.total }}"
+    json_attributes_path: "$.entities"
+    json_attributes:
+      - entities
+```
+
+你也可以为特定车牌单独建 REST 传感器，从 `entities` 数组中按 `entity_id` 过滤提取目标实体的 `state` 与 `attributes`。
+
 ## 🔧 CLI工具
 
 ```bash

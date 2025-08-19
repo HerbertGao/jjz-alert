@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Dict, Any, Optional
+import re
 
 from service.jjz.jjz_status import JJZStatusEnum
 from utils.plate_utils import (
@@ -124,8 +125,12 @@ class HAPlateDevice:
         # 获取车牌号剩余部分（去掉省份前缀）
         plate_remainder = self.plate_number[1:] if len(self.plate_number) > 1 else ""
 
-        # 构建实体ID：前缀_省份_车牌号剩余部分
-        entity_id = f"sensor.{entity_prefix}_{province_pinyin}_{plate_remainder}"
+        # 规范化 entity_prefix 与车牌剩余部分为小写且仅含 a-z0-9_
+        safe_prefix = re.sub(r'[^a-z0-9_]', '_', (entity_prefix or '').lower())
+        safe_remainder = re.sub(r'[^a-z0-9_]', '_', plate_remainder.lower())
+
+        # 构建实体ID：前缀_省份_车牌号剩余部分（全部小写）
+        entity_id = f"sensor.{safe_prefix}_{province_pinyin}_{safe_remainder}"
 
         # 状态值：优先显示进京证状态，如果进京证有效则显示限行状态
         if self.jjz_status == JJZStatusEnum.VALID.value:
