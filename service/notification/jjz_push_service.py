@@ -304,18 +304,23 @@ class JJZPushService:
                         if result["error"]:
                             workflow_result["errors"].append(result["error"])
 
-            # 步骤7: HA同步
+            # 步骤7: HA同步（当 MQTT 未启用时才执行，以避免与 MQTT Discovery 产生重复实体）
             if include_ha_sync and jjz_results_for_ha:
-                logging.info(f"开始HA同步，车牌数量: {len(jjz_results_for_ha)}")
                 try:
-                    from service.homeassistant import sync_to_homeassistant
-                    ha_sync_result = await sync_to_homeassistant(jjz_results_for_ha, traffic_results_for_ha)
-                    workflow_result["ha_sync_result"] = ha_sync_result
+                    from config.config_v2 import get_homeassistant_config
+                    ha_cfg = get_homeassistant_config()
+                    if getattr(ha_cfg, 'mqtt_enabled', False):
+                        logging.info("检测到已启用 MQTT Discovery，跳过基于 REST 的 HA 同步以避免实体重复")
+                    else:
+                        logging.info(f"开始HA同步，车牌数量: {len(jjz_results_for_ha)}")
+                        from service.homeassistant import sync_to_homeassistant
+                        ha_sync_result = await sync_to_homeassistant(jjz_results_for_ha, traffic_results_for_ha)
+                        workflow_result["ha_sync_result"] = ha_sync_result
 
-                    if ha_sync_result:
-                        success_count = ha_sync_result.get('success_plates', 0)
-                        total_count = ha_sync_result.get('total_plates', 0)
-                        logging.info(f"HA同步完成: {success_count}/{total_count} 车牌成功")
+                        if ha_sync_result:
+                            success_count = ha_sync_result.get('success_plates', 0)
+                            total_count = ha_sync_result.get('total_plates', 0)
+                            logging.info(f"HA同步完成: {success_count}/{total_count} 车牌成功")
                 except Exception as e:
                     error_msg = f"HA同步失败: {e}"
                     logging.error(error_msg)
