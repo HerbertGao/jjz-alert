@@ -355,11 +355,12 @@ class ConfigManager:
                     mqtt_port=ha_data.get("mqtt_port", 1883),
                     mqtt_username=ha_data.get("mqtt_username"),
                     mqtt_password=ha_data.get("mqtt_password"),
-                    mqtt_client_id=ha_data.get("mqtt_client_id", "jjz_alert"),
-                    mqtt_discovery_prefix=ha_data.get("mqtt_discovery_prefix", "homeassistant"),
-                    mqtt_base_topic=ha_data.get("mqtt_base_topic", "jjz_alert"),
-                    mqtt_qos=ha_data.get("mqtt_qos", 1),
-                    mqtt_retain=ha_data.get("mqtt_retain", True),
+                    # 以下为 MQTT 默认值，不在示例中暴露
+                    mqtt_client_id="jjz_alert",
+                    mqtt_discovery_prefix="homeassistant",
+                    mqtt_base_topic="jjz_alert",
+                    mqtt_qos=1,
+                    mqtt_retain=True,
                 )
 
             # 管理员配置

@@ -58,11 +58,6 @@ global:
     mqtt_port: 1883
     mqtt_username: "ha"
     mqtt_password: "your_password"
-    mqtt_client_id: "jjz_alert"
-    mqtt_discovery_prefix: "homeassistant"   # 通常保持默认
-    mqtt_base_topic: "jjz_alert"             # 实体命名与主题前缀
-    mqtt_qos: 1
-    mqtt_retain: true
 
 # =============================================================================
 # 进京证账户配置（数据来源）
