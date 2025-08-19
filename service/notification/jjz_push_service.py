@@ -323,8 +323,11 @@ class JJZPushService:
 
             # 步骤8: MQTT Discovery（可选）
             try:
-                if jjz_results_for_ha and ha_mqtt_publisher.enabled():
-                    logging.info("开始MQTT Discovery发布")
+                if jjz_results_for_ha:
+                    if not ha_mqtt_publisher.enabled():
+                        logging.info("MQTT 未启用或依赖缺失，跳过 MQTT 发布")
+                    else:
+                        logging.info("开始MQTT Discovery发布")
                     for plate, jjz_status in jjz_results_for_ha.items():
                         try:
                             plate_cfg = next((p for p in plate_configs if p.plate == plate), None)
@@ -359,12 +362,14 @@ class JJZPushService:
                                 "icon": "mdi:car",
                             }
 
-                            await ha_mqtt_publisher.publish_discovery_and_state(
+                            publish_ok = await ha_mqtt_publisher.publish_discovery_and_state(
                                 plate_number=plate,
                                 display_name=display_name,
                                 state=state_str,
                                 attributes=attrs,
                             )
+                            if not publish_ok:
+                                logging.warning(f"MQTT 发布未成功: plate={plate}")
                         except Exception as e:
                             logging.warning(f"MQTT单车牌发布失败 {plate}: {e}")
             except Exception as e:
