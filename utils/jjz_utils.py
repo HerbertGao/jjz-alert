@@ -6,6 +6,29 @@
 from datetime import datetime
 
 
+def format_valid_dates(start_str: str | None, end_str: str | None) -> tuple[str, str]:
+    """
+    将有效期起止日期格式化：同年仅显示 mm-dd，跨年显示 YYYY-mm-dd。
+
+    Args:
+        start_str: 开始日期，格式 YYYY-mm-dd
+        end_str: 结束日期，格式 YYYY-mm-dd
+
+    Returns:
+        (formatted_start, formatted_end)
+    """
+    try:
+        if not start_str or not end_str:
+            return start_str or "", end_str or ""
+        start_dt = datetime.strptime(start_str, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_str, "%Y-%m-%d")
+        if start_dt.year == end_dt.year:
+            return start_dt.strftime("%m-%d"), end_dt.strftime("%m-%d")
+        return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
+    except Exception:
+        return start_str or "", end_str or ""
+
+
 def extract_jjz_type_from_jjzzlmc(jjzzlmc: str) -> str:
     """
     从进京证类型名称中提取括号内的内容
@@ -93,20 +116,7 @@ def format_jjz_push_content(
     status_text = extract_status_from_blztmc(blztmc, status)
 
     # 根据是否跨年决定日期显示格式
-    def _format_valid_dates(start_str: str | None, end_str: str | None) -> tuple[str, str]:
-        try:
-            if not start_str or not end_str:
-                return start_str or "", end_str or ""
-            start_dt = datetime.strptime(start_str, "%Y-%m-%d")
-            end_dt = datetime.strptime(end_str, "%Y-%m-%d")
-            if start_dt.year == end_dt.year:
-                return start_dt.strftime("%m-%d"), end_dt.strftime("%m-%d")
-            else:
-                return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
-        except Exception:
-            return start_str or "", end_str or ""
-
-    disp_start, disp_end = _format_valid_dates(valid_start, valid_end)
+    disp_start, disp_end = format_valid_dates(valid_start, valid_end)
 
     # 构建内容
     content_parts = [
