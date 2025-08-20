@@ -3,6 +3,8 @@
 进京证相关工具函数
 """
 
+from datetime import datetime
+
 
 def extract_jjz_type_from_jjzzlmc(jjzzlmc: str) -> str:
     """
@@ -90,9 +92,25 @@ def format_jjz_push_content(
     # 提取状态文本
     status_text = extract_status_from_blztmc(blztmc, status)
 
+    # 根据是否跨年决定日期显示格式
+    def _format_valid_dates(start_str: str | None, end_str: str | None) -> tuple[str, str]:
+        try:
+            if not start_str or not end_str:
+                return start_str or "", end_str or ""
+            start_dt = datetime.strptime(start_str, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_str, "%Y-%m-%d")
+            if start_dt.year == end_dt.year:
+                return start_dt.strftime("%m-%d"), end_dt.strftime("%m-%d")
+            else:
+                return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
+        except Exception:
+            return start_str or "", end_str or ""
+
+    disp_start, disp_end = _format_valid_dates(valid_start, valid_end)
+
     # 构建内容
     content_parts = [
-        f"车牌{display_name}的进京证({jjz_type})状态：{status_text}，有效期 {valid_start} 至 {valid_end}"
+        f"车牌{display_name}的进京证({jjz_type})状态：{status_text}，有效期 {disp_start} 至 {disp_end}"
     ]
 
     if days_remaining is not None:

@@ -49,12 +49,12 @@ global:
     integration_mode: mqtt
 
     # ========== 当使用 REST 模式时，仅需配置以下关键参数 ==========
-    rest_url: "http://homeassistant.local:8123"     # 兼容旧字段 url
-    rest_token: "your_long_lived_access_token_here" # 兼容旧字段 token
+    rest_url: "http://homeassistant.local:8123"
+    rest_token: "your_long_lived_access_token_here"
     # 其他 REST 细节（如 entity_prefix/retry/timeout 等）已内置默认值，不建议修改
 
     # ========== 当使用 MQTT 模式时，需配置以下参数 ==========
-    mqtt_host: "homeassistant.local"
+    mqtt_host: "homeassistant.local"    # 你的 MQTT Broker 地址（HA 插件一般是 HA 主机IP）
     mqtt_port: 1883
     mqtt_username: "ha"
     mqtt_password: "your_password"
@@ -119,74 +119,3 @@ plates:
       - type: apprise
         urls:
           - "mailto://family-admin@example.com"
-
-
-# =============================================================================
-# v2.0 新特性说明
-# =============================================================================
-#
-# 🔄 向后兼容性：
-#   - 现有v1.x配置100%兼容
-#   - 自动检测并转换配置格式
-#   - 原配置文件自动备份
-#
-# 🆕 v2.0 新增功能：
-#   1. Redis缓存 - 进京证数据每次运行主流程时都重新查询，缓存数据仅供推送和后续操作使用
-#   2. Apprise多通道推送 - 支持80+推送服务
-#   3. 车牌级别图标配置 - 多通道共用
-#   4. 管理员通知移到global中 - 更易配置
-#   5. Home Assistant集成 - 智能家居支持
-#   6. CLI工具 - 配置验证、迁移、测试
-#
-# 🛠️ CLI工具使用：
-#   - 配置验证：python cli_tools.py validate
-#   - 配置迁移：python cli_tools.py migrate
-#   - 推送测试：python cli_tools.py test-push --plate 京A12345
-#   - 系统状态：python cli_tools.py status -v
-#
-# 📱 支持的Apprise服务（部分）：
-#   - bark:// - Bark推送
-#   - tgram:// - Telegram
-#   - mailto:// - 邮件
-#   - wxwork:// - 企业微信
-#   - dingding:// - 钉钉
-#   - slack:// - Slack
-#   - discord:// - Discord
-#   - teams:// - Microsoft Teams
-#   - webhook:// - 自定义Webhook
-#   - json:// - JSON格式Webhook
-#   更多服务请参考：https://github.com/caronc/apprise
-#
-# 🏠 Home Assistant集成说明：
-#   1. 启用条件：
-#      - 设置 homeassistant.enabled: true
-#      - 配置有效的 URL 和 Token
-#   
-#   2. 设备组织方式：
-#      - 每个车牌创建一个独立设备
-#      - 设备名称：进京证监控 {车牌显示名称}
-#      - 每个设备包含4个实体，涵盖完整车辆状态
-#   
-#   3. 工作方式：
-#      - 每次查询进京证和限行数据后自动同步到HA
-#      - 无需定时任务，简单高效
-#   
-#   4. 每个车牌设备包含的实体：
-#      - sensor.jjz_alert_{plate}_permit: 进京证详细状态
-#      - binary_sensor.jjz_alert_{plate}_permit_valid: 进京证是否有效
-#      - sensor.jjz_alert_{plate}_traffic: 限行详细状态  
-#      - binary_sensor.jjz_alert_{plate}_traffic_limited: 今日是否限行
-#   
-#   5. 设备属性包含（完整车辆信息）：
-#      - 车牌号、进京证类型、进京证状态
-#      - 进京证有效期、剩余天数
-#      - 六环内进京证剩余次数
-#      - 当日是否限行、限行规则
-#      - 车牌尾号、数据来源等
-#   
-#   6. 获取HA Token：
-#      - 登录Home Assistant
-#      - 用户配置 -> 安全 -> 长期访问令牌
-#      - 创建新令牌并复制到配置文件
-#
-# =============================================================================

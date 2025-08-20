@@ -156,8 +156,9 @@ class HAPlateDevice:
             "jjz_status_desc": self.jjz_status_desc,
             "jjz_type": self.jjz_type,
             "jjz_apply_time": self.jjz_apply_time,
-            "jjz_valid_start": self.jjz_valid_start,
-            "jjz_valid_end": self.jjz_valid_end,
+            # 有效期：按是否跨年格式化
+            "jjz_valid_start": self._format_valid_date(self.jjz_valid_start, self.jjz_valid_end)[0],
+            "jjz_valid_end": self._format_valid_date(self.jjz_valid_start, self.jjz_valid_end)[1],
             "jjz_days_remaining": self.jjz_days_remaining,
             "jjz_remaining_count": self.jjz_remaining_count,
 
@@ -181,6 +182,20 @@ class HAPlateDevice:
             last_updated=self.last_updated,
             device_info=self.get_device_info(),
         )
+
+    @staticmethod
+    def _format_valid_date(start_str: Optional[str], end_str: Optional[str]) -> tuple[str, str]:
+        try:
+            if not start_str or not end_str:
+                return start_str or "", end_str or ""
+            s = datetime.strptime(start_str, "%Y-%m-%d")
+            e = datetime.strptime(end_str, "%Y-%m-%d")
+            if s.year == e.year:
+                return s.strftime("%m-%d"), e.strftime("%m-%d")
+            else:
+                return s.strftime("%Y-%m-%d"), e.strftime("%Y-%m-%d")
+        except Exception:
+            return start_str or "", end_str or ""
 
     def _get_icon(self) -> str:
         """根据状态获取图标"""

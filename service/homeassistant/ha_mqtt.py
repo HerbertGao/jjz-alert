@@ -205,6 +205,23 @@ class HAMQTTPublisher:
         if not ok_cfg:
             return False
 
+        # 格式化属性中的有效期日期（不跨年仅显示 mm-dd，跨年显示 YYYY-mm-dd）
+        try:
+            from datetime import datetime as _dt
+            s = attributes.get("jjz_valid_start")
+            e = attributes.get("jjz_valid_end")
+            if s and e:
+                sd = _dt.strptime(s, "%Y-%m-%d")
+                ed = _dt.strptime(e, "%Y-%m-%d")
+                if sd.year == ed.year:
+                    attributes["jjz_valid_start"] = sd.strftime("%m-%d")
+                    attributes["jjz_valid_end"] = ed.strftime("%m-%d")
+                else:
+                    attributes["jjz_valid_start"] = sd.strftime("%Y-%m-%d")
+                    attributes["jjz_valid_end"] = ed.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+
         self._log_debug("发布属性", topic=topics['attr'], attributes_count=len(attributes))
         ok_attr = await self._publish(topics['attr'], attributes, qos=1, retain=True)
         if not ok_attr:
