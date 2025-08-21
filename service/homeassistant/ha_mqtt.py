@@ -16,11 +16,22 @@ from typing import Optional, Dict, Any
 from config.config_v2 import get_homeassistant_config
 from utils.plate_utils import normalize_plate_for_ha_entity_id, extract_province_from_plate
 
+# 尝试导入 gmqtt（推荐）或 asyncio-mqtt（备用）
 try:
-    from asyncio_mqtt import Client, MqttError
-except Exception:  # pragma: no cover - 依赖可选
-    Client = None
-    MqttError = Exception
+    import gmqtt
+    from gmqtt import Client as GMQTTClient
+    MQTT_AVAILABLE = True
+    MQTT_LIB = "gmqtt"
+except ImportError:
+    try:
+        from asyncio_mqtt import Client as AsyncMQTTClient, MqttError
+        MQTT_AVAILABLE = True
+        MQTT_LIB = "asyncio-mqtt"
+    except ImportError:
+        MQTT_AVAILABLE = False
+        MQTT_LIB = None
+        AsyncMQTTClient = None
+        MqttError = Exception
 
 
 @dataclass
@@ -58,18 +69,18 @@ def _get_mqtt_config() -> Optional[MQTTConfig]:
 class HAMQTTPublisher:
     def __init__(self):
         self._cfg = _get_mqtt_config()
-        self._client: Optional[Client] = None
+        self._client = None
         self._connecting: bool = False
 
     def enabled(self) -> bool:
-        return self._cfg is not None and Client is not None
+        return self._cfg is not None and MQTT_AVAILABLE
 
     def _log_debug(self, message: str, **kwargs):
         """输出 debug 级别日志（同步函数）"""
         extra_data = " ".join([f"{k}={v}" for k, v in kwargs.items()])
         logging.debug(f"[MQTT] {message} {extra_data}".strip())
 
-    async def _ensure_client(self) -> Optional[Client]:
+    async def _ensure_client(self):
         if not self.enabled():
             self._log_debug("MQTT 未启用或依赖缺失")
             return None
@@ -84,21 +95,31 @@ class HAMQTTPublisher:
             return None
         try:
             self._connecting = True
-            self._log_debug("创建新的 MQTT 客户端连接", host=self._cfg.host, port=self._cfg.port, client_id=self._cfg.client_id)
-            client = Client(
-                hostname=self._cfg.host,
-                port=self._cfg.port,
-                username=self._cfg.username,
-                password=self._cfg.password,
-                client_id=self._cfg.client_id,
-            )
-            await client.connect()
+            self._log_debug("创建新的 MQTT 客户端连接", host=self._cfg.host, port=self._cfg.port, client_id=self._cfg.client_id, lib=MQTT_LIB)
+            
+            if MQTT_LIB == "gmqtt":
+                # 使用 gmqtt
+                client = GMQTTClient(self._cfg.client_id)
+                if self._cfg.username:
+                    client.set_auth_credentials(self._cfg.username, self._cfg.password)
+                await client.connect(self._cfg.host, self._cfg.port)
+            else:
+                # 使用 asyncio-mqtt
+                client = AsyncMQTTClient(
+                    hostname=self._cfg.host,
+                    port=self._cfg.port,
+                    username=self._cfg.username,
+                    password=self._cfg.password,
+                    client_id=self._cfg.client_id,
+                )
+                await client.connect()
+            
             self._client = client
             self._log_debug("MQTT 客户端连接成功")
             await self._publish_availability("online")
             self._log_debug("发布在线状态")
             return self._client
-        except MqttError as e:
+        except Exception as e:
             logging.error(f"MQTT连接失败: {e}")
             self._log_debug("MQTT 连接失败", error=str(e))
             self._client = None
@@ -112,7 +133,10 @@ class HAMQTTPublisher:
                 self._log_debug("关闭 MQTT 客户端连接")
                 await self._publish_availability("offline")
                 self._log_debug("发布离线状态")
-                await self._client.disconnect()
+                if MQTT_LIB == "gmqtt":
+                    await self._client.disconnect()
+                else:
+                    await self._client.disconnect()
                 self._client = None
                 self._log_debug("MQTT 客户端已关闭")
         except Exception:
@@ -129,10 +153,15 @@ class HAMQTTPublisher:
             if not isinstance(payload, (str, bytes)):
                 payload = json.dumps(payload, ensure_ascii=False)
             self._log_debug("发布 MQTT 消息", topic=topic, qos=qos_val, retain=retain_val, payload_length=len(str(payload)))
-            await client.publish(topic, payload, qos=qos_val, retain=retain_val)
+            
+            if MQTT_LIB == "gmqtt":
+                client.publish(topic, payload, qos=qos_val, retain=retain_val)
+            else:
+                await client.publish(topic, payload, qos=qos_val, retain=retain_val)
+            
             self._log_debug("MQTT 消息发布成功", topic=topic)
             return True
-        except MqttError as e:
+        except Exception as e:
             logging.error(f"MQTT发布失败 {topic}: {e}")
             self._log_debug("MQTT 消息发布失败", topic=topic, error=str(e))
             return False
