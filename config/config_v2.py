@@ -107,6 +107,18 @@ class HomeAssistantConfig:
 
 
 @dataclass
+class MessageTemplateConfig:
+    """消息模板配置"""
+    
+    valid_status: Optional[str] = None
+    expired_status: Optional[str] = None
+    pending_status: Optional[str] = None
+    error_status: Optional[str] = None
+    traffic_reminder_prefix: Optional[str] = None
+    sycs_part: Optional[str] = None
+
+
+@dataclass
 class GlobalConfig:
     """全局配置"""
 
@@ -116,6 +128,7 @@ class GlobalConfig:
     redis: RedisConfig = field(default_factory=RedisConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
     homeassistant: HomeAssistantConfig = field(default_factory=HomeAssistantConfig)
+    message_templates: MessageTemplateConfig = field(default_factory=MessageTemplateConfig)
 
 
 @dataclass
@@ -361,6 +374,18 @@ class ConfigManager:
                     mqtt_base_topic="jjz_alert",
                     mqtt_qos=1,
                     mqtt_retain=True,
+                )
+
+            # 消息模板配置
+            if "message_templates" in global_data:
+                template_data = global_data["message_templates"]
+                config.global_config.message_templates = MessageTemplateConfig(
+                    valid_status=template_data.get("valid_status"),
+                    expired_status=template_data.get("expired_status"),
+                    pending_status=template_data.get("pending_status"),
+                    error_status=template_data.get("error_status"),
+                    traffic_reminder_prefix=template_data.get("traffic_reminder_prefix"),
+                    sycs_part=template_data.get("sycs_part"),
                 )
 
             # 管理员配置

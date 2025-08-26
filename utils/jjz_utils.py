@@ -109,6 +109,9 @@ def format_jjz_push_content(
     Returns:
         格式化的推送内容
     """
+    # 导入模板管理器
+    from utils.message_templates import template_manager
+    
     # 提取进京证类型
     jjz_type = extract_jjz_type_from_jjzzlmc(jjzzlmc)
 
@@ -118,21 +121,16 @@ def format_jjz_push_content(
     # 根据是否跨年决定日期显示格式
     disp_start, disp_end = format_valid_dates(valid_start, valid_end)
 
-    # 构建内容
-    content_parts = [
-        f"车牌{display_name}的进京证({jjz_type})状态：{status_text}，有效期 {disp_start} 至 {disp_end}"
-    ]
-
-    if days_remaining is not None:
-        content_parts.append(f"，剩余 {days_remaining} 天。")
-    else:
-        content_parts.append("。")
-
-    # 添加六环内剩余次数信息
-    if sycs:
-        content_parts.append(f"六环内进京证剩余 {sycs} 次。")
-
-    return "".join(content_parts)
+    # 使用模板管理器格式化内容
+    return template_manager.format_valid_status(
+        display_name=display_name,
+        jjz_type=jjz_type,
+        status_text=status_text,
+        valid_start=disp_start,
+        valid_end=disp_end,
+        days_remaining=days_remaining,
+        sycs=sycs,
+    )
 
 
 def format_jjz_expired_content(display_name: str, sycs: str) -> str:
@@ -146,13 +144,11 @@ def format_jjz_expired_content(display_name: str, sycs: str) -> str:
     Returns:
         格式化的推送内容
     """
-    content_parts = [f"车牌 {display_name} 的进京证 已过期，请及时续办。"]
-
-    # 添加六环内剩余次数信息
-    if sycs:
-        content_parts.append(f"六环内进京证剩余 {sycs} 次。")
-
-    return "".join(content_parts)
+    # 导入模板管理器
+    from utils.message_templates import template_manager
+    
+    # 使用模板管理器格式化内容
+    return template_manager.format_expired_status(display_name, sycs)
 
 
 def format_jjz_pending_content(display_name: str, jjzzlmc: str, apply_time: str) -> str:
@@ -167,8 +163,14 @@ def format_jjz_pending_content(display_name: str, jjzzlmc: str, apply_time: str)
     Returns:
         格式化的推送内容
     """
+    # 导入模板管理器
+    from utils.message_templates import template_manager
+    
+    # 提取进京证类型
     jjz_type = extract_jjz_type_from_jjzzlmc(jjzzlmc)
-    return f"车牌{display_name}的进京证({jjz_type})状态：审核中，申请时间 {apply_time}。请关注审核进度。"
+    
+    # 使用模板管理器格式化内容
+    return template_manager.format_pending_status(display_name, jjz_type, apply_time)
 
 
 def format_jjz_error_content(
@@ -186,5 +188,11 @@ def format_jjz_error_content(
     Returns:
         格式化的推送内容
     """
+    # 导入模板管理器
+    from utils.message_templates import template_manager
+    
+    # 提取进京证类型
     jjz_type = extract_jjz_type_from_jjzzlmc(jjzzlmc)
-    return f"车牌{display_name}的进京证({jjz_type})状态：{status}。{error_msg}"
+    
+    # 使用模板管理器格式化内容
+    return template_manager.format_error_status(display_name, jjz_type, status, error_msg)

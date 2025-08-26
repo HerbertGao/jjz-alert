@@ -100,7 +100,10 @@ async def push_jjz_status(
             if traffic_reminder:
                 reminder_text = str(traffic_reminder).strip()
                 if reminder_text in ("今日限行", "明日限行"):
-                    body = f"【⚠️{reminder_text}】" + body
+                    # 使用模板管理器格式化限行提醒
+                    from utils.message_templates import template_manager
+                    reminder_prefix = template_manager.format_traffic_reminder(reminder_text)
+                    body = reminder_prefix + body
         except Exception:
             pass
 

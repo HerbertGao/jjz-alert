@@ -7,17 +7,38 @@
 global:
   # 日志配置
   log:
-    level: INFO  # DEBUG, INFO, WARNING, ERROR
+    level: DEBUG  # DEBUG, INFO, WARNING, ERROR
 
   # 管理员通知配置（系统错误、状态通知）
   admin:
     notifications:
       - type: apprise
         urls:
-          - "tgram://bot_token/admin_chat_id"     # Telegram管理员群
-          - "mailto://admin@example.com"          # 管理员邮箱
-          - "wxwork://admin_webhook_key"          # 企业微信管理员
+          - barks://your-barks-server/your-key
+          - tgram://your-bot-token/your-chat-id
+          - dingtalk://your-webhook-url/your-secret
 
+  # 消息模板配置（可选，如不配置则使用默认模板）
+  # 支持使用 ${变量名} 语法进行变量替换
+  message_templates:
+    # 有效状态模板
+    valid_status: |
+      车牌${display_name}的进京证(${jjz_type})状态：${status_text}，有效期${valid_start}至${valid_end}，剩余${days_remaining}天。${sycs_part}
+    # 过期状态模板
+    expired_status: |
+      车牌${display_name}的进京证已过期，请及时续办。${sycs_part}
+    # 审核中状态模板
+    pending_status: |
+      车牌${display_name}的进京证(${jjz_type})状态：审核中，申请时间${apply_time}。请关注审核进度。
+    # 错误状态模板
+    error_status: |
+      车牌${display_name}的进京证(${jjz_type})状态：${status}。${error_msg}
+    # 限行提醒前缀模板
+    traffic_reminder_prefix: "【⚠️${reminder_text}】"
+    # 六环内剩余次数部分模板
+    sycs_part: "六环内进京证剩余${sycs}次。"
+    # 自定义模板示例（可以根据需要添加更多模板）
+    # custom_template: "自定义消息：${variable1} 和 ${variable2}"
 
   # 定时提醒配置
   remind:

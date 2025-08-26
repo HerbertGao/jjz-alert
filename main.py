@@ -14,6 +14,11 @@ async def main():
     """
     logging.info("开始执行进京证查询和推送任务")
 
+    # 初始化消息模板配置
+    from utils.message_templates import initialize_templates_from_config
+    from config.config_v2 import config_manager
+    initialize_templates_from_config(config_manager)
+
     # 使用统一的推送服务
     from service.notification.jjz_push_service import jjz_push_service
 
