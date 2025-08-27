@@ -573,9 +573,13 @@ class UnifiedPusher:
             supported_services = []
             try:
                 import apprise
-
-                apobj = apprise.Apprise()
-                supported_services = list(apobj.schemas())
+                # Apprise 没有 schemas() 方法，我们使用预定义的支持服务列表
+                supported_services = [
+                    'bark', 'tgram', 'mailto', 'wxwork', 'dingding', 'slack', 
+                    'discord', 'teams', 'webhook', 'json', 'form', 'fcm', 
+                    'gotify', 'pushover', 'prowl', 'pushbullet', 'join', 
+                    'notifico', 'pushsafer', 'telegram'
+                ]
             except Exception:
                 pass
 
@@ -630,13 +634,10 @@ class UnifiedPusher:
                     else:
                         total_channels += 1
 
-            # 获取Apprise支持的服务列表
-            supported_services = []
+            # 检查Apprise可用性
             apprise_available = False
             try:
                 import apprise
-                apobj = apprise.Apprise()
-                supported_services = list(apobj.schemas())
                 apprise_available = True
             except Exception as e:
                 logging.warning(f"Apprise不可用: {e}")
@@ -655,12 +656,10 @@ class UnifiedPusher:
 
             return {
                 "status": "healthy" if apprise_status == "healthy" else apprise_status,
-                "channels_available": len(supported_services),
                 "service_details": {
                     "apprise_enabled": self.apprise_enabled,
                     "apprise_available": apprise_available,
                     "apprise_status": apprise_status,
-                    "supported_services_count": len(supported_services),
                 },
                 "configuration": {
                     "total_plates": total_plates,
