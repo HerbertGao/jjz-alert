@@ -1,39 +1,58 @@
-# 使用 Python 3.13 作为基础镜像
+# syntax=docker/dockerfile:1.7-labs
+
+# 预下载 wheels（在构建机平台执行，避免 ARM64 下网络与解析开销）
+FROM --platform=$BUILDPLATFORM python:3.13-slim AS wheelhouse
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_INPUT=1
+WORKDIR /wheels
+COPY requirements-prod.txt ./
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip download --only-binary=:all: \
+      --implementation cp --python-version 313 --abi cp313 \
+      --platform manylinux_2_17_x86_64 \
+      --dest /wheels/x86_64 \
+      -r requirements-prod.txt && \
+    pip download --only-binary=:all: \
+      --implementation cp --python-version 313 --abi cp313 \
+      --platform manylinux_2_17_aarch64 \
+      --dest /wheels/aarch64 \
+      -r requirements-prod.txt
+
+# 最终运行镜像
 FROM python:3.13-slim
 
-# 设置构建参数
-ARG VERSION=latest
-ARG BUILD_DATE
-ARG VCS_REF
-
-# 设置标签
-LABEL maintainer="herbertgao" \
-      version="${VERSION}" \
-      description="JJZ-Alert 进京证提醒工具"
-
-# 设置工作目录
+# 设置工作目录与环境
 WORKDIR /app
-
-# 设置环境变量
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV TZ=Asia/Shanghai
+ARG VERSION=latest
 ENV VERSION=${VERSION}
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_INPUT=1
+# 声明来自 buildx 的自动构建参数
+ARG TARGETARCH
 
-# 复制 requirements.txt
-COPY requirements.txt .
+# 复制依赖与离线 wheels
+COPY requirements-prod.txt ./
+COPY --from=wheelhouse /wheels /wheels
 
-# 安装 Python 依赖
-RUN apt-get update && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir -r requirements.txt
+# 按平台选择对应 wheels 目录并离线安装
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      WHEELDIR=/wheels/aarch64; \
+    else \
+      WHEELDIR=/wheels/x86_64; \
+    fi; \
+    echo "Using wheel dir: $WHEELDIR for TARGETARCH=$TARGETARCH"; \
+    pip install --no-index --find-links=$WHEELDIR -r requirements-prod.txt
 
 # 复制项目文件
 COPY . .
 
-# 设置权限（如 main.py 需执行权限可加）
-# RUN chmod +x main.py
-
-# 健康检查（可根据实际情况调整）
+# 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import os; assert os.path.exists('/app/main.py')" || exit 1
 

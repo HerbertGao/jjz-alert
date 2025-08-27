@@ -32,6 +32,7 @@ def parse_status(data):
                 'end_date': end_date,
                 'status': status,
                 'days_left': days_left,
-                'jjz_type': jjz_type
+                'jjz_type': jjz_type,
+                'sycs': car.get('sycs', '')  # 六环内进京证剩余办理次数
             })
-    return all_status 
+    return all_status
