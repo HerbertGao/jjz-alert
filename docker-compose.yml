@@ -1,7 +1,7 @@
 services:
   # JJZ-Alert主应用服务
   jjz-alert:
-    image: ghcr.io/herbertgao/jjz-alert:v2.0-dev
+    image: ghcr.io/herbertgao/jjz-alert:latest
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
