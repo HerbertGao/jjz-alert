@@ -569,24 +569,9 @@ class UnifiedPusher:
             服务状态信息
         """
         try:
-            # 获取Apprise支持的服务列表
-            supported_services = []
-            try:
-                import apprise
-                # Apprise 没有 schemas() 方法，我们使用预定义的支持服务列表
-                supported_services = [
-                    'bark', 'tgram', 'mailto', 'wxwork', 'dingding', 'slack', 
-                    'discord', 'teams', 'webhook', 'json', 'form', 'fcm', 
-                    'gotify', 'pushover', 'prowl', 'pushbullet', 'join', 
-                    'notifico', 'pushsafer', 'telegram'
-                ]
-            except Exception:
-                pass
-
             return {
                 "service_status": {
                     "apprise_enabled": self.apprise_enabled,
-                    "supported_apprise_services": supported_services,
                 },
                 "configuration": {
                     "total_plates": 0,  # 需要从配置中获取
@@ -600,7 +585,6 @@ class UnifiedPusher:
             return {
                 "service_status": {
                     "apprise_enabled": self.apprise_enabled,
-                    "supported_apprise_services": [],
                 },
                 "configuration": {
                     "total_plates": 0,
