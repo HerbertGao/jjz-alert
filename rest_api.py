@@ -145,7 +145,8 @@ async def health() -> Dict[str, Any]:
             push_status = await unified_pusher.get_service_status()
             health_data["services"]["notification"] = {
                 "status": push_status.get("status", "unknown"),
-                "channels_available": push_status.get("channels_available", 0)
+                "apprise_enabled": push_status.get("service_details", {}).get("apprise_enabled", False),
+                "apprise_available": push_status.get("service_details", {}).get("apprise_available", False)
             }
         except Exception as e:
             health_data["services"]["notification"] = {
@@ -277,7 +278,7 @@ async def metrics() -> Dict[str, Any]:
                 "notification_service": {
                     "total_channels": push_status.get("configuration", {}).get("total_channels", 0),
                     "apprise_channels": push_status.get("configuration", {}).get("apprise_channels", 0),
-                    "supported_services": push_status.get("channels_available", 0)
+                    "apprise_enabled": push_status.get("service_details", {}).get("apprise_enabled", False)
                 },
                 "homeassistant": {
                     "enabled": ha_status.get("enabled", False),

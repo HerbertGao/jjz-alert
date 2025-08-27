@@ -563,46 +563,22 @@ class UnifiedPusher:
 
     def get_status(self) -> Dict[str, Any]:
         """
-        获取推送服务状态
+        获取推送服务状态（同步版本，简单状态）
 
         Returns:
             服务状态信息
         """
         try:
-            # 获取Apprise支持的服务列表
-            supported_services = []
-            try:
-                import apprise
-
-                apobj = apprise.Apprise()
-                supported_services = list(apobj.schemas())
-            except Exception:
-                pass
-
             return {
-                "service_status": {
-                    "apprise_enabled": self.apprise_enabled,
-                    "supported_apprise_services": supported_services,
-                },
-                "configuration": {
-                    "total_plates": 0,  # 需要从配置中获取
-                    "apprise_channels": 0,  # 需要从配置中获取
-                    "total_channels": 0,  # 需要从配置中获取
-                },
+                "status": "enabled" if self.apprise_enabled else "disabled",
+                "apprise_enabled": self.apprise_enabled,
             }
-
         except Exception as e:
             logging.error(f"获取服务状态失败: {e}")
             return {
-                "service_status": {
-                    "apprise_enabled": self.apprise_enabled,
-                    "supported_apprise_services": [],
-                },
-                "configuration": {
-                    "total_plates": 0,
-                    "apprise_channels": 0,
-                    "total_channels": 0,
-                },
+                "status": "error",
+                "apprise_enabled": self.apprise_enabled,
+                "error": str(e)
             }
 
     async def get_service_status(self) -> Dict[str, Any]:
@@ -630,13 +606,10 @@ class UnifiedPusher:
                     else:
                         total_channels += 1
 
-            # 获取Apprise支持的服务列表
-            supported_services = []
+            # 检查Apprise可用性
             apprise_available = False
             try:
                 import apprise
-                apobj = apprise.Apprise()
-                supported_services = list(apobj.schemas())
                 apprise_available = True
             except Exception as e:
                 logging.warning(f"Apprise不可用: {e}")
@@ -655,21 +628,15 @@ class UnifiedPusher:
 
             return {
                 "status": "healthy" if apprise_status == "healthy" else apprise_status,
-                "channels_available": len(supported_services),
                 "service_details": {
                     "apprise_enabled": self.apprise_enabled,
                     "apprise_available": apprise_available,
                     "apprise_status": apprise_status,
-                    "supported_services_count": len(supported_services),
                 },
                 "configuration": {
                     "total_plates": total_plates,
                     "total_channels": total_channels,
                     "apprise_channels": apprise_channels,
-                },
-                "capabilities": {
-                    "priorities": [p.value for p in PushPriority],
-                    "notification_types": ["apprise"],
                 }
             }
 
@@ -678,7 +645,6 @@ class UnifiedPusher:
             return {
                 "status": "error",
                 "error": str(e),
-                "channels_available": 0,
                 "service_details": {
                     "apprise_enabled": self.apprise_enabled,
                     "apprise_available": False,
