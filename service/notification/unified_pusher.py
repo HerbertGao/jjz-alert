@@ -563,34 +563,22 @@ class UnifiedPusher:
 
     def get_status(self) -> Dict[str, Any]:
         """
-        获取推送服务状态
+        获取推送服务状态（同步版本，简单状态）
 
         Returns:
             服务状态信息
         """
         try:
             return {
-                "service_status": {
-                    "apprise_enabled": self.apprise_enabled,
-                },
-                "configuration": {
-                    "total_plates": 0,  # 需要从配置中获取
-                    "apprise_channels": 0,  # 需要从配置中获取
-                    "total_channels": 0,  # 需要从配置中获取
-                },
+                "status": "enabled" if self.apprise_enabled else "disabled",
+                "apprise_enabled": self.apprise_enabled,
             }
-
         except Exception as e:
             logging.error(f"获取服务状态失败: {e}")
             return {
-                "service_status": {
-                    "apprise_enabled": self.apprise_enabled,
-                },
-                "configuration": {
-                    "total_plates": 0,
-                    "apprise_channels": 0,
-                    "total_channels": 0,
-                },
+                "status": "error",
+                "apprise_enabled": self.apprise_enabled,
+                "error": str(e)
             }
 
     async def get_service_status(self) -> Dict[str, Any]:
@@ -649,10 +637,6 @@ class UnifiedPusher:
                     "total_plates": total_plates,
                     "total_channels": total_channels,
                     "apprise_channels": apprise_channels,
-                },
-                "capabilities": {
-                    "priorities": [p.value for p in PushPriority],
-                    "notification_types": ["apprise"],
                 }
             }
 
@@ -661,7 +645,6 @@ class UnifiedPusher:
             return {
                 "status": "error",
                 "error": str(e),
-                "channels_available": 0,
                 "service_details": {
                     "apprise_enabled": self.apprise_enabled,
                     "apprise_available": False,
