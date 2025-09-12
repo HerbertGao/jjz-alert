@@ -131,22 +131,48 @@ class HAMQTTPublisher:
         try:
             if self._client:
                 self._log_debug("关闭 MQTT 客户端连接")
-                await self._publish_availability("offline")
-                self._log_debug("发布离线状态")
-                if MQTT_LIB == "gmqtt":
-                    await self._client.disconnect()
-                else:
-                    await self._client.disconnect()
-                self._client = None
-                self._log_debug("MQTT 客户端已关闭")
-        except Exception:
-            pass
+                try:
+                    # 先发布离线状态，但不等待结果
+                    await self._publish_availability("offline")
+                    self._log_debug("发布离线状态")
+                except Exception as e:
+                    self._log_debug("发布离线状态失败", error=str(e))
+                
+                try:
+                    if MQTT_LIB == "gmqtt":
+                        # 对于 gmqtt，确保正确断开连接
+                        if hasattr(self._client, 'disconnect'):
+                            await self._client.disconnect()
+                        # 清理内部状态
+                        if hasattr(self._client, '_cleanup'):
+                            self._client._cleanup()
+                    else:
+                        await self._client.disconnect()
+                except Exception as e:
+                    self._log_debug("断开 MQTT 连接时出错", error=str(e))
+                finally:
+                    self._client = None
+                    self._log_debug("MQTT 客户端已关闭")
+        except Exception as e:
+            self._log_debug("关闭 MQTT 客户端时出错", error=str(e))
+            # 确保客户端被重置
+            self._client = None
 
     async def _publish(self, topic: str, payload: Any, qos: Optional[int] = None, retain: Optional[bool] = None):
         client = await self._ensure_client()
         if not client:
             self._log_debug("无法获取 MQTT 客户端，跳过发布", topic=topic)
             return False
+        
+        # 检查连接状态（仅对 gmqtt）
+        if MQTT_LIB == "gmqtt" and hasattr(client, 'is_connected') and not client.is_connected:
+            self._log_debug("MQTT 连接已断开，重置客户端", topic=topic)
+            self._client = None
+            client = await self._ensure_client()
+            if not client:
+                self._log_debug("重新连接失败，跳过发布", topic=topic)
+                return False
+        
         qos_val = self._cfg.qos if qos is None else qos
         retain_val = self._cfg.retain if retain is None else retain
         try:
@@ -164,6 +190,10 @@ class HAMQTTPublisher:
         except Exception as e:
             logging.error(f"MQTT发布失败 {topic}: {e}")
             self._log_debug("MQTT 消息发布失败", topic=topic, error=str(e))
+            # 如果是连接相关错误，重置客户端
+            if "socket" in str(e).lower() or "connection" in str(e).lower():
+                self._log_debug("检测到连接错误，重置 MQTT 客户端")
+                self._client = None
             return False
 
     async def _publish_availability(self, status: str):

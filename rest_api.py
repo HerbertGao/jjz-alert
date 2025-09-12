@@ -15,6 +15,7 @@ POST /query              Body: {"plates": ["京A12345", "津B67890"]}
 
 import logging
 import time
+from contextlib import asynccontextmanager
 from typing import Any, Dict, List
 
 import uvicorn
@@ -24,7 +25,45 @@ from pydantic import BaseModel, Field
 from config.config_v2 import config_manager
 from utils.logger import get_structured_logger
 
-app = FastAPI(title="JJZ Alert API", version="2.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时执行
+    logging.info("应用启动完成")
+    yield
+    # 关闭时执行
+    logging.info("开始清理应用资源...")
+    
+    try:
+        # 关闭 MQTT 连接
+        from service.homeassistant.ha_mqtt import ha_mqtt_publisher
+        if ha_mqtt_publisher.enabled():
+            await ha_mqtt_publisher.close()
+            logging.info("MQTT 连接已关闭")
+    except Exception as e:
+        logging.error(f"关闭 MQTT 连接时出错: {e}")
+    
+    try:
+        # 关闭 Redis 连接
+        from config.redis.connection import close_redis
+        await close_redis()
+        logging.info("Redis 连接已关闭")
+    except Exception as e:
+        logging.error(f"关闭 Redis 连接时出错: {e}")
+    
+    try:
+        # 关闭 Home Assistant 客户端
+        from service.homeassistant.ha_client import close_ha_client
+        await close_ha_client()
+        logging.info("Home Assistant 客户端已关闭")
+    except Exception as e:
+        logging.error(f"关闭 Home Assistant 客户端时出错: {e}")
+    
+    logging.info("应用资源清理完成")
+
+
+app = FastAPI(title="JJZ Alert API", version="2.0.0", lifespan=lifespan)
 
 # 创建结构化日志记录器
 structured_logger = get_structured_logger("rest_api")
