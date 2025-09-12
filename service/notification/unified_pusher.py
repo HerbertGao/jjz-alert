@@ -570,7 +570,7 @@ class UnifiedPusher:
         """
         try:
             return {
-                "status": "enabled" if self.apprise_enabled else "disabled",
+                "status": "enabled" if self.de_enabled else "disabled",
                 "apprise_enabled": self.apprise_enabled,
             }
         except Exception as e:
@@ -610,6 +610,8 @@ class UnifiedPusher:
             apprise_available = False
             try:
                 import apprise
+                # 简单测试Apprise是否可以正常初始化
+                test_instance = apprise.Apprise()
                 apprise_available = True
             except Exception as e:
                 logging.warning(f"Apprise不可用: {e}")

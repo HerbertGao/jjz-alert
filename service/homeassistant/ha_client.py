@@ -98,10 +98,15 @@ class HomeAssistantClient:
         """测试与Home Assistant的连接"""
         try:
             response = await self._make_request('GET', '/api/')
+            version = response.get('version')
+            # 如果版本信息为空或None，尝试从其他字段获取
+            if not version:
+                version = response.get('ha_version') or response.get('version_info', {}).get('version')
+            
             return {
                 'success': True,
                 'message': response.get('message', 'API connected'),
-                'version': response.get('version', 'unknown')
+                'version': version or 'connected'  # 如果确实没有版本信息，显示connected
             }
         except Exception as e:
             return {
