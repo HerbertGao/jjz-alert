@@ -40,18 +40,19 @@ async def log_requests(request: Request, call_next):
     process_time = time.time() - start_time
     response_time_ms = round(process_time * 1000, 2)
 
-    # 记录API调用日志
-    structured_logger.log_api_call(
-        method=request.method,
-        endpoint=str(request.url.path),
-        status_code=response.status_code,
-        response_time_ms=response_time_ms,
-        extra_data={
-            "query_params": dict(request.query_params),
-            "user_agent": request.headers.get("user-agent"),
-            "client_ip": request.client.host if request.client else None
-        }
-    )
+    # 只在DEBUG级别或错误状态码时记录API调用日志
+    if logging.getLogger().isEnabledFor(logging.DEBUG) or response.status_code >= 400:
+        structured_logger.log_api_call(
+            method=request.method,
+            endpoint=str(request.url.path),
+            status_code=response.status_code,
+            response_time_ms=response_time_ms,
+            extra_data={
+                "query_params": dict(request.query_params),
+                "user_agent": request.headers.get("user-agent"),
+                "client_ip": request.client.host if request.client else None
+            }
+        )
 
     return response
 

@@ -53,7 +53,7 @@ class HomeAssistantSyncService:
             result = await client.test_connection()
 
             if result['success']:
-                logging.info(f"Home Assistant连接测试成功: {result.get('version', 'unknown')}")
+                logging.debug(f"Home Assistant连接测试成功: {result.get('version', 'unknown')}")
             else:
                 logging.error(f"Home Assistant连接测试失败: {result.get('error', 'unknown')}")
 
