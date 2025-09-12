@@ -3,9 +3,58 @@ import utils.logger
 
 import asyncio
 import logging
+import signal
+import sys
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
+
+
+async def cleanup_resources():
+    """清理应用资源"""
+    logging.info("开始清理应用资源...")
+    
+    try:
+        # 关闭 MQTT 连接
+        from service.homeassistant.ha_mqtt import ha_mqtt_publisher
+        if ha_mqtt_publisher.enabled():
+            await ha_mqtt_publisher.close()
+            logging.info("MQTT 连接已关闭")
+    except Exception as e:
+        logging.error(f"关闭 MQTT 连接时出错: {e}")
+    
+    try:
+        # 关闭 Redis 连接
+        from config.redis.connection import close_redis
+        await close_redis()
+        logging.info("Redis 连接已关闭")
+    except Exception as e:
+        logging.error(f"关闭 Redis 连接时出错: {e}")
+    
+    try:
+        # 关闭 Home Assistant 客户端
+        from service.homeassistant.ha_client import close_ha_client
+        await close_ha_client()
+        logging.info("Home Assistant 客户端已关闭")
+    except Exception as e:
+        logging.error(f"关闭 Home Assistant 客户端时出错: {e}")
+    
+    logging.info("应用资源清理完成")
+
+
+def signal_handler(signum, frame):
+    """信号处理器"""
+    logging.info(f"接收到信号 {signum}，开始清理资源...")
+    try:
+        # 创建新的事件循环来运行清理函数
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(cleanup_resources())
+        loop.close()
+    except Exception as e:
+        logging.error(f"清理资源时出错: {e}")
+    finally:
+        sys.exit(0)
 
 
 async def main():
@@ -55,6 +104,10 @@ async def main():
 
 
 def schedule_jobs():
+    # 在主线程中注册信号处理器
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     scheduler = BlockingScheduler()
     # 使用全局配置管理器实例
     from config.config_v2 import config_manager
