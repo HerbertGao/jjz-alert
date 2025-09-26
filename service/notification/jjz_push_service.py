@@ -229,9 +229,11 @@ class JJZPushService:
                         )
                     else:
                         # 次日推送逻辑
-                        if (jjz_status.valid_start and jjz_status.valid_end and
-                                jjz_status.valid_start <= tomorrow_str <= jjz_status.valid_end and
-                                jjz_status.status == JJZStatusEnum.VALID.value):
+                        # 检查是否有进京证在明天有效（包括待生效的进京证）
+                        has_valid_tomorrow = (jjz_status.valid_start and jjz_status.valid_end and
+                                            jjz_status.valid_start <= tomorrow_str <= jjz_status.valid_end)
+                        
+                        if has_valid_tomorrow:
                             # 次日有效，推送次日信息
                             traffic_reminder_text = None
                             try:

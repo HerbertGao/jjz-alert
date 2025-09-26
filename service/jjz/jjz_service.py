@@ -108,7 +108,7 @@ class JJZService:
             return []
 
     def _parse_all_jjz_records(self, response_data: Dict[str, Any]) -> List[JJZStatus]:
-        """解析所有进京证记录"""
+        """解析所有进京证记录（包括生效中和待生效的进京证）"""
         records = []
 
         try:
@@ -128,48 +128,70 @@ class JJZService:
                 if not plate:
                     continue
 
-                # 获取进京证记录
+                # 获取生效中的进京证记录
                 bzxx = vehicle.get('bzxx', [])
-                if not bzxx:
-                    continue
+                # 获取待生效的进京证记录
+                ecbzxx = vehicle.get('ecbzxx', [])
 
-                # 获取最新的进京证记录
-                latest_record = bzxx[0]  # 假设第一条是最新的
+                # 处理生效中的进京证
+                for record in bzxx:
+                    jjz_status = self._parse_single_jjz_record(plate, record, vehicle, 'active')
+                    if jjz_status:
+                        records.append(jjz_status)
 
-                # 解析进京证状态
-                blzt = latest_record.get('blzt', '')  # 办理状态
-                blztmc = latest_record.get('blztmc', '')  # 办理状态描述
-                sqsj = latest_record.get('sqsj', '')  # 申请时间
-                yxqs = latest_record.get('yxqs', '')  # 有效期开始
-                yxqz = latest_record.get('yxqz', '')  # 有效期结束
-                sxsyts = latest_record.get('sxsyts', '')  # 剩余使用天数
-                sycs = vehicle.get('sycs', '')  # 六环内进京证剩余办理次数
-                jjzzlmc = latest_record.get('jjzzlmc', '')  # 进京证类型名称
-
-                # 计算状态
-                status = self._determine_status_v2(blzt, blztmc, yxqz)
-                # 直接使用API返回的剩余天数
-                days_remaining = int(sxsyts) if sxsyts and sxsyts != '' else None
-
-                jjz_status = JJZStatus(
-                    plate=plate,
-                    status=status,
-                    apply_time=sqsj,
-                    valid_start=yxqs,
-                    valid_end=yxqz,
-                    days_remaining=days_remaining,
-                    sycs=sycs,
-                    jjzzlmc=jjzzlmc,
-                    blztmc=blztmc,
-                    data_source='api'
-                )
-
-                records.append(jjz_status)
+                # 处理待生效的进京证
+                for record in ecbzxx:
+                    jjz_status = self._parse_single_jjz_record(plate, record, vehicle, 'pending')
+                    if jjz_status:
+                        records.append(jjz_status)
 
         except Exception as e:
             logging.error(f"解析所有进京证记录失败: {e}")
 
         return records
+
+    def _parse_single_jjz_record(self, plate: str, record: Dict[str, Any], vehicle: Dict[str, Any], record_type: str) -> Optional[JJZStatus]:
+        """解析单个进京证记录"""
+        try:
+            # 解析进京证状态
+            blzt = record.get('blzt', '')  # 办理状态
+            blztmc = record.get('blztmc', '')  # 办理状态描述
+            sqsj = record.get('sqsj', '')  # 申请时间
+            yxqs = record.get('yxqs', '')  # 有效期开始
+            yxqz = record.get('yxqz', '')  # 有效期结束
+            sxsyts = record.get('sxsyts', '')  # 剩余使用天数
+            sycs = vehicle.get('sycs', '')  # 六环内进京证剩余办理次数
+            jjzzlmc = record.get('jjzzlmc', '')  # 进京证类型名称
+
+            # 计算状态
+            status = self._determine_status_v2(blzt, blztmc, yxqz, yxqs)
+            
+            # 处理剩余天数
+            days_remaining = None
+            if sxsyts and sxsyts != '' and sxsyts is not None:
+                try:
+                    days_remaining = int(sxsyts)
+                except (ValueError, TypeError):
+                    days_remaining = None
+
+            jjz_status = JJZStatus(
+                plate=plate,
+                status=status,
+                apply_time=sqsj,
+                valid_start=yxqs,
+                valid_end=yxqz,
+                days_remaining=days_remaining,
+                sycs=sycs,
+                jjzzlmc=jjzzlmc,
+                blztmc=blztmc,
+                data_source='api'
+            )
+
+            return jjz_status
+
+        except Exception as e:
+            logging.error(f"解析单个进京证记录失败: plate={plate}, record_type={record_type}, error={e}")
+            return None
 
     def _parse_jjz_response(self, plate: str, response_data: Dict[str, Any]) -> JJZStatus:
         """解析进京证API响应数据"""
@@ -235,7 +257,7 @@ class JJZService:
             # 计算状态
             logging.debug(
                 f"解析字段: blzt={blzt}, blztmc={blztmc}, yxqz={yxqz}, sxsyts={sxsyts}, sycs={sycs}, jjzzlmc={jjzzlmc}")
-            status = self._determine_status_v2(blzt, blztmc, yxqz)
+            status = self._determine_status_v2(blzt, blztmc, yxqz, yxqs)
             # 直接使用API返回的剩余天数
             days_remaining = int(sxsyts) if sxsyts and sxsyts != '' else None
 
@@ -284,10 +306,10 @@ class JJZService:
             logging.warning(f"确定进京证状态失败: {e}")
             return JJZStatusEnum.INVALID.value
 
-    def _determine_status_v2(self, blzt: str, blztmc: str, yxqz: str) -> str:
+    def _determine_status_v2(self, blzt: str, blztmc: str, yxqz: str, yxqs: str = None) -> str:
         """根据新API格式确定进京证状态"""
         try:
-            logging.debug(f"状态判断参数: blzt={blzt}, blztmc={blztmc}, yxqz={yxqz}")
+            logging.debug(f"状态判断参数: blzt={blzt}, blztmc={blztmc}, yxqz={yxqz}, yxqs={yxqs}")
 
             if not yxqz:
                 return JJZStatusEnum.INVALID.value
@@ -298,8 +320,21 @@ class JJZService:
 
             if end_date < today:
                 return JJZStatusEnum.EXPIRED.value
-            elif (blzt == '1' or blzt == 1) and '审核通过' in blztmc:
+            elif (blzt == '1' or blzt == 1) and '审核通过' in blztmc and '生效中' in blztmc:
                 return JJZStatusEnum.VALID.value
+            elif (blzt == '6' or blzt == 6) and '审核通过' in blztmc and '待生效' in blztmc:
+                # 待生效状态，需要检查是否在有效期内
+                if yxqs:
+                    try:
+                        start_date = datetime.strptime(yxqs, '%Y-%m-%d').date()
+                        if start_date <= today <= end_date:
+                            return JJZStatusEnum.VALID.value  # 待生效但在有效期内，视为有效
+                        else:
+                            return JJZStatusEnum.PENDING.value  # 待生效但还未到生效时间
+                    except Exception:
+                        return JJZStatusEnum.PENDING.value
+                else:
+                    return JJZStatusEnum.PENDING.value
             elif (blzt == '0' or blzt == 0) or '审核中' in blztmc:
                 return JJZStatusEnum.PENDING.value
             else:
@@ -449,7 +484,7 @@ class JJZService:
         for plate in plates:
             statuses = plate_statuses[plate]
             if statuses:
-                # 按申请时间排序，选择最新的
+                # 按申请时间排序，选择最新的记录
                 latest_status = max(statuses, key=lambda s: s.apply_time or '')
                 results[plate] = latest_status
 
