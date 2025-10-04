@@ -120,8 +120,27 @@ def schedule_jobs():
     )
 
     def async_main_wrapper():
-        """Wrapper to run async main function in sync scheduler"""
-        asyncio.run(main())
+        """Wrapper to run async main function in sync scheduler with event loop isolation"""
+        # 创建新的事件循环来避免循环冲突
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # 在独立的事件循环中执行任务
+            loop.run_until_complete(main())
+        except Exception as e:
+            logging.error(f"定时任务执行失败: {e}")
+        finally:
+            # 清理事件循环
+            try:
+                # 确保所有任务完成
+                pending = asyncio.all_tasks(loop)
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            except Exception as e:
+                logging.warning(f"清理待处理任务时出错: {e}")
+            finally:
+                loop.close()
 
     for time_str in remind_times:
         hour, minute = map(int, time_str.split(":"))
