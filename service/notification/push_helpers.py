@@ -85,9 +85,25 @@ async def push_jjz_status(
             )
 
         else:
+            # 检查是否为系统级错误，如果是则跳过用户推送并通知管理员
+            error_msg = jjz_data.get("error_message", "")
+            if _is_system_error(error_msg):
+                logging.warning(f"车牌 {plate} 因系统级错误跳过用户推送: {error_msg}")
+                
+                # 通知管理员系统错误
+                await _notify_admin_system_error(plate, display_name, error_msg)
+                
+                return {
+                    "plate": plate,
+                    "success_count": 0,
+                    "total_count": 0,
+                    "skipped": True,
+                    "skip_reason": "系统级错误",
+                    "error": error_msg
+                }
+            
             priority = PushPriority.NORMAL
             logging.debug(f"[STATUS_DEBUG] 车牌 {plate} - 状态为{status}，设置优先级为NORMAL")
-            error_msg = jjz_data.get("error_message", "")
             body = format_jjz_error_content(
                 display_name=display_name,
                 jjzzlmc=jjz_data.get("jjzzlmc", ""),
@@ -180,16 +196,17 @@ async def push_jjz_reminder(
 
 
 async def push_admin_notification(
-        plate_configs: list,
-        title: str,
-        message: str,
+        plate_configs: list = None,
+        title: str = "",
+        message: str = "",
         priority: PushPriority = PushPriority.NORMAL,
+        category: str = "admin"
 ) -> Dict[str, Any]:
     """
     推送管理员通知
 
     Args:
-        plate_configs: 车牌配置列表
+        plate_configs: 车牌配置列表（可选，为空时使用全局管理员配置）
         title: 标题
         message: 消息内容
         priority: 优先级
@@ -199,21 +216,26 @@ async def push_admin_notification(
         推送结果
     """
     try:
-        # 使用第一个车牌配置的管理员通知
-        if not plate_configs:
+        from config.config_v2 import config_manager
+        
+        # 获取全局管理员通知配置
+        app_config = config_manager.load_config()
+        admin_notifications = app_config.global_config.admin.notifications
+        
+        if not admin_notifications:
             return {
                 "success_count": 0,
                 "total_count": 0,
-                "errors": ["没有可用的车牌配置"],
+                "errors": ["未配置管理员通知"],
                 "timestamp": datetime.now().isoformat(),
             }
 
-        # 创建临时配置用于管理员推送
+        # 创建管理员配置
         admin_config = PlateConfig(
             plate="ADMIN",
             display_name="管理员",
-            notifications=plate_configs[0].notifications,  # 使用第一个配置的通知设置
-            icon=plate_configs[0].icon,
+            notifications=admin_notifications,
+            icon="https://cdn-icons-png.flaticon.com/512/1077/1077114.png",  # 管理员图标
         )
 
         # 发送推送
@@ -232,3 +254,100 @@ async def push_admin_notification(
             "errors": [error_msg],
             "timestamp": datetime.now().isoformat(),
         }
+
+
+def _is_system_error(error_msg: str) -> bool:
+    """
+    检测是否为系统级错误
+    
+    Args:
+        error_msg: 错误信息
+        
+    Returns:
+        是否为系统级错误
+    """
+    if not error_msg:
+        return False
+    
+    # 系统级错误关键词
+    system_error_keywords = [
+        # 网络相关错误
+        "TLS connect error",
+        "OPENSSL_internal",
+        "curl: (35)",
+        "网络连接失败",
+        "网络TLS错误",
+        "TLS连接失败",
+        "Connection",
+        "timeout",
+        "网络错误",
+        "连接超时",
+        "SSL",
+        "TLS",
+        "certificate",
+        "handshake",
+        # API相关错误
+        "Session.request() got an unexpected keyword argument",
+        "HTTP POST请求失败",
+        "HTTP GET请求失败",
+        "进京证查询失败",
+        # 系统级错误
+        "系统错误",
+        "服务不可用",
+        "服务器错误",
+        "API错误",
+        "配置错误",
+        "未配置",
+        "初始化失败"
+    ]
+    
+    error_msg_lower = error_msg.lower()
+    return any(keyword.lower() in error_msg_lower for keyword in system_error_keywords)
+
+
+async def _notify_admin_system_error(plate: str, display_name: str, error_msg: str):
+    """
+    通知管理员系统级错误
+    
+    Args:
+        plate: 车牌号
+        display_name: 显示名称
+        error_msg: 错误信息
+    """
+    try:
+        # 构建通知消息
+        title = "🚨 进京证查询系统错误"
+        message = f"""
+🚗 车牌: {display_name} ({plate})
+❌ 错误类型: 系统级错误
+📝 错误详情: {error_msg}
+⏰ 发生时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+💡 建议: 请检查系统配置和服务器状态
+🔄 处理: 已跳过用户推送，仅通知管理员
+        """.strip()
+        
+        # 直接使用全局管理员配置发送通知
+        await push_admin_notification(
+            title=title,
+            message=message,
+            priority=PushPriority.HIGH,
+            category="system_error"
+        )
+        
+        logging.info(f"已向管理员发送系统错误通知: {plate}")
+        
+    except Exception as e:
+        logging.error(f"发送管理员系统错误通知失败: {e}")
+
+
+async def _notify_admin_network_error(plate: str, display_name: str, error_msg: str):
+    """
+    通知管理员网络错误（保留向后兼容）
+    
+    Args:
+        plate: 车牌号
+        display_name: 显示名称
+        error_msg: 错误信息
+    """
+    # 调用系统错误通知函数
+    await _notify_admin_system_error(plate, display_name, error_msg)

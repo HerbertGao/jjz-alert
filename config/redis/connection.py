@@ -30,8 +30,14 @@ class RedisConnectionManager:
         """初始化Redis连接"""
         try:
             async with self._connection_lock:
+                # 如果已有连接但事件循环不匹配，先关闭旧连接
                 if self._pool is not None:
-                    return True
+                    current_loop = asyncio.get_running_loop()
+                    if hasattr(self, '_loop') and self._loop != current_loop:
+                        logging.info("检测到事件循环变化，重新初始化Redis连接")
+                        await self.close()
+                    else:
+                        return True
 
                 # 创建连接池
                 self._pool = aioredis.ConnectionPool(
@@ -66,6 +72,8 @@ class RedisConnectionManager:
                 # 测试连接
                 await self._test_connection()
 
+                # 记录当前事件循环
+                self._loop = asyncio.get_running_loop()
                 logging.info(f"Redis连接初始化成功: {self.config.host}:{self.config.port}/{self.config.db}")
                 return True
 
@@ -204,8 +212,15 @@ redis_manager = RedisConnectionManager()
 
 async def get_redis_client() -> aioredis.Redis:
     """获取Redis客户端的快捷函数"""
-    if redis_manager._client is None:
+    # 检查当前事件循环是否与连接管理器匹配
+    current_loop = asyncio.get_running_loop()
+    
+    # 如果客户端未初始化或事件循环不匹配，重新初始化
+    if redis_manager._client is None or not hasattr(redis_manager, '_loop') or redis_manager._loop != current_loop:
         await redis_manager.initialize()
+        # 记录当前事件循环
+        redis_manager._loop = current_loop
+    
     return redis_manager.client
 
 

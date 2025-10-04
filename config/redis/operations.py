@@ -4,6 +4,7 @@ Redis基础操作模块
 提供常用的Redis操作封装
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -52,18 +53,26 @@ class RedisOperations:
 
     async def get(self, key: str, default: Any = None) -> Any:
         """获取键值"""
-        try:
-            client = await self._get_client()
-            value = await client.get(key)
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                client = await self._get_client()
+                value = await client.get(key)
 
-            if value is None:
-                return default
+                if value is None:
+                    return default
 
-            return self._deserialize_value(value)
+                return self._deserialize_value(value)
 
-        except Exception as e:
-            logging.error(f"Redis GET操作失败: key={key}, error={e}")
-            return default
+            except Exception as e:
+                if attempt < max_retries:
+                    logging.warning(f"Redis GET操作失败，重试 {attempt + 1}/{max_retries}: key={key}, error={e}")
+                    # 重新获取客户端
+                    self._client = None
+                    await asyncio.sleep(0.1)  # 短暂等待
+                else:
+                    logging.error(f"Redis GET操作失败: key={key}, error={e}")
+                    return default
 
     async def delete(self, *keys: str) -> int:
         """删除键"""

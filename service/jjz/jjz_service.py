@@ -4,6 +4,7 @@
 提供进京证查询、缓存管理和业务逻辑封装
 """
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -84,7 +85,31 @@ class JJZService:
             logging.debug(f"进京证状态查询成功: {resp.json()}")
             return resp.json()
         except Exception as e:
-            return {"error": str(e)}
+            error_msg = str(e)
+            
+            # 特殊处理系统级错误
+            if ("TLS connect error" in error_msg or "OPENSSL_internal" in error_msg or 
+                "curl: (35)" in error_msg or "Connection" in error_msg or
+                "Session.request() got an unexpected keyword argument" in error_msg or
+                "HTTP POST请求失败" in error_msg or "HTTP GET请求失败" in error_msg):
+                
+                error_type = "系统级错误"
+                if "TLS" in error_msg or "SSL" in error_msg:
+                    error_type = "TLS/SSL连接错误"
+                elif "Session.request()" in error_msg:
+                    error_type = "HTTP请求参数错误"
+                elif "HTTP" in error_msg:
+                    error_type = "HTTP请求失败"
+                elif "Connection" in error_msg:
+                    error_type = "网络连接错误"
+                
+                logging.error(f"{error_type}: {error_msg}")
+                # 异步通知管理员（不等待结果）
+                asyncio.create_task(self._notify_admin_system_error(error_type, error_msg))
+                return {"error": f"{error_type}: {error_msg}"}
+            else:
+                logging.error(f"进京证查询失败: {error_msg}")
+                return {"error": error_msg}
 
     def _load_accounts(self) -> List[JJZAccount]:
         """加载进京证账户配置"""
@@ -687,6 +712,53 @@ class JJZService:
                 'status': 'error',
                 'error': str(e)
             }
+
+    async def _notify_admin_system_error(self, error_type: str, error_msg: str):
+        """
+        通知管理员系统级错误
+        
+        Args:
+            error_type: 错误类型
+            error_msg: 错误信息
+        """
+        try:
+            from service.notification.push_helpers import push_admin_notification
+            from service.notification.adapter import PushPriority
+            
+            # 构建通知消息
+            title = "🚨 进京证查询系统错误"
+            message = f"""
+🔧 服务: 进京证查询服务
+❌ 错误类型: {error_type}
+📝 错误详情: {error_msg}
+⏰ 发生时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+💡 建议: 请检查系统配置和服务器状态
+🔄 处理: 已跳过用户推送，仅通知管理员
+            """.strip()
+            
+            # 直接使用全局管理员配置发送通知
+            await push_admin_notification(
+                title=title,
+                message=message,
+                priority=PushPriority.HIGH,
+                category="system_error"
+            )
+            
+            logging.info(f"已向管理员发送系统错误通知: {error_type}")
+            
+        except Exception as e:
+            logging.error(f"发送管理员系统错误通知失败: {e}")
+
+    async def _notify_admin_network_error(self, error_type: str, error_msg: str):
+        """
+        通知管理员网络错误（保留向后兼容）
+        
+        Args:
+            error_type: 错误类型
+            error_msg: 错误信息
+        """
+        # 调用系统错误通知函数
+        await self._notify_admin_system_error(error_type, error_msg)
 
 
 # 全局JJZ服务实例
