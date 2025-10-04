@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
     steps:
     - uses: actions/checkout@v5
 
@@ -83,4 +84,5 @@ jobs:
       uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
-        sarif_file: 'trivy-results.sarif' 
+        sarif_file: 'trivy-results.sarif'
+        category: 'trivy-scan' 
