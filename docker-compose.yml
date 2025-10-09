@@ -27,7 +27,7 @@ services:
 
   # Redis数据存储服务
   redis:
-    image: redis:8-alpine
+    image: redis:7-alpine
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
