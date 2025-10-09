@@ -27,7 +27,7 @@ services:
 
   # Redis数据存储服务
   redis:
-    image: cgr.dev/chainguard/redis:8.0
+    image: cgr.dev/chainguard/redis:latest
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
