@@ -108,7 +108,11 @@ def schedule_jobs():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    scheduler = BlockingScheduler()
+    # 配置作业默认行为：允许最多 2 个并发实例，并开启合并以避免错过时段累积触发
+    scheduler = BlockingScheduler(job_defaults={
+        "max_instances": 2,
+        "coalesce": True,
+    })
     # 使用全局配置管理器实例
     from config.config_v2 import config_manager
 
@@ -145,7 +149,12 @@ def schedule_jobs():
     for time_str in remind_times:
         hour, minute = map(int, time_str.split(":"))
         trigger = CronTrigger(hour=hour, minute=minute)
-        scheduler.add_job(async_main_wrapper, trigger, misfire_grace_time=None)
+        scheduler.add_job(
+            async_main_wrapper,
+            trigger,
+            misfire_grace_time=None,
+            max_instances=2,
+        )
         logging.info(f"已添加定时任务: 每天 {hour:02d}:{minute:02d}")
     logging.info("定时任务调度器启动")
     scheduler.start()
