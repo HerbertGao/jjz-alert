@@ -416,7 +416,10 @@ class TestHomeAssistantValidation:
         # 验证自定义配置值被正确读取
         assert config.global_config.homeassistant.enabled is True
         assert config.global_config.homeassistant.rest_entity_prefix == "custom_prefix"
-        assert config.global_config.homeassistant.rest_device_manufacturer == "Custom Manufacturer"
+        assert (
+            config.global_config.homeassistant.rest_device_manufacturer
+            == "Custom Manufacturer"
+        )
         assert config.global_config.homeassistant.rest_device_model == "Custom Model"
         assert config.global_config.homeassistant.rest_retry_count == 5
         assert config.global_config.homeassistant.rest_timeout == 60
