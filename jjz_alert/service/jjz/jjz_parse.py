@@ -13,7 +13,7 @@ StatusResolver = Callable[[str, str, str, Optional[str]], str]
 
 def parse_status(data: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
     """
-    兼容旧版的简单解析方法（保留向后兼容）
+    解析进京证状态数据
     """
     if "data" not in data or "bzclxx" not in data["data"]:
         logger.warning("未找到 data.bzclxx 字段，原始返回: %s", data)

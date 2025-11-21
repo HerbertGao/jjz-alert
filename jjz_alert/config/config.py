@@ -96,13 +96,13 @@ class ConfigManager:
             logging.error(f"加载配置文件失败: {e}")
             self._config = AppConfig()
 
-    def _parse_structured_config(self, v2_config: Dict) -> AppConfig:
+    def _parse_structured_config(self, raw_config: Dict) -> AppConfig:
         """解析配置格式"""
         config = AppConfig()
 
         # 解析全局配置
-        if "global" in v2_config:
-            global_data = v2_config["global"]
+        if "global" in raw_config:
+            global_data = raw_config["global"]
 
             # 定时提醒配置（含 API 配置）
             if "remind" in global_data:
@@ -201,14 +201,10 @@ class ConfigManager:
                 config.global_config.log = LogConfig(
                     level=log_data.get("level", "INFO")
                 )
-            elif "log_level" in global_data:  # 兼容旧的平级格式
-                config.global_config.log = LogConfig(
-                    level=global_data.get("log_level", "INFO")
-                )
 
         # 解析进京证账户
-        if "jjz_accounts" in v2_config:
-            for account_data in v2_config["jjz_accounts"]:
+        if "jjz_accounts" in raw_config:
+            for account_data in raw_config["jjz_accounts"]:
                 if "jjz" in account_data:
                     jjz_data = account_data["jjz"]
                     jjz_config = JJZConfig(token=jjz_data["token"], url=jjz_data["url"])
@@ -218,8 +214,8 @@ class ConfigManager:
                     config.jjz_accounts.append(account)
 
         # 解析车牌配置
-        if "plates" in v2_config:
-            for plate_data in v2_config["plates"]:
+        if "plates" in raw_config:
+            for plate_data in raw_config["plates"]:
                 plate_config = PlateConfig(
                     plate=plate_data["plate"],
                     display_name=plate_data.get("display_name"),

@@ -91,26 +91,6 @@ class TestConfigManager:
         assert config1 is not None
         assert config2 is not None
 
-    def test_parse_config_with_log_level_compat(self, tmp_path, monkeypatch):
-        """测试解析配置 - 兼容旧的 log_level 格式"""
-        # 清除 LOG_LEVEL 环境变量，以便测试 YAML 配置读取
-        monkeypatch.delenv("LOG_LEVEL", raising=False)
-
-        config_file = tmp_path / "config.yaml"
-        config_data = {
-            "global": {
-                "log_level": "WARNING",  # 旧的平级格式
-            },
-            "jjz_accounts": [],
-            "plates": [],
-        }
-        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
-
-        manager = ConfigManager(str(config_file))
-        config = manager.load_config()
-
-        assert config.global_config.log.level == "WARNING"
-
     def test_apply_env_overrides_redis(self, tmp_path, monkeypatch):
         """测试环境变量覆盖 - Redis配置"""
         config_file = tmp_path / "config.yaml"
