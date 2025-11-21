@@ -72,9 +72,9 @@ global:
     # ========== 当使用 REST 模式时，仅需配置以下关键参数 ==========
     rest_url: "http://homeassistant.local:8123"
     rest_token: "your_long_lived_access_token_here"
-    # entity_prefix: "jjz_alert"  # 实体前缀
-    # device_manufacturer: "进京证提醒" # 设备生产商
-    # device_model: "jjz_alert" #设备型号
+    # entity_prefix: "jjz_alert"  # 实体前缀，默认值为 jjz_alert
+    # device_manufacturer: "进京证提醒" # 设备生产商，默认值为 进京证提醒
+    # device_model: "jjz_alert" #设备型号，默认值为 jjz_alert
     # 其他 REST 细节（如 retry/timeout 等）已内置默认值，不建议修改
 
     # ========== 当使用 MQTT 模式时，需配置以下参数 ==========
@@ -82,6 +82,7 @@ global:
     mqtt_port: 1883
     mqtt_username: "ha"
     mqtt_password: "your_password"
+    # 其他 MQTT 细节（如 client_id/base_topic 等）已内置默认值，不建议修改
 
 # =============================================================================
 # 进京证账户配置（数据来源）

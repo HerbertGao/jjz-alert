@@ -145,37 +145,29 @@ class ConfigManager:
             if "homeassistant" in global_data:
                 ha_data = global_data["homeassistant"]
 
-                # 读取 REST 关键参数使用 rest_*，并兼容旧字段 url/token 作为回退
-                rest_url = ha_data.get(
-                    "rest_url", ha_data.get("url", "http://homeassistant.local:8123")
-                )
-                rest_token = ha_data.get("rest_token", ha_data.get("token", ""))
-
-                # 其余 REST 参数统一使用内置默认值（不推荐用户修改）
                 config.global_config.homeassistant = HomeAssistantConfig(
                     enabled=ha_data.get("enabled", False),
                     integration_mode=ha_data.get("integration_mode", "rest"),
-                    url=rest_url,
-                    token=rest_token,
+                    # ========== REST 模式 ==========
+                    url=ha_data.get("rest_url", "http://homeassistant.local:8123"),
+                    token=ha_data.get("rest_token", ""),
                     entity_prefix=ha_data.get("entity_prefix", "jjz_alert"),
-                    # 同步配置（默认值）
-                    sync_after_query=True,
-                    # 错误处理（默认值）
-                    retry_count=3,
-                    timeout=30,
-                    # 设备创建策略（默认值）
-                    create_device_per_plate=True,
                     device_manufacturer=ha_data.get(
                         "device_manufacturer", "进京证提醒"
                     ),
                     device_model=ha_data.get("device_model", "jjz_alert"),
-                    # MQTT Discovery（可选）
+                    # 其他 REST 细节（retry/timeout 等）已内置默认值，不建议修改
+                    sync_after_query=True,
+                    retry_count=3,
+                    timeout=30,
+                    create_device_per_plate=True,
+                    # ========== MQTT 模式 ==========
                     mqtt_enabled=ha_data.get("mqtt_enabled", False),
                     mqtt_host=ha_data.get("mqtt_host", "localhost"),
                     mqtt_port=ha_data.get("mqtt_port", 1883),
                     mqtt_username=ha_data.get("mqtt_username"),
                     mqtt_password=ha_data.get("mqtt_password"),
-                    # 以下为 MQTT 默认值，不在示例中暴露
+                    # 其他 MQTT 细节（client_id/base_topic 等）已内置默认值，不建议修改
                     mqtt_client_id="jjz_alert",
                     mqtt_discovery_prefix="homeassistant",
                     mqtt_base_topic="jjz_alert",
