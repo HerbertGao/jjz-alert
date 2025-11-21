@@ -337,9 +337,14 @@ class HomeAssistantClient:
 
                 safe_prefix = re.sub(r"[^a-z0-9_]", "_", prefix.lower())
                 safe_remainder = re.sub(r"[^a-z0-9_]", "_", plate_remainder.lower())
-                current_prefixes.add(
-                    f"sensor.{safe_prefix}_{province_pinyin}_{safe_remainder}"
-                )
+                # 如果 province_pinyin 为空，则跳过以避免双下划线
+                if province_pinyin:
+                    entity_prefix = (
+                        f"sensor.{safe_prefix}_{province_pinyin}_{safe_remainder}"
+                    )
+                else:
+                    entity_prefix = f"sensor.{safe_prefix}_{safe_remainder}"
+                current_prefixes.add(entity_prefix)
 
             # 找出需要删除的实体
             entities_to_delete = []
