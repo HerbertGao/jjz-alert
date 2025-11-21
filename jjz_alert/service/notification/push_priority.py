@@ -23,6 +23,7 @@ class PlatformPriority(Enum):
     APPRISE_URGENT = "urgent"
     APPRISE_CRITICAL = "critical"
 
+
 class PriorityMapper:
     """优先级映射器"""
 

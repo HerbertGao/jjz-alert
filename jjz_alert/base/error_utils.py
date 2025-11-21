@@ -39,7 +39,7 @@ def _run_async_safe(coro: asyncio.Future) -> None:
         except Exception as e:
             logger.error(
                 f"Background task failed with exception: {type(e).__name__}: {e}",
-                exc_info=True
+                exc_info=True,
             )
 
     task.add_done_callback(_handle_task_result)

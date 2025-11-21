@@ -184,7 +184,8 @@ class UnifiedPusher:
             # {level} 用于 Bark URL，{priority} 用于其他 Apprise 服务
             url = url.replace("{level}", PriorityMapper.get_bark_level(priority_enum))
             url = url.replace(
-                "{priority}", PriorityMapper.get_platform_priority(priority_enum, "apprise")
+                "{priority}",
+                PriorityMapper.get_platform_priority(priority_enum, "apprise"),
             )
 
             return url

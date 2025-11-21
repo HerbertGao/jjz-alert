@@ -878,7 +878,9 @@ class TestUnifiedPusher:
         # 传入字符串形式的priority（不是枚举）
         push_params = {"priority": "normal"}  # 字符串，不是PushPriority.NORMAL
 
-        result = pusher._process_url_placeholders(url, "京A12345", "测试车辆", push_params)
+        result = pusher._process_url_placeholders(
+            url, "京A12345", "测试车辆", push_params
+        )
 
         # 应该正常处理，替换占位符
         assert "{level}" not in result
@@ -916,6 +918,7 @@ class TestUnifiedPusher:
 
             # Mock apprise 模块（只在动态导入时生效）
             import sys
+
             mock_apprise_module = Mock()
             mock_apprise_module.Apprise.return_value = Mock()
 
@@ -940,12 +943,17 @@ class TestUnifiedPusher:
             mock_config_manager.load_config.return_value = mock_app_config
 
             # Mock apprise导入失败
-            with patch("builtins.__import__", side_effect=ImportError("Apprise not found")):
+            with patch(
+                "builtins.__import__", side_effect=ImportError("Apprise not found")
+            ):
                 result = await pusher.get_service_status()
 
                 # apprise应该标记为不可用
                 assert result["service_details"]["apprise_available"] is False
-                assert result["service_details"]["apprise_status"] in ["disabled", "error"]
+                assert result["service_details"]["apprise_status"] in [
+                    "disabled",
+                    "error",
+                ]
 
     @pytest.mark.asyncio
     async def test_get_service_status_apprise_disabled(self):
@@ -971,4 +979,7 @@ class TestUnifiedPusher:
 
                 # apprise应该标记为禁用
                 assert result["service_details"]["apprise_enabled"] is False
-                assert result["service_details"]["apprise_status"] in ["disabled", "error"]
+                assert result["service_details"]["apprise_status"] in [
+                    "disabled",
+                    "error",
+                ]

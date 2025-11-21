@@ -1219,7 +1219,10 @@ class TestTrafficService:
         target_str = target_date.strftime("%Y年%m月%d日")
 
         traffic_service._memory_cache = [
-            {"limitedTime": target_str, "limitedNumber": "13579"}  # 包含多个数字但不含'和'
+            {
+                "limitedTime": target_str,
+                "limitedNumber": "13579",
+            }  # 包含多个数字但不含'和'
         ]
         traffic_service._memory_cache_date = date.today()
 
@@ -1238,7 +1241,10 @@ class TestTrafficService:
 
         traffic_service._memory_cache = [
             {"limitedTime": "invalid_date_format", "limitedNumber": "1和6"},
-            {"limitedTime": target_date.strftime("%Y年%m月%d日"), "limitedNumber": "2和7"},
+            {
+                "limitedTime": target_date.strftime("%Y年%m月%d日"),
+                "limitedNumber": "2和7",
+            },
         ]
         traffic_service._memory_cache_date = date.today()
 
