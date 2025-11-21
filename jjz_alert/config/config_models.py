@@ -64,33 +64,30 @@ class HomeAssistantConfig:
     # 二选一：使用 REST API 同步或 MQTT Discovery 推送
     # 可选值: 'rest' 或 'mqtt'（默认 rest 保持向后兼容）
     integration_mode: str = "rest"
-    url: str = "http://homeassistant.local:8123"
-    token: str = ""
-    entity_prefix: str = "jjz_alert"
 
-    # 同步配置
-    sync_after_query: bool = True  # 查询后同步（推荐）
+    # ========== REST 模式 ==========
+    rest_url: str = "http://homeassistant.local:8123"
+    rest_token: str = ""
+
+    # 设备信息
+    rest_entity_prefix: str = "jjz_alert"
+    rest_device_manufacturer: str = "进京证提醒"  # 设备制造商
+    rest_device_model: str = "jjz_alert"  # 设备型号
 
     # 错误处理
-    retry_count: int = 3  # 同步失败重试次数
-    timeout: int = 30  # 请求超时(秒)
+    rest_retry_count: int = 3  # 同步失败重试次数
+    rest_timeout: int = 30  # 请求超时(秒)
 
-    # 设备和实体创建策略
-    create_device_per_plate: bool = True  # 为每个车牌创建独立设备
-    device_manufacturer: str = "进京证提醒"  # 设备制造商
-    device_model: str = "jjz_alert"  # 设备型号
-
-    # MQTT Discovery（可选）
-    mqtt_enabled: bool = False
+    # ========== MQTT 模式 ==========
     mqtt_host: str = "localhost"
     mqtt_port: int = 1883
     mqtt_username: Optional[str] = None
     mqtt_password: Optional[str] = None
+
     mqtt_client_id: str = "jjz_alert"
     mqtt_discovery_prefix: str = "homeassistant"
     mqtt_base_topic: str = "jjz_alert"
     mqtt_qos: int = 1
-    mqtt_retain: bool = True
 
 
 @dataclass

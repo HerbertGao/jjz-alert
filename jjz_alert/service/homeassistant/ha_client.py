@@ -21,9 +21,9 @@ class HomeAssistantClient:
 
     def __init__(self, config: HomeAssistantConfig):
         self.config = config
-        self.base_url = config.url.rstrip("/")
+        self.base_url = config.rest_url.rstrip("/")
         self.headers = {
-            "Authorization": f"Bearer {config.token}",
+            "Authorization": f"Bearer {config.rest_token}",
             "Content-Type": "application/json",
         }
         self._session: Optional[aiohttp.ClientSession] = None
@@ -63,7 +63,7 @@ class HomeAssistantClient:
         url = f"{self.base_url}/api/{clean_endpoint}"
         session = await self._get_session()
 
-        timeout_value = timeout or self.config.timeout
+        timeout_value = timeout or self.config.rest_timeout
         request_timeout = aiohttp.ClientTimeout(total=timeout_value)
 
         try:
@@ -213,8 +213,8 @@ class HomeAssistantClient:
         try:
             # 首先注册设备
             device_info = plate_device.get_device_info(
-                manufacturer=self.config.device_manufacturer,
-                model=self.config.device_model,
+                manufacturer=self.config.rest_device_manufacturer,
+                model=self.config.rest_device_model,
             )
 
             device_registered = await self.register_device(device_info)
@@ -223,9 +223,9 @@ class HomeAssistantClient:
 
             # 获取所有实体状态
             entity_states = plate_device.get_all_entity_states(
-                entity_prefix=self.config.entity_prefix,
-                manufacturer=self.config.device_manufacturer,
-                model=self.config.device_model,
+                entity_prefix=self.config.rest_entity_prefix,
+                manufacturer=self.config.rest_device_manufacturer,
+                model=self.config.rest_device_model,
             )
             sync_results["total_count"] = len(entity_states)
 
@@ -291,7 +291,7 @@ class HomeAssistantClient:
 
             # 过滤JJZ相关实体
             jjz_entities = []
-            prefix = self.config.entity_prefix
+            prefix = self.config.rest_entity_prefix
 
             for state in states:
                 entity_id = state.get("entity_id", "")
@@ -325,7 +325,7 @@ class HomeAssistantClient:
 
             # 提取当前车牌的实体前缀
             current_prefixes = set()
-            prefix = self.config.entity_prefix
+            prefix = self.config.rest_entity_prefix
             for plate in current_plates:
                 # 提取省份信息和车牌剩余部分
                 from jjz_alert.base.plate_utils import extract_province_from_plate

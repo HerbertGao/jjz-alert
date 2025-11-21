@@ -55,7 +55,6 @@ def _get_mqtt_config() -> Optional[MQTTConfig]:
         discovery_prefix=cfg.mqtt_discovery_prefix or "homeassistant",
         base_topic=cfg.mqtt_base_topic or "jjz_alert",
         qos=cfg.mqtt_qos if isinstance(cfg.mqtt_qos, int) else 1,
-        retain=bool(cfg.mqtt_retain),
     )
 
 
@@ -183,7 +182,8 @@ class HAMQTTPublisher:
                 return False
 
         qos_val = self._cfg.qos if qos is None else qos
-        retain_val = self._cfg.retain if retain is None else retain
+        # retain 固定使用 True（MQTT Discovery 最佳实践）
+        retain_val = True if retain is None else retain
         try:
             if not isinstance(payload, (str, bytes)):
                 payload = json.dumps(payload, ensure_ascii=False)

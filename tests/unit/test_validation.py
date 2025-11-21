@@ -136,7 +136,9 @@ class TestConfigValidator:
     def test_validate_homeassistant_config_enabled_no_url(self):
         """测试Home Assistant配置验证 - 启用但未配置URL"""
         config = AppConfig()
-        config.global_config.homeassistant = HomeAssistantConfig(enabled=True, url="")
+        config.global_config.homeassistant = HomeAssistantConfig(
+            enabled=True, rest_url=""
+        )
 
         validator = ConfigValidator()
         result = validator.validate(config)
@@ -150,7 +152,7 @@ class TestConfigValidator:
         """测试Home Assistant配置验证 - 无效URL"""
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
-            enabled=True, url="invalid-url"
+            enabled=True, rest_url="invalid-url"
         )
 
         validator = ConfigValidator()
@@ -164,9 +166,9 @@ class TestConfigValidator:
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="http://homeassistant.local:8123",  # 先通过URL格式验证
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
+            rest_url="http://homeassistant.local:8123",  # 先通过URL格式验证
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="jjz_alert",
         )
 
         validator = ConfigValidator()
@@ -174,7 +176,7 @@ class TestConfigValidator:
 
         # 由于URL格式有效，会检查协议，但http://开头是有效的
         # 所以这个测试需要测试一个无效的URL格式
-        config.global_config.homeassistant.url = "invalid-url"
+        config.global_config.homeassistant.rest_url = "invalid-url"
         validator2 = ConfigValidator()
         result2 = validator2.validate(config)
 
@@ -186,9 +188,9 @@ class TestConfigValidator:
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="http://homeassistant.local",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
+            rest_url="http://homeassistant.local",
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="jjz_alert",
         )
 
         validator = ConfigValidator()
@@ -204,7 +206,7 @@ class TestConfigValidator:
         """测试Home Assistant配置验证 - 未配置令牌"""
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
-            enabled=True, url="http://homeassistant.local:8123", token=""
+            enabled=True, rest_url="http://homeassistant.local:8123", rest_token=""
         )
 
         validator = ConfigValidator()
@@ -219,7 +221,7 @@ class TestConfigValidator:
         """测试Home Assistant配置验证 - 令牌过短"""
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
-            enabled=True, url="http://homeassistant.local:8123", token="short"
+            enabled=True, rest_url="http://homeassistant.local:8123", rest_token="short"
         )
 
         validator = ConfigValidator()
@@ -236,9 +238,9 @@ class TestConfigValidator:
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="http://homeassistant.local:8123",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="",
+            rest_url="http://homeassistant.local:8123",
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="",
         )
 
         validator = ConfigValidator()
@@ -254,9 +256,9 @@ class TestConfigValidator:
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="http://homeassistant.local:8123",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="Invalid-Prefix",
+            rest_url="http://homeassistant.local:8123",
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="Invalid-Prefix",
         )
 
         validator = ConfigValidator()
@@ -272,9 +274,9 @@ class TestConfigValidator:
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="http://homeassistant.local:8123",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
+            rest_url="http://homeassistant.local:8123",
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="jjz_alert",
         )
 
         validator = ConfigValidator()
@@ -282,55 +284,15 @@ class TestConfigValidator:
 
         assert result is True
 
-    def test_validate_homeassistant_config_device_disabled(self):
-        """测试Home Assistant配置验证 - 设备创建禁用"""
-        config = AppConfig()
-        config.global_config.homeassistant = HomeAssistantConfig(
-            enabled=True,
-            url="http://homeassistant.local:8123",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
-            create_device_per_plate=False,
-        )
-
-        validator = ConfigValidator()
-        result = validator.validate(config)
-
-        assert result is True  # 警告不影响验证结果
-        assert any(
-            "Home Assistant车牌设备创建已禁用" in warning
-            for warning in validator.warnings
-        )
-
-    def test_validate_homeassistant_config_sync_disabled(self):
-        """测试Home Assistant配置验证 - 同步禁用"""
-        config = AppConfig()
-        config.global_config.homeassistant = HomeAssistantConfig(
-            enabled=True,
-            url="http://homeassistant.local:8123",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
-            sync_after_query=False,
-        )
-
-        validator = ConfigValidator()
-        result = validator.validate(config)
-
-        assert result is True  # 警告不影响验证结果
-        assert any(
-            "Home Assistant查询后同步已禁用" in warning
-            for warning in validator.warnings
-        )
-
     def test_validate_homeassistant_config_invalid_retry_count(self):
         """测试Home Assistant配置验证 - 无效重试次数"""
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="http://homeassistant.local:8123",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
-            retry_count=0,
+            rest_url="http://homeassistant.local:8123",
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="jjz_alert",
+            rest_retry_count=0,
         )
 
         validator = ConfigValidator()
@@ -346,10 +308,10 @@ class TestConfigValidator:
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="http://homeassistant.local:8123",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
-            retry_count=15,
+            rest_url="http://homeassistant.local:8123",
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="jjz_alert",
+            rest_retry_count=15,
         )
 
         validator = ConfigValidator()
@@ -365,10 +327,10 @@ class TestConfigValidator:
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="http://homeassistant.local:8123",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
-            timeout=3,
+            rest_url="http://homeassistant.local:8123",
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="jjz_alert",
+            rest_timeout=3,
         )
 
         validator = ConfigValidator()
@@ -385,10 +347,10 @@ class TestConfigValidator:
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="http://homeassistant.local:8123",
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
-            timeout=120,
+            rest_url="http://homeassistant.local:8123",
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="jjz_alert",
+            rest_timeout=120,
         )
 
         validator = ConfigValidator()
@@ -782,9 +744,9 @@ class TestConfigValidator:
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
             enabled=True,
-            url="ftp://homeassistant.local:8123",  # 无效的协议
-            token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert",
+            rest_url="ftp://homeassistant.local:8123",  # 无效的协议
+            rest_token="valid_token_12345678901234567890123456789012345678901234567890",
+            rest_entity_prefix="jjz_alert",
         )
 
         validator = ConfigValidator()

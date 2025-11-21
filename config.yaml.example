@@ -72,17 +72,21 @@ global:
     # ========== 当使用 REST 模式时，仅需配置以下关键参数 ==========
     rest_url: "http://homeassistant.local:8123"
     rest_token: "your_long_lived_access_token_here"
-    # entity_prefix: "jjz_alert"  # 实体前缀，默认值为 jjz_alert
-    # device_manufacturer: "进京证提醒" # 设备生产商，默认值为 进京证提醒
-    # device_model: "jjz_alert" #设备型号，默认值为 jjz_alert
-    # 其他 REST 细节（如 retry/timeout 等）已内置默认值，不建议修改
+    # rest_entity_prefix: "jjz_alert"  # 实体前缀，默认值为 jjz_alert
+    # rest_device_manufacturer: "进京证提醒" # 设备生产商，默认值为 进京证提醒
+    # rest_device_model: "jjz_alert" # 设备型号，默认值为 jjz_alert
+    # rest_retry_count: 3  # 同步失败重试次数，默认值为 3
+    # rest_timeout: 30  # 请求超时（秒），默认值为 30
 
     # ========== 当使用 MQTT 模式时，需配置以下参数 ==========
     mqtt_host: "homeassistant.local"    # 你的 MQTT Broker 地址（HA 插件一般是 HA 主机IP）
     mqtt_port: 1883
     mqtt_username: "ha"
     mqtt_password: "your_password"
-    # 其他 MQTT 细节（如 client_id/base_topic 等）已内置默认值，不建议修改
+    # mqtt_client_id: "jjz_alert"  # MQTT 客户端 ID，默认值为 jjz_alert
+    # mqtt_discovery_prefix: "homeassistant"  # MQTT Discovery 前缀，默认值为 homeassistant
+    # mqtt_base_topic: "jjz_alert"  # MQTT 基础主题，默认值为 jjz_alert
+    # mqtt_qos: 1  # MQTT QoS 级别，默认值为 1
 
 # =============================================================================
 # 进京证账户配置（数据来源）

@@ -241,3 +241,149 @@ class TestConfigFunctions:
             assert len(notifications) == 1
             assert notifications[0].type == "apprise"
             mock_manager.load_config.assert_called_once()
+
+
+@pytest.mark.unit
+class TestHomeAssistantValidation:
+    """Home Assistant 配置验证测试类"""
+
+    def test_ha_disabled_when_rest_url_missing(self, tmp_path):
+        """测试 REST 模式缺少 rest_url 时禁用 HA"""
+        config_file = tmp_path / "config.yaml"
+        config_data = {
+            "global": {
+                "homeassistant": {
+                    "enabled": True,
+                    "integration_mode": "rest",
+                    "rest_token": "test_token",
+                    # rest_url 缺失
+                }
+            },
+            "jjz_accounts": [],
+            "plates": [],
+        }
+        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
+
+        manager = ConfigManager(str(config_file))
+        config = manager.load_config()
+
+        # HA 应该被禁用
+        assert config.global_config.homeassistant.enabled is False
+
+    def test_ha_disabled_when_rest_token_missing(self, tmp_path):
+        """测试 REST 模式缺少 rest_token 时禁用 HA"""
+        config_file = tmp_path / "config.yaml"
+        config_data = {
+            "global": {
+                "homeassistant": {
+                    "enabled": True,
+                    "integration_mode": "rest",
+                    "rest_url": "http://homeassistant.local:8123",
+                    # rest_token 缺失
+                }
+            },
+            "jjz_accounts": [],
+            "plates": [],
+        }
+        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
+
+        manager = ConfigManager(str(config_file))
+        config = manager.load_config()
+
+        # HA 应该被禁用
+        assert config.global_config.homeassistant.enabled is False
+
+    def test_ha_disabled_when_mqtt_host_missing(self, tmp_path):
+        """测试 MQTT 模式缺少 mqtt_host 时禁用 HA"""
+        config_file = tmp_path / "config.yaml"
+        config_data = {
+            "global": {
+                "homeassistant": {
+                    "enabled": True,
+                    "integration_mode": "mqtt",
+                    # mqtt_host 缺失
+                }
+            },
+            "jjz_accounts": [],
+            "plates": [],
+        }
+        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
+
+        manager = ConfigManager(str(config_file))
+        config = manager.load_config()
+
+        # HA 应该被禁用
+        assert config.global_config.homeassistant.enabled is False
+
+    def test_ha_enabled_when_rest_config_valid(self, tmp_path):
+        """测试 REST 模式配置完整时保持启用状态"""
+        config_file = tmp_path / "config.yaml"
+        config_data = {
+            "global": {
+                "homeassistant": {
+                    "enabled": True,
+                    "integration_mode": "rest",
+                    "rest_url": "http://homeassistant.local:8123",
+                    "rest_token": "test_token",
+                }
+            },
+            "jjz_accounts": [],
+            "plates": [],
+        }
+        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
+
+        manager = ConfigManager(str(config_file))
+        config = manager.load_config()
+
+        # HA 应该保持启用
+        assert config.global_config.homeassistant.enabled is True
+        assert (
+            config.global_config.homeassistant.rest_url
+            == "http://homeassistant.local:8123"
+        )
+        assert config.global_config.homeassistant.rest_token == "test_token"
+
+    def test_ha_enabled_when_mqtt_config_valid(self, tmp_path):
+        """测试 MQTT 模式配置完整时保持启用状态"""
+        config_file = tmp_path / "config.yaml"
+        config_data = {
+            "global": {
+                "homeassistant": {
+                    "enabled": True,
+                    "integration_mode": "mqtt",
+                    "mqtt_host": "mqtt.example.com",
+                }
+            },
+            "jjz_accounts": [],
+            "plates": [],
+        }
+        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
+
+        manager = ConfigManager(str(config_file))
+        config = manager.load_config()
+
+        # HA 应该保持启用
+        assert config.global_config.homeassistant.enabled is True
+        assert config.global_config.homeassistant.mqtt_host == "mqtt.example.com"
+
+    def test_ha_disabled_when_multiple_fields_missing(self, tmp_path):
+        """测试 REST 模式多个必需字段缺失时禁用 HA"""
+        config_file = tmp_path / "config.yaml"
+        config_data = {
+            "global": {
+                "homeassistant": {
+                    "enabled": True,
+                    "integration_mode": "rest",
+                    # rest_url 和 rest_token 都缺失
+                }
+            },
+            "jjz_accounts": [],
+            "plates": [],
+        }
+        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
+
+        manager = ConfigManager(str(config_file))
+        config = manager.load_config()
+
+        # HA 应该被禁用
+        assert config.global_config.homeassistant.enabled is False

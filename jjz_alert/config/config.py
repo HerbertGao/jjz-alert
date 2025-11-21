@@ -146,8 +146,10 @@ class ConfigManager:
                 ha_data = global_data["homeassistant"]
 
                 # 验证 Home Assistant 配置的完整性
-                if ha_data.get("enabled", False):
+                ha_enabled = ha_data.get("enabled", False)
+                if ha_enabled:
                     integration_mode = ha_data.get("integration_mode", "rest")
+                    validation_failed = False
 
                     # REST 模式必需字段验证
                     if integration_mode == "rest":
@@ -156,11 +158,13 @@ class ConfigManager:
                                 "Home Assistant 配置错误: REST 模式已启用，但缺少 'rest_url' 字段。"
                                 "请在配置文件的 global.homeassistant 中添加 'rest_url' 字段。"
                             )
+                            validation_failed = True
                         if "rest_token" not in ha_data:
                             logging.error(
                                 "Home Assistant 配置错误: REST 模式已启用，但缺少 'rest_token' 字段。"
                                 "请在配置文件的 global.homeassistant 中添加 'rest_token' 字段。"
                             )
+                            validation_failed = True
 
                     # MQTT 模式必需字段验证
                     elif integration_mode == "mqtt":
@@ -169,35 +173,40 @@ class ConfigManager:
                                 "Home Assistant 配置错误: MQTT 模式已启用，但缺少 'mqtt_host' 字段。"
                                 "请在配置文件的 global.homeassistant 中添加 'mqtt_host' 字段。"
                             )
+                            validation_failed = True
+
+                    # 如果验证失败，禁用 Home Assistant
+                    if validation_failed:
+                        logging.warning(
+                            "由于配置验证失败，Home Assistant 集成已被禁用。"
+                            "请修复配置错误后重新启动应用。"
+                        )
+                        ha_enabled = False
 
                 config.global_config.homeassistant = HomeAssistantConfig(
-                    enabled=ha_data.get("enabled", False),
+                    enabled=ha_enabled,
                     integration_mode=ha_data.get("integration_mode", "rest"),
                     # ========== REST 模式 ==========
-                    url=ha_data.get("rest_url", "http://homeassistant.local:8123"),
-                    token=ha_data.get("rest_token", ""),
-                    entity_prefix=ha_data.get("entity_prefix", "jjz_alert"),
-                    device_manufacturer=ha_data.get(
+                    rest_url=ha_data.get("rest_url", "http://homeassistant.local:8123"),
+                    rest_token=ha_data.get("rest_token", ""),
+                    rest_entity_prefix=ha_data.get("entity_prefix", "jjz_alert"),
+                    rest_device_manufacturer=ha_data.get(
                         "device_manufacturer", "进京证提醒"
                     ),
-                    device_model=ha_data.get("device_model", "jjz_alert"),
-                    # 其他 REST 细节（retry/timeout 等）已内置默认值，不建议修改
-                    sync_after_query=True,
-                    retry_count=3,
-                    timeout=30,
-                    create_device_per_plate=True,
+                    rest_device_model=ha_data.get("device_model", "jjz_alert"),
+                    rest_retry_count=ha_data.get("retry_count", 3),
+                    rest_timeout=ha_data.get("timeout", 30),
                     # ========== MQTT 模式 ==========
-                    mqtt_enabled=ha_data.get("mqtt_enabled", False),
                     mqtt_host=ha_data.get("mqtt_host", "localhost"),
                     mqtt_port=ha_data.get("mqtt_port", 1883),
                     mqtt_username=ha_data.get("mqtt_username"),
                     mqtt_password=ha_data.get("mqtt_password"),
-                    # 其他 MQTT 细节（client_id/base_topic 等）已内置默认值，不建议修改
-                    mqtt_client_id="jjz_alert",
-                    mqtt_discovery_prefix="homeassistant",
-                    mqtt_base_topic="jjz_alert",
-                    mqtt_qos=1,
-                    mqtt_retain=True,
+                    mqtt_client_id=ha_data.get("mqtt_client_id", "jjz_alert"),
+                    mqtt_discovery_prefix=ha_data.get(
+                        "mqtt_discovery_prefix", "homeassistant"
+                    ),
+                    mqtt_base_topic=ha_data.get("mqtt_base_topic", "jjz_alert"),
+                    mqtt_qos=ha_data.get("mqtt_qos", 1),
                 )
 
             # 消息模板配置

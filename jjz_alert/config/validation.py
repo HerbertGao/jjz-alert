@@ -87,56 +87,75 @@ class ConfigValidator:
 
     def _validate_homeassistant_config(self, ha_config):
         """验证Home Assistant配置"""
-        # 基础连接配置验证
-        if not ha_config.url:
-            self.errors.append("启用Home Assistant但未配置URL")
-        elif not self._validate_url(ha_config.url):
-            self.errors.append(f"Home Assistant URL格式无效: {ha_config.url}")
+        # 检查集成模式
+        integration_mode = ha_config.integration_mode.lower()
+
+        if integration_mode == "rest":
+            # REST 模式验证
+            if not ha_config.rest_url:
+                self.errors.append("启用Home Assistant但未配置URL")
+            elif not self._validate_url(ha_config.rest_url):
+                self.errors.append(f"Home Assistant URL格式无效: {ha_config.rest_url}")
+            else:
+                # 检查URL格式是否符合HA规范
+                if not (
+                    ha_config.rest_url.startswith("http://")
+                    or ha_config.rest_url.startswith("https://")
+                ):
+                    self.errors.append("Home Assistant URL必须以http://或https://开头")
+
+                # 检查是否包含端口
+                if (
+                    ":8123" not in ha_config.rest_url
+                    and "homeassistant.local" in ha_config.rest_url
+                ):
+                    self.warnings.append("Home Assistant URL建议包含端口号:8123")
+
+            if not ha_config.rest_token:
+                self.errors.append("启用Home Assistant但未配置访问令牌")
+            elif len(ha_config.rest_token) < 50:
+                self.warnings.append("Home Assistant访问令牌长度过短，可能无效")
+
+            # 验证实体前缀
+            if not ha_config.rest_entity_prefix:
+                self.errors.append("Home Assistant实体前缀不能为空")
+            elif not self._validate_entity_prefix(ha_config.rest_entity_prefix):
+                self.errors.append(
+                    f"Home Assistant实体前缀格式无效: {ha_config.rest_entity_prefix}"
+                )
+
+            # 验证错误处理
+            if ha_config.rest_retry_count < 1:
+                self.errors.append("Home Assistant重试次数不能小于1")
+            elif ha_config.rest_retry_count > 10:
+                self.warnings.append("Home Assistant重试次数过多，建议不超过10次")
+
+            if ha_config.rest_timeout < 5:
+                self.warnings.append("Home Assistant请求超时时间过短，建议至少5秒")
+            elif ha_config.rest_timeout > 60:
+                self.warnings.append("Home Assistant请求超时时间过长，建议不超过60秒")
+
+        elif integration_mode == "mqtt":
+            # MQTT 模式验证
+            if not ha_config.mqtt_host:
+                self.errors.append("启用Home Assistant MQTT模式但未配置MQTT主机地址")
+
+            if not (1 <= ha_config.mqtt_port <= 65535):
+                self.errors.append(f"MQTT端口号无效: {ha_config.mqtt_port}")
+
+            # 验证客户端ID
+            if not ha_config.mqtt_client_id:
+                self.warnings.append("MQTT客户端ID未配置，将使用默认值")
+
+            # 验证QoS级别
+            if ha_config.mqtt_qos not in (0, 1, 2):
+                self.errors.append(
+                    f"MQTT QoS级别无效: {ha_config.mqtt_qos}，必须为0、1或2"
+                )
         else:
-            # 检查URL格式是否符合HA规范
-            if not (
-                ha_config.url.startswith("http://")
-                or ha_config.url.startswith("https://")
-            ):
-                self.errors.append("Home Assistant URL必须以http://或https://开头")
-
-            # 检查是否包含端口
-            if ":8123" not in ha_config.url and "homeassistant.local" in ha_config.url:
-                self.warnings.append("Home Assistant URL建议包含端口号:8123")
-
-        if not ha_config.token:
-            self.errors.append("启用Home Assistant但未配置访问令牌")
-        elif len(ha_config.token) < 50:
-            self.warnings.append("Home Assistant访问令牌长度过短，可能无效")
-
-        # 验证实体前缀
-        if not ha_config.entity_prefix:
-            self.errors.append("Home Assistant实体前缀不能为空")
-        elif not self._validate_entity_prefix(ha_config.entity_prefix):
             self.errors.append(
-                f"Home Assistant实体前缀格式无效: {ha_config.entity_prefix}"
+                f"Home Assistant集成模式无效: {integration_mode}，必须为'rest'或'mqtt'"
             )
-
-        # 验证设备创建配置
-        if not ha_config.create_device_per_plate:
-            self.warnings.append(
-                "Home Assistant车牌设备创建已禁用，将不会有设备信息同步到HA"
-            )
-
-        # 验证同步配置
-        if not ha_config.sync_after_query:
-            self.warnings.append("Home Assistant查询后同步已禁用，数据不会自动同步到HA")
-
-        # 验证错误处理
-        if ha_config.retry_count < 1:
-            self.errors.append("Home Assistant重试次数不能小于1")
-        elif ha_config.retry_count > 10:
-            self.warnings.append("Home Assistant重试次数过多，建议不超过10次")
-
-        if ha_config.timeout < 5:
-            self.warnings.append("Home Assistant请求超时时间过短，建议至少5秒")
-        elif ha_config.timeout > 60:
-            self.warnings.append("Home Assistant请求超时时间过长，建议不超过60秒")
 
     def _validate_jjz_accounts(self, accounts: List[JJZAccount]):
         """验证进京证账户配置"""

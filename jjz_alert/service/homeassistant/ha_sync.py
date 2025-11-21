@@ -121,7 +121,7 @@ class HomeAssistantSyncService:
             )
 
             # 执行同步（带重试机制）
-            for attempt in range(self.config.retry_count):
+            for attempt in range(self.config.rest_retry_count):
                 try:
                     result = await client.sync_plate_device(plate_device)
 
@@ -146,12 +146,12 @@ class HomeAssistantSyncService:
                     # 如果成功或者是最后一次尝试，跳出重试循环
                     if (
                         result["success_count"] > 0
-                        or attempt == self.config.retry_count - 1
+                        or attempt == self.config.rest_retry_count - 1
                     ):
                         break
 
                     # 重试前等待
-                    if attempt < self.config.retry_count - 1:
+                    if attempt < self.config.rest_retry_count - 1:
                         await asyncio.sleep(2)
 
                 except HomeAssistantAPIError as e:
@@ -161,13 +161,13 @@ class HomeAssistantSyncService:
                         # 认证错误不重试
                         sync_result["error"] = str(e)
                         break
-                    elif attempt == self.config.retry_count - 1:
+                    elif attempt == self.config.rest_retry_count - 1:
                         # 最后一次尝试
                         sync_result["error"] = str(e)
                     else:
                         # 继续重试
                         logging.warning(
-                            f"车牌 {plate_number} HA同步失败，尝试 {attempt + 1}/{self.config.retry_count}: {e}"
+                            f"车牌 {plate_number} HA同步失败，尝试 {attempt + 1}/{self.config.rest_retry_count}: {e}"
                         )
                         await asyncio.sleep(2)
 
@@ -356,12 +356,10 @@ class HomeAssistantSyncService:
                     self._last_sync_time.isoformat() if self._last_sync_time else None
                 ),
                 "config": {
-                    "url": self.config.url,
-                    "entity_prefix": self.config.entity_prefix,
-                    "sync_after_query": self.config.sync_after_query,
-                    "create_device_per_plate": self.config.create_device_per_plate,
-                    "retry_count": self.config.retry_count,
-                    "timeout": self.config.timeout,
+                    "url": self.config.rest_url,
+                    "entity_prefix": self.config.rest_entity_prefix,
+                    "retry_count": self.config.rest_retry_count,
+                    "timeout": self.config.rest_timeout,
                 },
                 "connection_status": None,
             }
@@ -394,7 +392,7 @@ async def sync_to_homeassistant(
     """便捷函数：同步查询结果到Home Assistant"""
     try:
         config = get_homeassistant_config()
-        if not config.enabled or not config.sync_after_query:
+        if not config.enabled:
             return None
 
         return await ha_sync_service.sync_from_query_results(
@@ -432,13 +430,12 @@ async def get_ha_service_status() -> Dict[str, Any]:
         return {
             "status": status,
             "enabled": sync_status.get("enabled", False),
-            "url": config.url,
+            "url": config.rest_url,
             "last_sync": sync_status.get("last_sync_time"),
             "connection": sync_status.get("connection_status", {}).get(
                 "success", False
             ),
-            "sync_after_query": config.sync_after_query,
-            "entity_prefix": config.entity_prefix,
+            "entity_prefix": config.rest_entity_prefix,
         }
 
     except Exception as e:

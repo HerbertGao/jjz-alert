@@ -18,4 +18,3 @@ class MQTTConfig:
     discovery_prefix: str
     base_topic: str
     qos: int
-    retain: bool
