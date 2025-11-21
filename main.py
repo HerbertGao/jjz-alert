@@ -1,5 +1,5 @@
 # 初始化日志（需在其他自定义模块之前导入）
-import utils.logger
+import jjz_alert.base.logger
 
 import asyncio
 import logging
@@ -13,32 +13,35 @@ from apscheduler.triggers.cron import CronTrigger
 async def cleanup_resources():
     """清理应用资源"""
     logging.info("开始清理应用资源...")
-    
+
     try:
         # 关闭 MQTT 连接
-        from service.homeassistant.ha_mqtt import ha_mqtt_publisher
+        from jjz_alert.service.homeassistant.ha_mqtt import ha_mqtt_publisher
+
         if ha_mqtt_publisher.enabled():
             await ha_mqtt_publisher.close()
             logging.info("MQTT 连接已关闭")
     except Exception as e:
         logging.error(f"关闭 MQTT 连接时出错: {e}")
-    
+
     try:
         # 关闭 Redis 连接
-        from config.redis.connection import close_redis
+        from jjz_alert.config.redis.connection import close_redis
+
         await close_redis()
         logging.info("Redis 连接已关闭")
     except Exception as e:
         logging.error(f"关闭 Redis 连接时出错: {e}")
-    
+
     try:
         # 关闭 Home Assistant 客户端
-        from service.homeassistant.ha_client import close_ha_client
+        from jjz_alert.service.homeassistant.ha_client import close_ha_client
+
         await close_ha_client()
         logging.info("Home Assistant 客户端已关闭")
     except Exception as e:
         logging.error(f"关闭 Home Assistant 客户端时出错: {e}")
-    
+
     logging.info("应用资源清理完成")
 
 
@@ -64,12 +67,13 @@ async def main():
     logging.info("开始执行进京证查询和推送任务")
 
     # 初始化消息模板配置
-    from utils.message_templates import initialize_templates_from_config
-    from config.config_v2 import config_manager
+    from jjz_alert.base.message_templates import initialize_templates_from_config
+    from jjz_alert.config.config import config_manager
+
     initialize_templates_from_config(config_manager)
 
     # 使用统一的推送服务
-    from service.notification.jjz_push_service import jjz_push_service
+    from jjz_alert.service.notification.jjz_push_service import jjz_push_service
 
     try:
         # 执行完整的推送工作流
@@ -77,9 +81,13 @@ async def main():
 
         # 记录执行结果
         if result["success"]:
-            logging.info(f"推送任务执行成功: {result['success_plates']}/{result['total_plates']} 个车牌推送成功")
+            logging.info(
+                f"推送任务执行成功: {result['success_plates']}/{result['total_plates']} 个车牌推送成功"
+            )
         else:
-            logging.error(f"推送任务执行失败: {result['failed_plates']}/{result['total_plates']} 个车牌推送失败")
+            logging.error(
+                f"推送任务执行失败: {result['failed_plates']}/{result['total_plates']} 个车牌推送失败"
+            )
 
         # 记录错误信息
         if result["errors"]:
@@ -89,12 +97,16 @@ async def main():
         # 记录HA同步结果
         if result["ha_sync_result"]:
             ha_result = result["ha_sync_result"]
-            success_count = ha_result.get('success_plates', 0)
-            total_count = ha_result.get('total_plates', 0)
+            success_count = ha_result.get("success_plates", 0)
+            total_count = ha_result.get("total_plates", 0)
             if success_count > 0:
-                logging.info(f"Home Assistant同步完成: {success_count}/{total_count} 车牌成功")
+                logging.info(
+                    f"Home Assistant同步完成: {success_count}/{total_count} 车牌成功"
+                )
             else:
-                logging.warning(f"Home Assistant同步失败: {ha_result.get('errors', [])}")
+                logging.warning(
+                    f"Home Assistant同步失败: {ha_result.get('errors', [])}"
+                )
 
         logging.info("所有任务执行完成")
 
@@ -107,14 +119,16 @@ def schedule_jobs():
     # 在主线程中注册信号处理器
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     # 配置作业默认行为：允许最多 2 个并发实例，并开启合并以避免错过时段累积触发
-    scheduler = BlockingScheduler(job_defaults={
-        "max_instances": 2,
-        "coalesce": True,
-    })
+    scheduler = BlockingScheduler(
+        job_defaults={
+            "max_instances": 2,
+            "coalesce": True,
+        }
+    )
     # 使用全局配置管理器实例
-    from config.config_v2 import config_manager
+    from jjz_alert.config.config import config_manager
 
     app_config = config_manager.load_config()
     remind_times = (
@@ -128,7 +142,7 @@ def schedule_jobs():
         # 创建新的事件循环来避免循环冲突
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         try:
             # 在独立的事件循环中执行任务
             loop.run_until_complete(main())
@@ -140,7 +154,9 @@ def schedule_jobs():
                 # 确保所有任务完成
                 pending = asyncio.all_tasks(loop)
                 if pending:
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True)
+                    )
             except Exception as e:
                 logging.warning(f"清理待处理任务时出错: {e}")
             finally:
@@ -164,7 +180,7 @@ if __name__ == "__main__":
     from threading import Thread
 
     # 获取配置
-    from config.config_v2 import config_manager
+    from jjz_alert.config.config import config_manager
 
     app_config = config_manager.load_config()
     remind_enabled = (

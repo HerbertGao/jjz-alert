@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-JJZ Alert V2.0 性能测试
+JJZ Alert 性能测试
 
 测试关键功能的性能指标:
 - Redis连接和操作性能
@@ -16,9 +16,9 @@ import logging
 import time
 from datetime import datetime
 
-from config.redis.connection import redis_manager
-from service.cache.cache_service import CacheService
-from service.jjz.jjz_service import JJZService
+from jjz_alert.config.redis.connection import redis_manager
+from jjz_alert.service.cache.cache_service import CacheService
+from jjz_alert.service.jjz.jjz_service import JJZService
 
 
 async def test_redis_performance():
@@ -62,7 +62,7 @@ async def test_redis_performance():
         "redis_ping_ms": health.get("ping_ms", -1),
         "cache_write_ms": round(write_time * 1000, 2),
         "cache_read_ms": round(read_time * 1000, 2),
-        "cache_data_integrity": retrieved == test_data
+        "cache_data_integrity": retrieved == test_data,
     }
 
     print(f"✅ Redis初始化: {results['redis_init_ms']}ms")
@@ -88,7 +88,7 @@ async def test_cache_service_performance():
         "apply_time": "2025-08-15 10:00:00",
         "valid_start": "2025-08-15 00:00:00",
         "valid_end": "2025-08-20 23:59:59",
-        "days_remaining": 5
+        "days_remaining": 5,
     }
     await cache_service.cache_jjz_data("性能测试车牌", jjz_data)
     cache_jjz_time = time.time() - start_time
@@ -104,7 +104,7 @@ async def test_cache_service_performance():
         {
             "limitedTime": "2025年08月15日",
             "limitedNumber": "4和9",
-            "description": "周四限行"
+            "description": "周四限行",
         }
     ]
     await cache_service.cache_traffic_rules(traffic_rules)
@@ -124,7 +124,7 @@ async def test_cache_service_performance():
         "cache_traffic_ms": round(cache_traffic_time * 1000, 2),
         "get_cache_info_ms": round(get_info_time * 1000, 2),
         "jjz_data_integrity": retrieved_jjz is not None,
-        "total_cache_keys": cache_info.get("key_counts", {}).get("total", 0)
+        "total_cache_keys": cache_info.get("key_counts", {}).get("total", 0),
     }
 
     print(f"✅ 进京证缓存写入: {results['cache_jjz_ms']}ms")
@@ -161,12 +161,14 @@ async def test_service_performance():
 
     results = {
         "service_init_ms": round(init_time * 1000, 2),
-        "get_cached_plates_ms": round(get_plates_time * 1000, 2) if get_plates_time >= 0 else -1,
-        "cached_plates_count": len(cached_plates)
+        "get_cached_plates_ms": (
+            round(get_plates_time * 1000, 2) if get_plates_time >= 0 else -1
+        ),
+        "cached_plates_count": len(cached_plates),
     }
 
     print(f"✅ 服务初始化: {results['service_init_ms']}ms")
-    if results['get_cached_plates_ms'] >= 0:
+    if results["get_cached_plates_ms"] >= 0:
         print(f"✅ 获取缓存车牌: {results['get_cached_plates_ms']}ms")
         print(f"✅ 缓存车牌数量: {results['cached_plates_count']}")
 
@@ -175,7 +177,7 @@ async def test_service_performance():
 
 async def run_performance_tests():
     """运行所有性能测试"""
-    print("🎯 JJZ Alert V2.0 性能测试")
+    print("🎯 JJZ Alert 性能测试")
     print("=" * 50)
 
     # 禁用调试日志以避免干扰测试结果
@@ -205,13 +207,21 @@ async def run_performance_tests():
         cache_read = redis_results.get("cache_read_ms", -1)
         cache_write = redis_results.get("cache_write_ms", -1)
 
-        print(f"🔸 Redis延迟: {redis_ping}ms {'✅' if redis_ping < 5 else '⚠️' if redis_ping < 20 else '❌'}")
-        print(f"🔸 缓存读取: {cache_read}ms {'✅' if cache_read < 10 else '⚠️' if cache_read < 50 else '❌'}")
-        print(f"🔸 缓存写入: {cache_write}ms {'✅' if cache_write < 20 else '⚠️' if cache_write < 100 else '❌'}")
+        print(
+            f"🔸 Redis延迟: {redis_ping}ms {'✅' if redis_ping < 5 else '⚠️' if redis_ping < 20 else '❌'}"
+        )
+        print(
+            f"🔸 缓存读取: {cache_read}ms {'✅' if cache_read < 10 else '⚠️' if cache_read < 50 else '❌'}"
+        )
+        print(
+            f"🔸 缓存写入: {cache_write}ms {'✅' if cache_write < 20 else '⚠️' if cache_write < 100 else '❌'}"
+        )
 
         # 业务服务指标
         service_init = service_results.get("service_init_ms", -1)
-        print(f"🔸 服务初始化: {service_init}ms {'✅' if service_init < 100 else '⚠️' if service_init < 500 else '❌'}")
+        print(
+            f"🔸 服务初始化: {service_init}ms {'✅' if service_init < 100 else '⚠️' if service_init < 500 else '❌'}"
+        )
 
         # 整体评估
         print("\n🎉 性能评估结果:")

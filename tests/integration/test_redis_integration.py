@@ -10,10 +10,10 @@ from datetime import date
 import pytest
 import pytest_asyncio
 
-from config.redis.connection import RedisConnectionManager
-from config.redis.operations import RedisOperations
-from service.cache.cache_service import CacheService
-from service.jjz.jjz_status import JJZStatusEnum
+from jjz_alert.config.redis.connection import RedisConnectionManager
+from jjz_alert.config.redis.operations import RedisOperations
+from jjz_alert.service.cache.cache_service import CacheService
+from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 
 
 @pytest.mark.integration
@@ -55,10 +55,10 @@ class TestRedisIntegration:
         """测试Redis连接健康检查"""
         health = await real_redis_manager.health_check()
 
-        assert health['status'] == 'healthy'
-        assert 'ping_ms' in health
-        assert 'redis_version' in health
-        assert health['ping_ms'] < 100  # 延迟应该很低
+        assert health["status"] == "healthy"
+        assert "ping_ms" in health
+        assert "redis_version" in health
+        assert health["ping_ms"] < 100  # 延迟应该很低
 
     @pytest.mark.asyncio
     async def test_redis_basic_operations(self, real_redis_ops):
@@ -130,7 +130,7 @@ class TestRedisIntegration:
             "test:pattern:jjz:京A12345",
             "test:pattern:jjz:京B67890",
             "test:pattern:traffic:2025-08-15",
-            "test:pattern:other:data"
+            "test:pattern:other:data",
         ]
 
         for key in test_keys:
@@ -176,7 +176,7 @@ class TestRedisIntegration:
             "apply_time": "2025-08-15 10:00:00",
             "valid_start": "2025-08-15 00:00:00",
             "valid_end": "2025-08-20 23:59:59",
-            "days_remaining": 5
+            "days_remaining": 5,
         }
 
         # 测试缓存数据
@@ -211,13 +211,13 @@ class TestRedisIntegration:
             {
                 "limited_time": "2025年08月15日",
                 "limited_number": "4和9",
-                "description": "周四限行"
+                "description": "周四限行",
             },
             {
                 "limited_time": "2025年08月16日",
                 "limited_number": "5和0",
-                "description": "周五限行"
-            }
+                "description": "周五限行",
+            },
         ]
 
         # 测试缓存规则
@@ -245,7 +245,11 @@ class TestRedisIntegration:
         push_records = [
             {"message_type": "jjz_expiring", "success": True, "channel": "bark"},
             {"message_type": "traffic_reminder", "success": True, "channel": "apprise"},
-            {"message_type": "jjz_expiring", "success": False, "error": "network timeout"}
+            {
+                "message_type": "jjz_expiring",
+                "success": False,
+                "error": "network timeout",
+            },
         ]
 
         for record in push_records:
@@ -258,10 +262,14 @@ class TestRedisIntegration:
         assert all("timestamp" in record for record in history)
 
         # 测试重复推送检查
-        recent = await real_cache_service.check_recent_push(plate, "jjz_expiring", window_minutes=60)
+        recent = await real_cache_service.check_recent_push(
+            plate, "jjz_expiring", window_minutes=60
+        )
         assert recent is True  # 刚刚推送过
 
-        old = await real_cache_service.check_recent_push(plate, "nonexistent_type", window_minutes=60)
+        old = await real_cache_service.check_recent_push(
+            plate, "nonexistent_type", window_minutes=60
+        )
         assert old is False  # 没有这种类型的推送
 
     @pytest.mark.asyncio
@@ -278,45 +286,44 @@ class TestRedisIntegration:
 
         # 获取统计信息
         stats = await real_cache_service.get_cache_stats(days=1)
-        assert 'jjz' in stats
-        assert stats['jjz']['total_hits'] >= 1
-        assert stats['jjz']['total_misses'] >= 1
-        assert stats['jjz']['total_sets'] >= 1
+        assert "jjz" in stats
+        assert stats["jjz"]["total_hits"] >= 1
+        assert stats["jjz"]["total_misses"] >= 1
+        assert stats["jjz"]["total_sets"] >= 1
 
         # 获取缓存信息
         info = await real_cache_service.get_cache_info()
-        assert 'key_counts' in info
-        assert info['key_counts']['total'] >= 1
+        assert "key_counts" in info
+        assert info["key_counts"]["total"] >= 1
 
     @pytest.mark.asyncio
     async def test_cache_service_clear_integration(self, real_cache_service):
         """测试缓存清理集成"""
         # 创建测试数据
         await real_cache_service.cache_jjz_data("京A12345", {"status": "valid"})
-        await real_cache_service.cache_traffic_rules([{
-            "limited_time": "2025年08月15日",
-            "limited_number": "4和9"
-        }])
+        await real_cache_service.cache_traffic_rules(
+            [{"limited_time": "2025年08月15日", "limited_number": "4和9"}]
+        )
         await real_cache_service.record_push_history("京A12345", {"type": "test"})
 
         # 获取清理前的数据
         info_before = await real_cache_service.get_cache_info()
-        assert info_before['key_counts']['total'] > 0
+        assert info_before["key_counts"]["total"] > 0
 
         # 清理所有缓存
         result = await real_cache_service.clear_cache()
-        assert result['deleted_keys'] > 0
+        assert result["deleted_keys"] > 0
 
         # 验证清理结果
         info_after = await real_cache_service.get_cache_info()
-        assert info_after['key_counts']['total'] == 0
+        assert info_after["key_counts"]["total"] == 0
 
     @pytest.mark.asyncio
     async def test_redis_connection_resilience(self, real_redis_manager):
         """测试Redis连接弹性"""
         # 测试正常连接
         health = await real_redis_manager.health_check()
-        assert health['status'] == 'healthy'
+        assert health["status"] == "healthy"
 
         # 测试获取客户端
         client = real_redis_manager.client

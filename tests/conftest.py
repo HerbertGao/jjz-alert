@@ -12,9 +12,9 @@ import fakeredis.aioredis
 import pytest
 import pytest_asyncio
 
-from config.config_v2 import AppConfig, JJZAccount, JJZConfig
-from config.redis.connection import RedisConnectionManager
-from service.cache.cache_service import CacheService
+from jjz_alert.config.config import AppConfig, JJZAccount, JJZConfig
+from jjz_alert.config.redis.connection import RedisConnectionManager
+from jjz_alert.service.cache.cache_service import CacheService
 
 
 @pytest.fixture(scope="session")
@@ -41,9 +41,9 @@ async def mock_redis_manager(fake_redis):
     manager.client = fake_redis
     manager.initialize = AsyncMock(return_value=True)
     manager.close = AsyncMock()
-    manager.health_check = AsyncMock(return_value={'status': 'healthy'})
+    manager.health_check = AsyncMock(return_value={"status": "healthy"})
 
-    with patch('config.redis.connection.redis_manager', manager):
+    with patch("jjz_alert.config.redis.connection.redis_manager", manager):
         yield manager
 
 
@@ -51,7 +51,9 @@ async def mock_redis_manager(fake_redis):
 async def cache_service(fake_redis):
     """提供测试用的缓存服务"""
     # Mock Redis operations to use fake redis
-    with patch('service.cache.cache_service.RedisOperations') as mock_ops_class:
+    with patch(
+        "jjz_alert.service.cache.cache_service.RedisOperations"
+    ) as mock_ops_class:
         mock_ops = Mock()
         mock_ops.set = AsyncMock(return_value=True)
         mock_ops.get = AsyncMock(return_value=None)
@@ -75,10 +77,7 @@ def sample_jjz_account():
     """提供测试用的进京证账户配置"""
     return JJZAccount(
         name="测试账户",
-        jjz=JJZConfig(
-            token="test_token_123",
-            url="https://test.example.com/api"
-        )
+        jjz=JJZConfig(token="test_token_123", url="https://test.example.com/api"),
     )
 
 
@@ -104,10 +103,10 @@ def mock_http_response():
                     "status": "1",
                     "applyTime": "2025-08-15 10:00:00",
                     "validStartTime": "2025-08-15 00:00:00",
-                    "validEndTime": "2025-08-20 23:59:59"
+                    "validEndTime": "2025-08-20 23:59:59",
                 }
             ]
-        }
+        },
     }
     return mock_response
 
@@ -119,18 +118,18 @@ def sample_traffic_rules():
         {
             "limited_time": "2025年08月15日",
             "limited_number": "4和9",
-            "description": "周四限行4和9"
+            "description": "周四限行4和9",
         },
         {
             "limited_time": "2025年08月16日",
             "limited_number": "5和0",
-            "description": "周五限行5和0"
+            "description": "周五限行5和0",
         },
         {
             "limited_time": "2025年08月17日",
             "limited_number": "不限行",
-            "description": "周六不限行"
-        }
+            "description": "周六不限行",
+        },
     ]
 
 
@@ -145,19 +144,19 @@ def mock_traffic_response():
             {
                 "limitedTime": "2025年08月15日",
                 "limitedNumber": "4和9",
-                "description": "周四限行4和9"
+                "description": "周四限行4和9",
             },
             {
                 "limitedTime": "2025年08月16日",
                 "limitedNumber": "5和0",
-                "description": "周五限行5和0"
+                "description": "周五限行5和0",
             },
             {
                 "limitedTime": "2025年08月17日",
                 "limitedNumber": "不限行",
-                "description": "周六不限行"
-            }
-        ]
+                "description": "周六不限行",
+            },
+        ],
     }
     return mock_response
 
@@ -165,7 +164,7 @@ def mock_traffic_response():
 @pytest.fixture(autouse=True)
 def mock_config_loading():
     """自动Mock配置加载，避免读取真实配置文件"""
-    with patch('config.config_v2.config_manager.load_config') as mock_load:
+    with patch("jjz_alert.config.config.config_manager.load_config") as mock_load:
         mock_config = AppConfig()
         mock_load.return_value = mock_config
         yield mock_load
@@ -199,7 +198,7 @@ plates:
 """
 
     config_file = tmp_path / "test_config.yaml"
-    config_file.write_text(config_content, encoding='utf-8')
+    config_file.write_text(config_content, encoding="utf-8")
     return str(config_file)
 
 
@@ -210,8 +209,8 @@ def test_env():
     original_env = os.environ.copy()
 
     # 设置测试环境标识
-    os.environ['TESTING'] = '1'
-    os.environ['LOG_LEVEL'] = 'DEBUG'
+    os.environ["TESTING"] = "1"
+    os.environ["LOG_LEVEL"] = "DEBUG"
 
     yield
 

@@ -137,6 +137,19 @@ python tests/tools/run_tests.py --unit         # 单元测试
 python tests/tools/run_tests.py --performance  # 性能测试
 ```
 
+或通过 tox 快速切换测试环境（推荐先在 `.venv` 中安装开发依赖）：
+
+```bash
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+
+tox -e py311              # 默认 pytest 套件
+tox -e unit -- --fast     # 只跑单测，可传递额外参数
+tox -e integration        # 集成测试
+tox -e coverage           # 生成覆盖率报告
+tox -e format             # 使用 Black 格式化代码
+```
+
 ## 📁 项目结构
 
 ```
@@ -144,7 +157,7 @@ python tests/tools/run_tests.py --performance  # 性能测试
 ├── cli_tools.py
 ├── requirements.txt
 ├── config/
-│   ├── config_v2.py
+│   ├── config.py
 │   ├── migration.py
 │   ├── validation.py
 │   └── redis/
