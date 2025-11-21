@@ -134,8 +134,8 @@ class AutoRecoveryManager:
                 logging.warning(f"服务 {service_name} 失败，使用备用方案: {error}")
                 self._record_attempt(service_name, recovery_strategy, True)
                 if asyncio.iscoroutinefunction(fallback_func):
-                    return await fallback_func(*args, **kwargs)
-                return fallback_func(*args, **kwargs)
+                    return await fallback_func()
+                return fallback_func()
 
             if recovery_strategy == RecoveryStrategy.GRACEFUL_DEGRADATION:
                 logging.warning(f"服务 {service_name} 降级运行: {error}")
@@ -152,8 +152,8 @@ class AutoRecoveryManager:
                         f"服务 {service_name} 自动恢复失败，尝试备用方案: {exc}"
                     )
                     if asyncio.iscoroutinefunction(fallback_func):
-                        return await fallback_func(*args, **kwargs)
-                    return fallback_func(*args, **kwargs)
+                        return await fallback_func()
+                    return fallback_func()
                 except Exception as fallback_error:
                     logging.error(
                         f"服务 {service_name} 备用方案执行失败: {fallback_error}"

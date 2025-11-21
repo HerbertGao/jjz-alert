@@ -128,8 +128,8 @@ def with_error_handling(
                 if fallback_func and not recovery_attempted:
                     try:
                         if asyncio.iscoroutinefunction(fallback_func):
-                            return await fallback_func(*args, **kwargs)
-                        return fallback_func(*args, **kwargs)
+                            return await fallback_func()
+                        return fallback_func()
                     except Exception as fallback_error:
                         logger.error(f"备用方案执行失败: {fallback_error}")
 
@@ -191,7 +191,7 @@ def with_error_handling(
                 # 同步函数仅支持直接兜底方案
                 if fallback_func and not asyncio.iscoroutinefunction(fallback_func):
                     try:
-                        return fallback_func(*args, **kwargs)
+                        return fallback_func()
                     except Exception as fallback_error:
                         logger.error(f"备用方案执行失败: {fallback_error}")
                 elif fallback_func:
