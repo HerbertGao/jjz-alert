@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Any, Coroutine, Dict
 
 from jjz_alert.base.error_exceptions import (
     ConfigurationError,
@@ -17,7 +17,7 @@ from jjz_alert.base.admin_notifier import admin_notifier
 logger = logging.getLogger(__name__)
 
 
-def _run_async_safe(coro: asyncio.Future) -> None:
+def _run_async_safe(coro: Coroutine[Any, Any, None]) -> None:
     """
     在同步上下文中安全运行异步任务。
 
