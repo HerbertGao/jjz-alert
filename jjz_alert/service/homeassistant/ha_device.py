@@ -69,7 +69,10 @@ class HAPlateDevice:
         )
 
     def get_combined_sensor_state(
-        self, entity_prefix: str = "jjz_alert"
+        self,
+        entity_prefix: str = "jjz_alert",
+        manufacturer: str = "JJZ Alert",
+        model: str = "Beijing Vehicle",
     ) -> HAEntityState:
         """获取合并的进京证和限行传感器状态"""
         # 提取省份信息和车牌剩余部分
@@ -138,7 +141,7 @@ class HAPlateDevice:
             state=state,
             attributes=attributes,
             last_updated=self.last_updated,
-            device_info=self.get_device_info(),
+            device_info=self.get_device_info(manufacturer=manufacturer, model=model),
         )
 
     @staticmethod
@@ -162,13 +165,18 @@ class HAPlateDevice:
             return "mdi:car"
 
     def get_all_entity_states(
-        self, entity_prefix: str = "jjz_alert"
+        self,
+        entity_prefix: str = "jjz_alert",
+        manufacturer: str = "JJZ Alert",
+        model: str = "Beijing Vehicle",
     ) -> list[HAEntityState]:
         """获取该车牌的所有实体状态"""
         entities = []
 
         # 合并的进京证和限行传感器
-        entities.append(self.get_combined_sensor_state(entity_prefix))
+        entities.append(
+            self.get_combined_sensor_state(entity_prefix, manufacturer, model)
+        )
 
         return entities
 

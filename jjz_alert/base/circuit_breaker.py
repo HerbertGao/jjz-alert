@@ -83,9 +83,13 @@ class CircuitBreaker:
         self.state = "closed"
 
     def _on_failure(self):
-        """失败时增加计数器"""
+        """失败时增加计数器，并根据状态调整断路器"""
         self.failure_count += 1
         self.last_failure_time = datetime.now()
 
-        if self.failure_count >= self.failure_threshold:
+        # Half-open 状态下的失败应立即转回 open，无需等待阈值
+        # 因为 half-open 是用单个请求测试服务是否恢复
+        if self.state == "half_open":
+            self.state = "open"
+        elif self.failure_count >= self.failure_threshold:
             self.state = "open"

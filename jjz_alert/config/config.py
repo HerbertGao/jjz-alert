@@ -145,6 +145,31 @@ class ConfigManager:
             if "homeassistant" in global_data:
                 ha_data = global_data["homeassistant"]
 
+                # 验证 Home Assistant 配置的完整性
+                if ha_data.get("enabled", False):
+                    integration_mode = ha_data.get("integration_mode", "rest")
+
+                    # REST 模式必需字段验证
+                    if integration_mode == "rest":
+                        if "rest_url" not in ha_data:
+                            logging.error(
+                                "Home Assistant 配置错误: REST 模式已启用，但缺少 'rest_url' 字段。"
+                                "请在配置文件的 global.homeassistant 中添加 'rest_url' 字段。"
+                            )
+                        if "rest_token" not in ha_data:
+                            logging.error(
+                                "Home Assistant 配置错误: REST 模式已启用，但缺少 'rest_token' 字段。"
+                                "请在配置文件的 global.homeassistant 中添加 'rest_token' 字段。"
+                            )
+
+                    # MQTT 模式必需字段验证
+                    elif integration_mode == "mqtt":
+                        if "mqtt_host" not in ha_data:
+                            logging.error(
+                                "Home Assistant 配置错误: MQTT 模式已启用，但缺少 'mqtt_host' 字段。"
+                                "请在配置文件的 global.homeassistant 中添加 'mqtt_host' 字段。"
+                            )
+
                 config.global_config.homeassistant = HomeAssistantConfig(
                     enabled=ha_data.get("enabled", False),
                     integration_mode=ha_data.get("integration_mode", "rest"),

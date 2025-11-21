@@ -223,7 +223,9 @@ class HomeAssistantClient:
 
             # 获取所有实体状态
             entity_states = plate_device.get_all_entity_states(
-                self.config.entity_prefix
+                entity_prefix=self.config.entity_prefix,
+                manufacturer=self.config.device_manufacturer,
+                model=self.config.device_model,
             )
             sync_results["total_count"] = len(entity_states)
 

@@ -42,25 +42,20 @@ class CacheService:
     )
     async def cache_jjz_data(self, plate: str, jjz_data: Dict[str, Any]) -> bool:
         """缓存进京证数据 - 永久缓存，供推送和后续其他操作使用"""
-        try:
-            key = f"{self.JJZ_PREFIX}{plate}"
+        key = f"{self.JJZ_PREFIX}{plate}"
 
-            # 添加缓存时间戳
-            cache_data = {**jjz_data, "cached_at": datetime.now().isoformat()}
+        # 添加缓存时间戳
+        cache_data = {**jjz_data, "cached_at": datetime.now().isoformat()}
 
-            # 永久缓存，不设置TTL
-            success = await self.redis_ops.set(key, cache_data)
+        # 永久缓存，不设置TTL
+        success = await self.redis_ops.set(key, cache_data)
 
-            if success:
-                logging.debug(f"进京证数据已缓存: {plate}")
-                # 更新统计信息
-                await self._update_cache_stats("jjz", "set")
+        if success:
+            logging.debug(f"进京证数据已缓存: {plate}")
+            # 更新统计信息
+            await self._update_cache_stats("jjz", "set")
 
-            return success
-
-        except Exception as e:
-            logging.error(f"缓存进京证数据失败: plate={plate}, error={e}")
-            raise CacheError(f"缓存进京证数据失败: {e}", details={"plate": plate})
+        return success
 
     @with_error_handling(
         exceptions=(CacheError, RedisError, Exception),
@@ -69,25 +64,19 @@ class CacheService:
     )
     async def get_jjz_data(self, plate: str) -> Optional[Dict[str, Any]]:
         """获取进京证缓存数据"""
-        try:
-            key = f"{self.JJZ_PREFIX}{plate}"
-            data = await self.redis_ops.get(key)
+        key = f"{self.JJZ_PREFIX}{plate}"
+        data = await self.redis_ops.get(key)
 
-            if data:
-                # 更新统计信息
-                await self._update_cache_stats("jjz", "hit")
-                logging.debug(f"进京证缓存命中: {plate}")
-                return data
-            else:
-                # 更新统计信息
-                await self._update_cache_stats("jjz", "miss")
-                logging.debug(f"进京证缓存未命中: {plate}")
-                return None
-
-        except Exception as e:
-            logging.error(f"获取进京证缓存失败: plate={plate}, error={e}")
-            await self._update_cache_stats("jjz", "error")
-            raise CacheError(f"获取进京证缓存失败: {e}", details={"plate": plate})
+        if data:
+            # 更新统计信息
+            await self._update_cache_stats("jjz", "hit")
+            logging.debug(f"进京证缓存命中: {plate}")
+            return data
+        else:
+            # 更新统计信息
+            await self._update_cache_stats("jjz", "miss")
+            logging.debug(f"进京证缓存未命中: {plate}")
+            return None
 
     @with_error_handling(
         exceptions=(CacheError, RedisError, Exception),
@@ -96,19 +85,14 @@ class CacheService:
     )
     async def delete_jjz_data(self, plate: str) -> bool:
         """删除进京证缓存数据"""
-        try:
-            key = f"{self.JJZ_PREFIX}{plate}"
-            result = await self.redis_ops.delete(key)
+        key = f"{self.JJZ_PREFIX}{plate}"
+        result = await self.redis_ops.delete(key)
 
-            if result > 0:
-                logging.debug(f"进京证缓存已删除: {plate}")
-                await self._update_cache_stats("jjz", "delete")
+        if result > 0:
+            logging.debug(f"进京证缓存已删除: {plate}")
+            await self._update_cache_stats("jjz", "delete")
 
-            return result > 0
-
-        except Exception as e:
-            logging.error(f"删除进京证缓存失败: plate={plate}, error={e}")
-            raise CacheError(f"删除进京证缓存失败: {e}", details={"plate": plate})
+        return result > 0
 
     @with_error_handling(
         exceptions=(CacheError, RedisError, Exception),
@@ -117,23 +101,18 @@ class CacheService:
     )
     async def get_all_jjz_plates(self) -> List[str]:
         """获取所有已缓存的车牌号"""
-        try:
-            pattern = f"{self.JJZ_PREFIX}*"
-            keys = await self.redis_ops.keys(pattern)
+        pattern = f"{self.JJZ_PREFIX}*"
+        keys = await self.redis_ops.keys(pattern)
 
-            # 提取车牌号
-            plates = []
-            prefix_len = len(self.JJZ_PREFIX)
-            for key in keys:
-                if key.startswith(self.JJZ_PREFIX):
-                    plate = key[prefix_len:]
-                    plates.append(plate)
+        # 提取车牌号
+        plates = []
+        prefix_len = len(self.JJZ_PREFIX)
+        for key in keys:
+            if key.startswith(self.JJZ_PREFIX):
+                plate = key[prefix_len:]
+                plates.append(plate)
 
-            return plates
-
-        except Exception as e:
-            logging.error(f"获取缓存车牌号列表失败: {e}")
-            raise CacheError(f"获取缓存车牌号列表失败: {e}")
+        return plates
 
     # =============================================================================
     # 限行规则缓存
@@ -146,54 +125,49 @@ class CacheService:
     )
     async def cache_traffic_rules(self, rules_data: List[Dict[str, Any]]) -> bool:
         """缓存限行规则数据"""
-        try:
-            # 按日期存储规则
-            success_count = 0
+        # 按日期存储规则
+        success_count = 0
 
-            for rule in rules_data:
-                rule_date = rule.get("limited_time", "")
-                if not rule_date:
-                    continue
+        for rule in rules_data:
+            rule_date = rule.get("limited_time", "")
+            if not rule_date:
+                continue
 
-                # 解析日期
-                try:
-                    date_obj = datetime.strptime(rule_date, "%Y年%m月%d日").date()
-                    date_str = date_obj.strftime("%Y-%m-%d")
-                except ValueError:
-                    logging.warning(f"无效的限行规则日期格式: {rule_date}")
-                    continue
+            # 解析日期
+            try:
+                date_obj = datetime.strptime(rule_date, "%Y年%m月%d日").date()
+                date_str = date_obj.strftime("%Y-%m-%d")
+            except ValueError:
+                logging.warning(f"无效的限行规则日期格式: {rule_date}")
+                continue
 
-                key = f"{self.TRAFFIC_PREFIX}rules:{date_str}"
+            key = f"{self.TRAFFIC_PREFIX}rules:{date_str}"
 
-                # 计算到当天24:00的TTL
-                now = datetime.now()
-                end_of_day = datetime.combine(
-                    date_obj, datetime.max.time().replace(microsecond=0)
-                )
-                ttl_seconds = int((end_of_day - now).total_seconds())
+            # 计算到当天24:00的TTL
+            now = datetime.now()
+            end_of_day = datetime.combine(
+                date_obj, datetime.max.time().replace(microsecond=0)
+            )
+            ttl_seconds = int((end_of_day - now).total_seconds())
 
-                # 确保TTL为正数
-                if ttl_seconds <= 0:
-                    ttl_seconds = 1  # 至少缓存1秒
+            # 确保TTL为正数
+            if ttl_seconds <= 0:
+                ttl_seconds = 1  # 至少缓存1秒
 
-                cache_data = {
-                    **rule,
-                    "cached_at": now.isoformat(),
-                    "expires_at": end_of_day.isoformat(),
-                }
+            cache_data = {
+                **rule,
+                "cached_at": now.isoformat(),
+                "expires_at": end_of_day.isoformat(),
+            }
 
-                if await self.redis_ops.set(key, cache_data, ttl=ttl_seconds):
-                    success_count += 1
+            if await self.redis_ops.set(key, cache_data, ttl=ttl_seconds):
+                success_count += 1
 
-            if success_count > 0:
-                logging.info(f"限行规则已缓存: {success_count}条")
-                await self._update_cache_stats("traffic", "set", success_count)
+        if success_count > 0:
+            logging.info(f"限行规则已缓存: {success_count}条")
+            await self._update_cache_stats("traffic", "set", success_count)
 
-            return success_count > 0
-
-        except Exception as e:
-            logging.error(f"缓存限行规则失败: {e}")
-            raise CacheError(f"缓存限行规则失败: {e}")
+        return success_count > 0
 
     @with_error_handling(
         exceptions=(CacheError, RedisError, Exception),
@@ -202,27 +176,19 @@ class CacheService:
     )
     async def get_traffic_rule(self, target_date: date) -> Optional[Dict[str, Any]]:
         """获取指定日期的限行规则"""
-        try:
-            date_str = target_date.strftime("%Y-%m-%d")
-            key = f"{self.TRAFFIC_PREFIX}rules:{date_str}"
+        date_str = target_date.strftime("%Y-%m-%d")
+        key = f"{self.TRAFFIC_PREFIX}rules:{date_str}"
 
-            data = await self.redis_ops.get(key)
+        data = await self.redis_ops.get(key)
 
-            if data:
-                await self._update_cache_stats("traffic", "hit")
-                logging.debug(f"限行规则缓存命中: {date_str}")
-                return data
-            else:
-                await self._update_cache_stats("traffic", "miss")
-                logging.debug(f"限行规则缓存未命中: {date_str}")
-                return None
-
-        except Exception as e:
-            logging.error(f"获取限行规则缓存失败: date={target_date}, error={e}")
-            await self._update_cache_stats("traffic", "error")
-            raise CacheError(
-                f"获取限行规则缓存失败: {e}", details={"target_date": str(target_date)}
-            )
+        if data:
+            await self._update_cache_stats("traffic", "hit")
+            logging.debug(f"限行规则缓存命中: {date_str}")
+            return data
+        else:
+            await self._update_cache_stats("traffic", "miss")
+            logging.debug(f"限行规则缓存未命中: {date_str}")
+            return None
 
     async def get_today_traffic_rule(self) -> Optional[Dict[str, Any]]:
         """获取今日限行规则"""
