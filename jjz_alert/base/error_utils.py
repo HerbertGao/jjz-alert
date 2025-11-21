@@ -3,6 +3,7 @@
 """
 
 import asyncio
+import logging
 from typing import Any, Dict
 
 from jjz_alert.base.error_exceptions import (
@@ -13,12 +14,14 @@ from jjz_alert.base.error_exceptions import (
 from jjz_alert.base.error_collector import error_collector
 from jjz_alert.base.admin_notifier import admin_notifier
 
+logger = logging.getLogger(__name__)
+
 
 def _run_async_safe(coro: asyncio.Future) -> None:
     """
     在同步上下文中安全运行异步任务。
 
-    - 如果当前已有事件循环，则创建后台任务
+    - 如果当前已有事件循环，则创建后台任务并添加错误处理
     - 否则使用 asyncio.run 创建新的事件循环
     """
     try:
@@ -27,7 +30,19 @@ def _run_async_safe(coro: asyncio.Future) -> None:
         asyncio.run(coro)
         return
 
-    loop.create_task(coro)
+    task = loop.create_task(coro)
+
+    def _handle_task_result(task: asyncio.Task) -> None:
+        """处理任务完成结果，确保异常不会被静默忽略"""
+        try:
+            task.result()
+        except Exception as e:
+            logger.error(
+                f"Background task failed with exception: {type(e).__name__}: {e}",
+                exc_info=True
+            )
+
+    task.add_done_callback(_handle_task_result)
 
 
 async def handle_critical_error(error: Exception, context: str = ""):

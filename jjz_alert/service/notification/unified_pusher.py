@@ -179,17 +179,13 @@ class UnifiedPusher:
                 if priority_str in ["normal", "high"]
                 else PushPriority.NORMAL
             )
-            platform_priorities = PriorityMapper.get_all_platform_priorities(
-                priority_enum
-            )
 
             # 替换URL中的占位符
+            # {level} 用于 Bark URL，{priority} 用于其他 Apprise 服务
+            url = url.replace("{level}", PriorityMapper.get_bark_level(priority_enum))
             url = url.replace(
-                "{level}", platform_priorities.get("bark", "active")
-            )  # 对于Bark URL，使用bark级别
-            url = url.replace(
-                "{priority}", platform_priorities.get("apprise", "normal")
-            )  # 对于其他Apprise服务，使用apprise优先级
+                "{priority}", PriorityMapper.get_platform_priority(priority_enum, "apprise")
+            )
 
             return url
 

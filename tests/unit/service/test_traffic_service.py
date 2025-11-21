@@ -1177,3 +1177,87 @@ class TestTrafficService:
 
                     assert result["target_rule"] == mock_rule
                     mock_get.assert_called_once_with(today)
+
+    @pytest.mark.asyncio
+    async def test_check_plate_limited_with_exception_logging(self):
+        """测试判断车牌限行 - 异常导致日志记录"""
+        traffic_service = TrafficService()
+
+        # Mock get_traffic_rule 抛出异常来触发异常处理
+        with patch.object(
+            traffic_service, "get_traffic_rule", side_effect=Exception("Test error")
+        ):
+            result = await traffic_service.check_plate_limited("京A12341", date.today())
+            # 异常应该被捕获，返回False
+            assert result.is_limited is False
+            assert "Test error" in result.error_message
+
+    def test_preload_cache_with_update_failure(self):
+        """测试缓存预加载时更新失败情况"""
+        traffic_service = TrafficService()
+
+        # Mock _fetch_limit_rules_sync 返回 None
+        with patch.object(
+            traffic_service, "_fetch_limit_rules_sync", return_value=None
+        ):
+            traffic_service.preload_cache()
+            # 预加载失败，状态应该是 error
+            assert traffic_service._cache_status == "error"
+
+    def test_check_plate_limited_on_no_memory_cache(self):
+        """测试检查车牌限行 - 内存缓存为空"""
+        traffic_service = TrafficService()
+        traffic_service._memory_cache = None
+
+        result = traffic_service.check_plate_limited_on("京A12345", date.today())
+        assert result is False
+
+    def test_check_plate_limited_on_with_single_number(self):
+        """测试检查车牌限行 - 单个数字限行（不含'和'字符）"""
+        traffic_service = TrafficService()
+        target_date = date(2025, 12, 25)  # 使用未来日期避免与真实缓存冲突
+        target_str = target_date.strftime("%Y年%m月%d日")
+
+        traffic_service._memory_cache = [
+            {"limitedTime": target_str, "limitedNumber": "13579"}  # 包含多个数字但不含'和'
+        ]
+        traffic_service._memory_cache_date = date.today()
+
+        # 尾号1的车牌应该限行
+        result = traffic_service.check_plate_limited_on("京A12341", target_date)
+        assert result is True
+
+        # 尾号2的车牌不应该限行
+        result = traffic_service.check_plate_limited_on("京A12342", target_date)
+        assert result is False
+
+    def test_check_plate_limited_on_with_invalid_date(self):
+        """测试检查车牌限行 - 包含无效日期格式"""
+        traffic_service = TrafficService()
+        target_date = date(2025, 12, 25)  # 使用未来日期避免与真实缓存冲突
+
+        traffic_service._memory_cache = [
+            {"limitedTime": "invalid_date_format", "limitedNumber": "1和6"},
+            {"limitedTime": target_date.strftime("%Y年%m月%d日"), "limitedNumber": "2和7"},
+        ]
+        traffic_service._memory_cache_date = date.today()
+
+        # 应该跳过无效日期，使用有效的规则
+        result = traffic_service.check_plate_limited_on("京A12342", target_date)
+        assert result is True
+
+    def test_get_today_limit_info_no_rule(self):
+        """测试获取今天限行信息 - 没有对应规则"""
+        traffic_service = TrafficService()
+        # 使用一个肯定不是今天的日期
+        far_past = date(2020, 1, 1)
+        far_past_str = far_past.strftime("%Y年%m月%d日")
+
+        traffic_service._memory_cache = [
+            {"limitedTime": far_past_str, "limitedNumber": "1和6"}
+        ]
+        traffic_service._memory_cache_date = date.today()
+
+        # 今天没有规则，应该返回None
+        result = traffic_service.get_today_limit_info()
+        assert result is None

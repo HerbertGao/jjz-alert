@@ -25,20 +25,20 @@ class TestPriorityMapper:
         priority = PriorityMapper.get_platform_priority(PushPriority.NORMAL, "apprise")
         assert priority == PlatformPriority.APPRISE_NORMAL.value
 
-    def test_get_platform_priority_normal_bark(self):
-        """测试获取平台优先级 - normal -> bark"""
-        priority = PriorityMapper.get_platform_priority(PushPriority.NORMAL, "bark")
-        assert priority == PlatformPriority.BARK_ACTIVE.value
+    def test_get_bark_level_normal(self):
+        """测试获取 Bark level - normal"""
+        level = PriorityMapper.get_bark_level(PushPriority.NORMAL)
+        assert level == "active"
 
     def test_get_platform_priority_high_apprise(self):
         """测试获取平台优先级 - high -> apprise"""
         priority = PriorityMapper.get_platform_priority(PushPriority.HIGH, "apprise")
         assert priority == PlatformPriority.APPRISE_HIGH.value
 
-    def test_get_platform_priority_high_bark(self):
-        """测试获取平台优先级 - high -> bark"""
-        priority = PriorityMapper.get_platform_priority(PushPriority.HIGH, "bark")
-        assert priority == PlatformPriority.BARK_CRITICAL.value
+    def test_get_bark_level_high(self):
+        """测试获取 Bark level - high"""
+        level = PriorityMapper.get_bark_level(PushPriority.HIGH)
+        assert level == "critical"
 
     def test_get_platform_priority_unknown_platform(self):
         """测试获取平台优先级 - 未知平台"""
@@ -97,13 +97,13 @@ class TestPriorityMapper:
         """测试获取所有平台优先级 - normal"""
         priorities = PriorityMapper.get_all_platform_priorities(PushPriority.NORMAL)
         assert priorities["apprise"] == PlatformPriority.APPRISE_NORMAL.value
-        assert priorities["bark"] == PlatformPriority.BARK_ACTIVE.value
+        # Bark 现在通过 Apprise 支持，不再作为独立平台
 
     def test_get_all_platform_priorities_high(self):
         """测试获取所有平台优先级 - high"""
         priorities = PriorityMapper.get_all_platform_priorities(PushPriority.HIGH)
         assert priorities["apprise"] == PlatformPriority.APPRISE_HIGH.value
-        assert priorities["bark"] == PlatformPriority.BARK_CRITICAL.value
+        # Bark 现在通过 Apprise 支持，不再作为独立平台
 
 
 @pytest.mark.unit
@@ -868,3 +868,107 @@ class TestUnifiedPusher:
 
                     # 应该捕获异常并设置状态为error
                     assert result["service_details"]["apprise_status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_process_url_placeholders_with_string_priority(self):
+        """测试处理URL占位符 - priority是字符串类型"""
+        pusher = UnifiedPusher()
+        url = "bark://key@api.day.app/?level={level}"
+
+        # 传入字符串形式的priority（不是枚举）
+        push_params = {"priority": "normal"}  # 字符串，不是PushPriority.NORMAL
+
+        result = pusher._process_url_placeholders(url, "京A12345", "测试车辆", push_params)
+
+        # 应该正常处理，替换占位符
+        assert "{level}" not in result
+        assert "active" in result or "timeSensitive" in result
+
+    @pytest.mark.asyncio
+    async def test_get_service_status_with_multiple_notification_types(self):
+        """测试服务状态 - 包含多种通知类型"""
+        pusher = UnifiedPusher()
+
+        # 使用真实的 PlateConfig 和 NotificationConfig 对象
+        plate1 = PlateConfig(
+            plate="京A12345",
+            notifications=[
+                NotificationConfig(type="apprise", urls=["url1", "url2"]),
+                NotificationConfig(type="apprise", urls=["url3"]),
+                NotificationConfig(type="other", urls=["url4"]),
+            ],
+        )
+        plate2 = PlateConfig(
+            plate="京B67890",
+            notifications=[
+                NotificationConfig(type="other", urls=["url5"]),
+            ],
+        )
+
+        # 创建一个真实的 AppConfig 对象
+        from jjz_alert.config.config import AppConfig
+
+        mock_app_config = AppConfig()
+        mock_app_config.plates = [plate1, plate2]
+
+        with patch("jjz_alert.config.config.config_manager") as mock_config_manager:
+            mock_config_manager.load_config.return_value = mock_app_config
+
+            # Mock apprise 模块（只在动态导入时生效）
+            import sys
+            mock_apprise_module = Mock()
+            mock_apprise_module.Apprise.return_value = Mock()
+
+            with patch.dict(sys.modules, {"apprise": mock_apprise_module}):
+                result = await pusher.get_service_status()
+
+                # 验证统计信息
+                assert result["configuration"]["total_channels"] == 5
+                assert result["configuration"]["apprise_channels"] == 3
+
+    @pytest.mark.asyncio
+    async def test_get_service_status_apprise_import_error(self):
+        """测试服务状态 - apprise导入失败"""
+        pusher = UnifiedPusher()
+
+        from jjz_alert.config.config import AppConfig
+
+        mock_app_config = AppConfig()
+        mock_app_config.plates = []
+
+        with patch("jjz_alert.config.config.config_manager") as mock_config_manager:
+            mock_config_manager.load_config.return_value = mock_app_config
+
+            # Mock apprise导入失败
+            with patch("builtins.__import__", side_effect=ImportError("Apprise not found")):
+                result = await pusher.get_service_status()
+
+                # apprise应该标记为不可用
+                assert result["service_details"]["apprise_available"] is False
+                assert result["service_details"]["apprise_status"] in ["disabled", "error"]
+
+    @pytest.mark.asyncio
+    async def test_get_service_status_apprise_disabled(self):
+        """测试服务状态 - apprise被禁用"""
+        pusher = UnifiedPusher()
+        pusher.apprise_enabled = False  # 禁用apprise
+
+        from jjz_alert.config.config import AppConfig
+
+        mock_app_config = AppConfig()
+        mock_app_config.plates = []
+
+        with patch("jjz_alert.config.config.config_manager") as mock_config_manager:
+            mock_config_manager.load_config.return_value = mock_app_config
+
+            # Mock apprise导入成功
+            with patch("builtins.__import__") as mock_import:
+                mock_apprise_module = Mock()
+                mock_apprise_module.Apprise.return_value = Mock()
+                mock_import.return_value = mock_apprise_module
+
+                result = await pusher.get_service_status()
+
+                # apprise应该标记为禁用
+                assert result["service_details"]["apprise_enabled"] is False
+                assert result["service_details"]["apprise_status"] in ["disabled", "error"]

@@ -23,17 +23,6 @@ class PlatformPriority(Enum):
     APPRISE_URGENT = "urgent"
     APPRISE_CRITICAL = "critical"
 
-    # Bark特定优先级
-    BARK_ACTIVE = "active"
-    BARK_CRITICAL = "critical"
-
-    # 其他平台可以在这里添加
-    # TELEGRAM_NORMAL = "normal"
-    # TELEGRAM_HIGH = "high"
-    # EMAIL_LOW = "low"
-    # EMAIL_HIGH = "high"
-
-
 class PriorityMapper:
     """优先级映射器"""
 
@@ -41,12 +30,18 @@ class PriorityMapper:
     PRIORITY_MAPPINGS = {
         PushPriority.NORMAL: {
             "apprise": PlatformPriority.APPRISE_NORMAL,
-            "bark": PlatformPriority.BARK_ACTIVE,
         },
         PushPriority.HIGH: {
             "apprise": PlatformPriority.APPRISE_HIGH,
-            "bark": PlatformPriority.BARK_CRITICAL,
         },
+    }
+
+    # Bark URL 占位符映射（基于 Apprise Bark 插件支持）
+    # Apprise Bark 支持的 level: active, timeSensitive, passive, critical
+    # 参考：https://github.com/caronc/apprise/blob/master/apprise/plugins/bark.py
+    BARK_LEVEL_MAPPINGS = {
+        PushPriority.NORMAL: "active",
+        PushPriority.HIGH: "critical",
     }
 
     @classmethod
@@ -56,7 +51,7 @@ class PriorityMapper:
 
         Args:
             priority: 统一优先级
-            platform: 平台名称 ('apprise', 'bark', etc.)
+            platform: 平台名称 ('apprise' 等)
 
         Returns:
             平台特定的优先级值
@@ -71,6 +66,19 @@ class PriorityMapper:
             platform = "apprise"
 
         return platform_mapping[platform].value
+
+    @classmethod
+    def get_bark_level(cls, priority: PushPriority) -> str:
+        """
+        获取 Bark URL 占位符的 level 值
+
+        Args:
+            priority: 统一优先级
+
+        Returns:
+            Bark 特定的 level 值 (active/critical)
+        """
+        return cls.BARK_LEVEL_MAPPINGS.get(priority, "active")
 
     @classmethod
     def get_all_platform_priorities(cls, priority: PushPriority) -> Dict[str, str]:
