@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-JJZ Alert V2.0 性能测试
+JJZ Alert 性能测试
 
 测试关键功能的性能指标:
 - Redis连接和操作性能
@@ -177,7 +177,7 @@ async def test_service_performance():
 
 async def run_performance_tests():
     """运行所有性能测试"""
-    print("🎯 JJZ Alert V2.0 性能测试")
+    print("🎯 JJZ Alert 性能测试")
     print("=" * 50)
 
     # 禁用调试日志以避免干扰测试结果

@@ -157,7 +157,7 @@ class ConfigManager:
                     integration_mode=ha_data.get("integration_mode", "rest"),
                     url=rest_url,
                     token=rest_token,
-                    entity_prefix="jjz_alert",
+                    entity_prefix=ha_data.get("entity_prefix", "jjz_alert"),
                     # 同步配置（默认值）
                     sync_after_query=True,
                     # 错误处理（默认值）

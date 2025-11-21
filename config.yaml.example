@@ -72,7 +72,10 @@ global:
     # ========== 当使用 REST 模式时，仅需配置以下关键参数 ==========
     rest_url: "http://homeassistant.local:8123"
     rest_token: "your_long_lived_access_token_here"
-    # 其他 REST 细节（如 entity_prefix/retry/timeout 等）已内置默认值，不建议修改
+    # entity_prefix: "jjz_alert"  # 实体前缀
+    # device_manufacturer: "进京证提醒" # 设备生产商
+    # device_model: "jjz_alert" #设备型号
+    # 其他 REST 细节（如 retry/timeout 等）已内置默认值，不建议修改
 
     # ========== 当使用 MQTT 模式时，需配置以下参数 ==========
     mqtt_host: "homeassistant.local"    # 你的 MQTT Broker 地址（HA 插件一般是 HA 主机IP）
