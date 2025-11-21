@@ -387,3 +387,36 @@ class TestHomeAssistantValidation:
 
         # HA 应该被禁用
         assert config.global_config.homeassistant.enabled is False
+
+    def test_ha_reads_custom_rest_config_values(self, tmp_path):
+        """测试读取自定义 REST 配置值"""
+        config_file = tmp_path / "config.yaml"
+        config_data = {
+            "global": {
+                "homeassistant": {
+                    "enabled": True,
+                    "integration_mode": "rest",
+                    "rest_url": "http://homeassistant.local:8123",
+                    "rest_token": "test_token_123456789012345678901234567890123456789012345",
+                    "rest_entity_prefix": "custom_prefix",
+                    "rest_device_manufacturer": "Custom Manufacturer",
+                    "rest_device_model": "Custom Model",
+                    "rest_retry_count": 5,
+                    "rest_timeout": 60,
+                }
+            },
+            "jjz_accounts": [],
+            "plates": [],
+        }
+        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
+
+        manager = ConfigManager(str(config_file))
+        config = manager.load_config()
+
+        # 验证自定义配置值被正确读取
+        assert config.global_config.homeassistant.enabled is True
+        assert config.global_config.homeassistant.rest_entity_prefix == "custom_prefix"
+        assert config.global_config.homeassistant.rest_device_manufacturer == "Custom Manufacturer"
+        assert config.global_config.homeassistant.rest_device_model == "Custom Model"
+        assert config.global_config.homeassistant.rest_retry_count == 5
+        assert config.global_config.homeassistant.rest_timeout == 60
