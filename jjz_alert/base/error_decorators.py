@@ -246,7 +246,9 @@ def with_retry(
                         await asyncio.sleep(current_delay)
                         current_delay *= backoff_factor
                     else:
-                        logging.error(f"{func.__name__} 重试{validated_max_attempts}次后仍然失败")
+                        logging.error(
+                            f"{func.__name__} 重试{validated_max_attempts}次后仍然失败"
+                        )
                 except Exception as e:
                     # 非可重试异常直接抛出
                     raise
@@ -274,7 +276,9 @@ def with_retry(
                         time.sleep(current_delay)
                         current_delay *= backoff_factor
                     else:
-                        logging.error(f"{func.__name__} 重试{validated_max_attempts}次后仍然失败")
+                        logging.error(
+                            f"{func.__name__} 重试{validated_max_attempts}次后仍然失败"
+                        )
                 except Exception as e:
                     # 非可重试异常直接抛出
                     raise
