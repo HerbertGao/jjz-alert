@@ -447,7 +447,11 @@ class TestPushAdminNotification:
         ) as mock_load, patch(
             "jjz_alert.service.notification.push_helpers.unified_pusher.push"
         ) as mock_push:
-            from jjz_alert.config.config_models import AppConfig, GlobalConfig, AdminConfig
+            from jjz_alert.config.config_models import (
+                AppConfig,
+                GlobalConfig,
+                AdminConfig,
+            )
 
             mock_config = AppConfig()
             mock_config.global_config = GlobalConfig()
@@ -476,10 +480,12 @@ class TestPushAdminNotification:
     @pytest.mark.asyncio
     async def test_push_admin_notification_no_config(self):
         """测试推送管理员通知 - 无配置"""
-        with patch(
-            "jjz_alert.config.config.config_manager.load_config"
-        ) as mock_load:
-            from jjz_alert.config.config_models import AppConfig, GlobalConfig, AdminConfig
+        with patch("jjz_alert.config.config.config_manager.load_config") as mock_load:
+            from jjz_alert.config.config_models import (
+                AppConfig,
+                GlobalConfig,
+                AdminConfig,
+            )
 
             mock_config = AppConfig()
             mock_config.global_config = GlobalConfig()
@@ -534,9 +540,7 @@ class TestIsSystemError:
     def test_is_system_error_api_error(self):
         """测试系统错误检测 - API错误"""
         assert (
-            _is_system_error(
-                "Session.request() got an unexpected keyword argument"
-            )
+            _is_system_error("Session.request() got an unexpected keyword argument")
             is True
         )
         assert _is_system_error("HTTP POST请求失败") is True
@@ -613,11 +617,6 @@ class TestNotifyAdminNetworkError:
         with patch(
             "jjz_alert.service.notification.push_helpers._notify_admin_system_error"
         ) as mock_notify:
-            await _notify_admin_network_error(
-                "京A12345", "测试车辆", "网络连接失败"
-            )
+            await _notify_admin_network_error("京A12345", "测试车辆", "网络连接失败")
 
-            mock_notify.assert_called_once_with(
-                "京A12345", "测试车辆", "网络连接失败"
-            )
-
+            mock_notify.assert_called_once_with("京A12345", "测试车辆", "网络连接失败")

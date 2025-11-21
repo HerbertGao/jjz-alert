@@ -7,4 +7,3 @@ class HomeAssistantAPIError(Exception):
     """Home Assistant API错误"""
 
     pass
-

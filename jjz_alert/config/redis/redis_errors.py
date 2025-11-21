@@ -17,4 +17,3 @@ class RedisTimeoutError(RedisError):
 
     def __init__(self, message: str, details: dict = None):
         super().__init__(message, details)
-

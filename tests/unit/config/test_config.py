@@ -91,8 +91,11 @@ class TestConfigManager:
         assert config1 is not None
         assert config2 is not None
 
-    def test_parse_config_with_log_level_compat(self, tmp_path):
+    def test_parse_config_with_log_level_compat(self, tmp_path, monkeypatch):
         """测试解析配置 - 兼容旧的 log_level 格式"""
+        # 清除 LOG_LEVEL 环境变量，以便测试 YAML 配置读取
+        monkeypatch.delenv("LOG_LEVEL", raising=False)
+
         config_file = tmp_path / "config.yaml"
         config_data = {
             "global": {
@@ -150,7 +153,7 @@ class TestConfigManager:
         manager = ConfigManager(str(config_file))
         config = manager.load_config()
 
-        assert config.global_config.log_level == "DEBUG"
+        assert config.global_config.log.level == "DEBUG"
 
 
 @pytest.mark.unit
@@ -258,4 +261,3 @@ class TestConfigFunctions:
             assert len(notifications) == 1
             assert notifications[0].type == "apprise"
             mock_manager.load_config.assert_called_once()
-

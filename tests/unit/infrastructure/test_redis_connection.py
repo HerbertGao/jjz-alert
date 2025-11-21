@@ -32,11 +32,19 @@ class TestRedisConnectionManager:
         config = RedisConfig(host="localhost", port=6379, db=0)
         manager = RedisConnectionManager(config=config)
 
-        with patch.object(manager, "_test_connection", new_callable=AsyncMock) as mock_test:
+        with patch.object(
+            manager, "_test_connection", new_callable=AsyncMock
+        ) as mock_test:
             mock_test.return_value = None
-            with patch("jjz_alert.config.redis.connection.aioredis.ConnectionPool") as mock_pool_class:
-                with patch("jjz_alert.config.redis.connection.aioredis.Redis") as mock_redis_class:
-                    with patch("jjz_alert.config.redis.connection.redis.Redis") as mock_sync_redis_class:
+            with patch(
+                "jjz_alert.config.redis.connection.aioredis.ConnectionPool"
+            ) as mock_pool_class:
+                with patch(
+                    "jjz_alert.config.redis.connection.aioredis.Redis"
+                ) as mock_redis_class:
+                    with patch(
+                        "jjz_alert.config.redis.connection.redis.Redis"
+                    ) as mock_sync_redis_class:
                         mock_pool = AsyncMock()
                         mock_pool_class.return_value = mock_pool
                         mock_client = AsyncMock()
@@ -58,7 +66,9 @@ class TestRedisConnectionManager:
         config = RedisConfig(host="invalid", port=6379, db=0)
         manager = RedisConnectionManager(config=config)
 
-        with patch("jjz_alert.config.redis.connection.aioredis.ConnectionPool") as mock_pool_class:
+        with patch(
+            "jjz_alert.config.redis.connection.aioredis.ConnectionPool"
+        ) as mock_pool_class:
             mock_pool_class.side_effect = Exception("Connection failed")
             with patch.object(manager, "close", new_callable=AsyncMock) as mock_close:
                 result = await manager.initialize()
@@ -200,9 +210,11 @@ class TestRedisConnectionManager:
 
         mock_client = AsyncMock()
         with patch.object(manager, "initialize", new_callable=AsyncMock) as mock_init:
+
             async def init_side_effect():
                 manager._client = mock_client
                 return True
+
             mock_init.side_effect = init_side_effect
 
             async with manager.get_client() as client:
@@ -217,7 +229,9 @@ class TestRedisConnectionManager:
         manager._client = mock_client
 
         with patch.object(manager, "close", new_callable=AsyncMock) as mock_close:
-            with patch.object(manager, "initialize", new_callable=AsyncMock) as mock_init:
+            with patch.object(
+                manager, "initialize", new_callable=AsyncMock
+            ) as mock_init:
                 mock_init.return_value = True
 
                 # 模拟在使用客户端时抛出异常
@@ -242,7 +256,9 @@ class TestRedisConnectionManager:
         manager._client = mock_client
 
         with patch.object(manager, "close", new_callable=AsyncMock) as mock_close:
-            with patch.object(manager, "initialize", new_callable=AsyncMock) as mock_init:
+            with patch.object(
+                manager, "initialize", new_callable=AsyncMock
+            ) as mock_init:
                 mock_init.return_value = True
 
                 # 模拟在使用客户端时抛出异常
@@ -267,14 +283,16 @@ class TestRedisConnectionManager:
         manager.config = RedisConfig(host="localhost", port=6379, db=0)
 
         mock_client.ping = AsyncMock(return_value=True)
-        mock_client.info = AsyncMock(return_value={
-            "redis_version": "7.0.0",
-            "used_memory_human": "1M",
-            "connected_clients": 1,
-            "total_commands_processed": 100,
-            "keyspace_hits": 50,
-            "keyspace_misses": 10,
-        })
+        mock_client.info = AsyncMock(
+            return_value={
+                "redis_version": "7.0.0",
+                "used_memory_human": "1M",
+                "connected_clients": 1,
+                "total_commands_processed": 100,
+                "keyspace_hits": 50,
+                "keyspace_misses": 10,
+            }
+        )
 
         # Mock event loop time
         with patch("asyncio.get_event_loop") as mock_loop:
@@ -376,7 +394,9 @@ class TestRedisHelperFunctions:
     async def test_get_redis_client_new_connection(self):
         """测试获取Redis客户端 - 新连接"""
         with patch.object(redis_manager, "_client", None):
-            with patch.object(redis_manager, "initialize", new_callable=AsyncMock) as mock_init:
+            with patch.object(
+                redis_manager, "initialize", new_callable=AsyncMock
+            ) as mock_init:
                 mock_init.return_value = True
                 mock_client = AsyncMock()
                 redis_manager._client = mock_client
@@ -404,7 +424,9 @@ class TestRedisHelperFunctions:
         redis_manager._client = AsyncMock()
         redis_manager._loop = old_loop
 
-        with patch.object(redis_manager, "initialize", new_callable=AsyncMock) as mock_init:
+        with patch.object(
+            redis_manager, "initialize", new_callable=AsyncMock
+        ) as mock_init:
             mock_init.return_value = True
 
             client = await get_redis_client()
@@ -417,7 +439,9 @@ class TestRedisHelperFunctions:
     @pytest.mark.asyncio
     async def test_init_redis(self):
         """测试初始化Redis快捷函数"""
-        with patch.object(redis_manager, "initialize", new_callable=AsyncMock) as mock_init:
+        with patch.object(
+            redis_manager, "initialize", new_callable=AsyncMock
+        ) as mock_init:
             mock_init.return_value = True
 
             result = await init_redis()
@@ -438,9 +462,10 @@ class TestRedisHelperFunctions:
         """测试Redis客户端上下文管理器"""
         with patch.object(redis_manager, "get_client") as mock_get_client:
             mock_client = AsyncMock()
-            mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_get_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
             async with redis_client() as client:
                 assert client == mock_client
-

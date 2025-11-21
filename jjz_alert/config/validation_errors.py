@@ -7,4 +7,3 @@ class ConfigValidationError(Exception):
     """配置验证错误"""
 
     pass
-

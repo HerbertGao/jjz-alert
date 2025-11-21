@@ -92,12 +92,17 @@ class TestConfigValidator:
         result = validator.validate(config)
 
         assert result is True  # 警告不影响验证结果
-        assert any("启用了定时提醒但未配置提醒时间" in warning for warning in validator.warnings)
+        assert any(
+            "启用了定时提醒但未配置提醒时间" in warning
+            for warning in validator.warnings
+        )
 
     def test_validate_remind_config_invalid_time_format(self):
         """测试定时提醒配置验证 - 无效时间格式"""
         config = AppConfig()
-        config.global_config.remind = RemindConfig(enable=True, times=["25:00", "08:00"])
+        config.global_config.remind = RemindConfig(
+            enable=True, times=["25:00", "08:00"]
+        )
 
         validator = ConfigValidator()
         result = validator.validate(config)
@@ -108,7 +113,9 @@ class TestConfigValidator:
     def test_validate_remind_config_valid_time_format(self):
         """测试定时提醒配置验证 - 有效时间格式"""
         config = AppConfig()
-        config.global_config.remind = RemindConfig(enable=True, times=["08:00", "12:00", "18:00"])
+        config.global_config.remind = RemindConfig(
+            enable=True, times=["08:00", "12:00", "18:00"]
+        )
 
         validator = ConfigValidator()
         result = validator.validate(config)
@@ -135,7 +142,9 @@ class TestConfigValidator:
         result = validator.validate(config)
 
         assert result is False
-        assert any("启用Home Assistant但未配置URL" in error for error in validator.errors)
+        assert any(
+            "启用Home Assistant但未配置URL" in error for error in validator.errors
+        )
 
     def test_validate_homeassistant_config_invalid_url(self):
         """测试Home Assistant配置验证 - 无效URL"""
@@ -157,7 +166,7 @@ class TestConfigValidator:
             enabled=True,
             url="http://homeassistant.local:8123",  # 先通过URL格式验证
             token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert"
+            entity_prefix="jjz_alert",
         )
 
         validator = ConfigValidator()
@@ -179,14 +188,17 @@ class TestConfigValidator:
             enabled=True,
             url="http://homeassistant.local",
             token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert"
+            entity_prefix="jjz_alert",
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is True  # 警告不影响验证结果
-        assert any("Home Assistant URL建议包含端口号" in warning for warning in validator.warnings)
+        assert any(
+            "Home Assistant URL建议包含端口号" in warning
+            for warning in validator.warnings
+        )
 
     def test_validate_homeassistant_config_no_token(self):
         """测试Home Assistant配置验证 - 未配置令牌"""
@@ -199,22 +211,25 @@ class TestConfigValidator:
         result = validator.validate(config)
 
         assert result is False
-        assert any("启用Home Assistant但未配置访问令牌" in error for error in validator.errors)
+        assert any(
+            "启用Home Assistant但未配置访问令牌" in error for error in validator.errors
+        )
 
     def test_validate_homeassistant_config_short_token(self):
         """测试Home Assistant配置验证 - 令牌过短"""
         config = AppConfig()
         config.global_config.homeassistant = HomeAssistantConfig(
-            enabled=True,
-            url="http://homeassistant.local:8123",
-            token="short"
+            enabled=True, url="http://homeassistant.local:8123", token="short"
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is True  # 警告不影响验证结果
-        assert any("Home Assistant访问令牌长度过短" in warning for warning in validator.warnings)
+        assert any(
+            "Home Assistant访问令牌长度过短" in warning
+            for warning in validator.warnings
+        )
 
     def test_validate_homeassistant_config_empty_entity_prefix(self):
         """测试Home Assistant配置验证 - 空实体前缀"""
@@ -223,14 +238,16 @@ class TestConfigValidator:
             enabled=True,
             url="http://homeassistant.local:8123",
             token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix=""
+            entity_prefix="",
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is False
-        assert any("Home Assistant实体前缀不能为空" in error for error in validator.errors)
+        assert any(
+            "Home Assistant实体前缀不能为空" in error for error in validator.errors
+        )
 
     def test_validate_homeassistant_config_invalid_entity_prefix(self):
         """测试Home Assistant配置验证 - 无效实体前缀"""
@@ -239,14 +256,16 @@ class TestConfigValidator:
             enabled=True,
             url="http://homeassistant.local:8123",
             token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="Invalid-Prefix"
+            entity_prefix="Invalid-Prefix",
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is False
-        assert any("Home Assistant实体前缀格式无效" in error for error in validator.errors)
+        assert any(
+            "Home Assistant实体前缀格式无效" in error for error in validator.errors
+        )
 
     def test_validate_homeassistant_config_valid_entity_prefix(self):
         """测试Home Assistant配置验证 - 有效实体前缀"""
@@ -255,7 +274,7 @@ class TestConfigValidator:
             enabled=True,
             url="http://homeassistant.local:8123",
             token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert"
+            entity_prefix="jjz_alert",
         )
 
         validator = ConfigValidator()
@@ -271,14 +290,17 @@ class TestConfigValidator:
             url="http://homeassistant.local:8123",
             token="valid_token_12345678901234567890123456789012345678901234567890",
             entity_prefix="jjz_alert",
-            create_device_per_plate=False
+            create_device_per_plate=False,
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is True  # 警告不影响验证结果
-        assert any("Home Assistant车牌设备创建已禁用" in warning for warning in validator.warnings)
+        assert any(
+            "Home Assistant车牌设备创建已禁用" in warning
+            for warning in validator.warnings
+        )
 
     def test_validate_homeassistant_config_sync_disabled(self):
         """测试Home Assistant配置验证 - 同步禁用"""
@@ -288,14 +310,17 @@ class TestConfigValidator:
             url="http://homeassistant.local:8123",
             token="valid_token_12345678901234567890123456789012345678901234567890",
             entity_prefix="jjz_alert",
-            sync_after_query=False
+            sync_after_query=False,
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is True  # 警告不影响验证结果
-        assert any("Home Assistant查询后同步已禁用" in warning for warning in validator.warnings)
+        assert any(
+            "Home Assistant查询后同步已禁用" in warning
+            for warning in validator.warnings
+        )
 
     def test_validate_homeassistant_config_invalid_retry_count(self):
         """测试Home Assistant配置验证 - 无效重试次数"""
@@ -305,14 +330,16 @@ class TestConfigValidator:
             url="http://homeassistant.local:8123",
             token="valid_token_12345678901234567890123456789012345678901234567890",
             entity_prefix="jjz_alert",
-            retry_count=0
+            retry_count=0,
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is False
-        assert any("Home Assistant重试次数不能小于1" in error for error in validator.errors)
+        assert any(
+            "Home Assistant重试次数不能小于1" in error for error in validator.errors
+        )
 
     def test_validate_homeassistant_config_high_retry_count(self):
         """测试Home Assistant配置验证 - 重试次数过多"""
@@ -322,14 +349,16 @@ class TestConfigValidator:
             url="http://homeassistant.local:8123",
             token="valid_token_12345678901234567890123456789012345678901234567890",
             entity_prefix="jjz_alert",
-            retry_count=15
+            retry_count=15,
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is True  # 警告不影响验证结果
-        assert any("Home Assistant重试次数过多" in warning for warning in validator.warnings)
+        assert any(
+            "Home Assistant重试次数过多" in warning for warning in validator.warnings
+        )
 
     def test_validate_homeassistant_config_short_timeout(self):
         """测试Home Assistant配置验证 - 超时时间过短"""
@@ -339,14 +368,17 @@ class TestConfigValidator:
             url="http://homeassistant.local:8123",
             token="valid_token_12345678901234567890123456789012345678901234567890",
             entity_prefix="jjz_alert",
-            timeout=3
+            timeout=3,
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is True  # 警告不影响验证结果
-        assert any("Home Assistant请求超时时间过短" in warning for warning in validator.warnings)
+        assert any(
+            "Home Assistant请求超时时间过短" in warning
+            for warning in validator.warnings
+        )
 
     def test_validate_homeassistant_config_long_timeout(self):
         """测试Home Assistant配置验证 - 超时时间过长"""
@@ -356,14 +388,17 @@ class TestConfigValidator:
             url="http://homeassistant.local:8123",
             token="valid_token_12345678901234567890123456789012345678901234567890",
             entity_prefix="jjz_alert",
-            timeout=120
+            timeout=120,
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is True  # 警告不影响验证结果
-        assert any("Home Assistant请求超时时间过长" in warning for warning in validator.warnings)
+        assert any(
+            "Home Assistant请求超时时间过长" in warning
+            for warning in validator.warnings
+        )
 
     def test_validate_jjz_accounts_empty(self):
         """测试进京证账户配置验证 - 空列表"""
@@ -380,8 +415,12 @@ class TestConfigValidator:
         """测试进京证账户配置验证 - 重复名称"""
         config = AppConfig()
         config.jjz_accounts = [
-            JJZAccount(name="账户1", jjz=JJZConfig(token="token1", url="https://example.com")),
-            JJZAccount(name="账户1", jjz=JJZConfig(token="token2", url="https://example.com")),
+            JJZAccount(
+                name="账户1", jjz=JJZConfig(token="token1", url="https://example.com")
+            ),
+            JJZAccount(
+                name="账户1", jjz=JJZConfig(token="token2", url="https://example.com")
+            ),
         ]
 
         validator = ConfigValidator()
@@ -394,14 +433,18 @@ class TestConfigValidator:
         """测试进京证账户配置验证 - 缺少token"""
         config = AppConfig()
         config.jjz_accounts = [
-            JJZAccount(name="账户1", jjz=JJZConfig(token="", url="https://example.com")),
+            JJZAccount(
+                name="账户1", jjz=JJZConfig(token="", url="https://example.com")
+            ),
         ]
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is False
-        assert any("进京证账户" in error and "缺少token" in error for error in validator.errors)
+        assert any(
+            "进京证账户" in error and "缺少token" in error for error in validator.errors
+        )
 
     def test_validate_jjz_accounts_missing_url(self):
         """测试进京证账户配置验证 - 缺少URL"""
@@ -414,7 +457,9 @@ class TestConfigValidator:
         result = validator.validate(config)
 
         assert result is False
-        assert any("进京证账户" in error and "缺少URL" in error for error in validator.errors)
+        assert any(
+            "进京证账户" in error and "缺少URL" in error for error in validator.errors
+        )
 
     def test_validate_jjz_accounts_invalid_url(self):
         """测试进京证账户配置验证 - 无效URL"""
@@ -427,7 +472,10 @@ class TestConfigValidator:
         result = validator.validate(config)
 
         assert result is False
-        assert any("进京证账户" in error and "URL格式无效" in error for error in validator.errors)
+        assert any(
+            "进京证账户" in error and "URL格式无效" in error
+            for error in validator.errors
+        )
 
     def test_validate_plates_empty(self):
         """测试车牌配置验证 - 空列表"""
@@ -523,9 +571,7 @@ class TestConfigValidator:
         config.plates = [
             PlateConfig(
                 plate="京A12345",
-                notifications=[
-                    NotificationConfig(type="unknown", urls=[])
-                ]
+                notifications=[NotificationConfig(type="unknown", urls=[])],
             ),
         ]
 
@@ -541,9 +587,7 @@ class TestConfigValidator:
         config.plates = [
             PlateConfig(
                 plate="京A12345",
-                notifications=[
-                    NotificationConfig(type="apprise", urls=[])
-                ]
+                notifications=[NotificationConfig(type="apprise", urls=[])],
             ),
         ]
 
@@ -559,9 +603,7 @@ class TestConfigValidator:
         config.plates = [
             PlateConfig(
                 plate="京A12345",
-                notifications=[
-                    NotificationConfig(type="apprise", urls=[""])
-                ]
+                notifications=[NotificationConfig(type="apprise", urls=[""])],
             ),
         ]
 
@@ -569,7 +611,9 @@ class TestConfigValidator:
         result = validator.validate(config)
 
         assert result is False
-        assert any("Apprise URL" in error and "不能为空" in error for error in validator.errors)
+        assert any(
+            "Apprise URL" in error and "不能为空" in error for error in validator.errors
+        )
 
     def test_validate_apprise_config_invalid_url(self):
         """测试Apprise推送配置验证 - 无效URL"""
@@ -579,7 +623,7 @@ class TestConfigValidator:
                 plate="京A12345",
                 notifications=[
                     NotificationConfig(type="apprise", urls=["invalid://url"])
-                ]
+                ],
             ),
         ]
 
@@ -587,7 +631,10 @@ class TestConfigValidator:
         result = validator.validate(config)
 
         assert result is True  # 警告不影响验证结果
-        assert any("Apprise URL" in warning and "格式可能无效" in warning for warning in validator.warnings)
+        assert any(
+            "Apprise URL" in warning and "格式可能无效" in warning
+            for warning in validator.warnings
+        )
 
     def test_validate_apprise_config_valid_urls(self):
         """测试Apprise推送配置验证 - 有效URL"""
@@ -597,7 +644,7 @@ class TestConfigValidator:
                 plate="京A12345",
                 notifications=[
                     NotificationConfig(type="apprise", urls=["bark://token@host"])
-                ]
+                ],
             ),
         ]
 
@@ -667,7 +714,9 @@ class TestConfigValidator:
 
         assert validator._validate_time_format("25:00") is False
         assert validator._validate_time_format("12:60") is False
-        assert validator._validate_time_format("8:00") is True  # 正则表达式允许0-19，所以8:00是有效的
+        assert (
+            validator._validate_time_format("8:00") is True
+        )  # 正则表达式允许0-19，所以8:00是有效的
         assert validator._validate_time_format("invalid") is False
         assert validator._validate_time_format("24:00") is False  # 24小时制最大是23:59
 
@@ -735,15 +784,17 @@ class TestConfigValidator:
             enabled=True,
             url="ftp://homeassistant.local:8123",  # 无效的协议
             token="valid_token_12345678901234567890123456789012345678901234567890",
-            entity_prefix="jjz_alert"
+            entity_prefix="jjz_alert",
         )
 
         validator = ConfigValidator()
         result = validator.validate(config)
 
         assert result is False
-        assert any("Home Assistant URL必须以http://或https://开头" in error 
-                   for error in validator.errors)
+        assert any(
+            "Home Assistant URL必须以http://或https://开头" in error
+            for error in validator.errors
+        )
 
     def test_validate_admin_notifications(self):
         """测试管理员推送配置验证"""
@@ -768,25 +819,24 @@ class TestConfigValidator:
         # 创建一个会导致urlparse抛出异常的URL
         # 实际上，urlparse很少抛出异常，但我们可以测试边界情况
         # 例如None值或其他特殊值
-        
+
         # 测试空字符串（已经在test_validate_url_invalid中测试）
         assert validator._validate_url("") is False
-        
+
         # 测试None值（如果传入None）
         # 但由于类型检查，这不太可能发生
         # 我们可以测试一个会导致异常的URL格式
         # 实际上，urlparse对大多数输入都很宽容
-        
+
         # 更实际的方法是测试一个会导致urlparse返回无效结果的URL
         # 但根据代码逻辑，只要result.scheme和result.netloc都存在就返回True
         # 所以异常处理主要是防御性编程
-        
+
         # 让我们测试一个会导致异常的边界情况
         # 由于urlparse的健壮性，我们需要通过mock来测试
         from unittest.mock import patch
-        
+
         with patch("jjz_alert.config.validation.urlparse") as mock_parse:
             mock_parse.side_effect = Exception("解析失败")
             result = validator._validate_url("http://example.com")
             assert result is False
-

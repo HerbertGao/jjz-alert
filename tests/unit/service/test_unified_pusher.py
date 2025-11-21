@@ -52,28 +52,32 @@ class TestPriorityMapper:
         # 但我们可以通过临时修改PRIORITY_MAPPINGS来测试这个场景
         # 保存原始映射
         original_mappings = PriorityMapper.PRIORITY_MAPPINGS.copy()
-        
+
         # 创建一个新的PushPriority值（通过临时添加一个不在原始映射中的值）
         # 但由于PushPriority是枚举，我们无法动态创建
         # 更实际的方法是：临时清空映射，然后测试默认行为
         # 但这样会导致代码在查找时直接报KeyError
-        
+
         # 实际上，由于代码逻辑是先检查priority是否在映射中，
         # 如果不在就设置为NORMAL，然后再查找映射
         # 所以这个场景在实际代码中很难触发
         # 我们可以通过mock来测试这个逻辑
-        
+
         from unittest.mock import patch
-        
+
         # Mock PRIORITY_MAPPINGS，使其不包含NORMAL
-        with patch.object(PriorityMapper, 'PRIORITY_MAPPINGS', {PushPriority.HIGH: original_mappings[PushPriority.HIGH]}):
+        with patch.object(
+            PriorityMapper,
+            "PRIORITY_MAPPINGS",
+            {PushPriority.HIGH: original_mappings[PushPriority.HIGH]},
+        ):
             # 当NORMAL不在映射中时，代码会先检查，然后设置为NORMAL
             # 但由于NORMAL也不在修改后的映射中，会再次触发默认逻辑
             # 但代码逻辑是先设置priority = PushPriority.NORMAL，然后再查找
             # 所以会报KeyError
             # 这个测试场景实际上很难触发，因为代码有防御性检查
             pass
-        
+
         # 更实际的测试：验证默认值逻辑确实存在
         # 由于PushPriority只有NORMAL和HIGH两个值，都在映射中
         # 这个测试场景在实际代码中不会发生
@@ -166,9 +170,7 @@ class TestUnifiedPusher:
         """测试处理URL占位符 - 基础"""
         pusher = UnifiedPusher()
         url = "bark://test@{plate}/test?name={display_name}"
-        result = pusher._process_url_placeholders(
-            url, "京A12345", "测试车辆", {}
-        )
+        result = pusher._process_url_placeholders(url, "京A12345", "测试车辆", {})
         assert "京A12345" in result
         assert "测试车辆" in result
 
@@ -247,7 +249,9 @@ class TestUnifiedPusher:
         """测试发送Apprise通知 - 已禁用"""
         pusher = UnifiedPusher()
         pusher.apprise_enabled = False
-        notification = NotificationConfig(type="apprise", urls=["bark://test_key@api.day.app"])
+        notification = NotificationConfig(
+            type="apprise", urls=["bark://test_key@api.day.app"]
+        )
         push_params = {"priority": PushPriority.NORMAL}
 
         result = await pusher._send_apprise_notification(
@@ -387,9 +391,7 @@ class TestUnifiedPusher:
             plate="京A12345",
             display_name="测试车辆",
             notifications=[
-                NotificationConfig(
-                    type="apprise", urls=["bark://test_key@api.day.app"]
-                )
+                NotificationConfig(type="apprise", urls=["bark://test_key@api.day.app"])
             ],
         )
         push_params = {"priority": PushPriority.NORMAL, "group": "京A12345"}
@@ -452,9 +454,7 @@ class TestUnifiedPusher:
             plate="京A12345",
             display_name="测试车辆",
             notifications=[
-                NotificationConfig(
-                    type="apprise", urls=["bark://test_key@api.day.app"]
-                )
+                NotificationConfig(type="apprise", urls=["bark://test_key@api.day.app"])
             ],
         )
         push_params = {"priority": PushPriority.NORMAL, "group": "京A12345"}
@@ -477,9 +477,7 @@ class TestUnifiedPusher:
         with patch.object(
             pusher, "_send_single_notification", side_effect=Exception("严重错误")
         ):
-            result = await pusher._send_notifications(
-                plate_config, "标题", "内容", {}
-            )
+            result = await pusher._send_notifications(plate_config, "标题", "内容", {})
 
             assert result["success_count"] == 0
             assert "errors" in result
@@ -492,9 +490,7 @@ class TestUnifiedPusher:
             plate="京A12345",
             display_name="测试车辆",
             notifications=[
-                NotificationConfig(
-                    type="apprise", urls=["bark://test_key@api.day.app"]
-                )
+                NotificationConfig(type="apprise", urls=["bark://test_key@api.day.app"])
             ],
         )
 
@@ -520,9 +516,7 @@ class TestUnifiedPusher:
         plate_config = PlateConfig(
             plate="京A12345",
             notifications=[
-                NotificationConfig(
-                    type="apprise", urls=["bark://test_key@api.day.app"]
-                )
+                NotificationConfig(type="apprise", urls=["bark://test_key@api.day.app"])
             ],
         )
 
@@ -534,9 +528,7 @@ class TestUnifiedPusher:
                 "notifications": [],
             }
 
-            result = await pusher.push(
-                plate_config, "标题", "内容", group="自定义分组"
-            )
+            result = await pusher.push(plate_config, "标题", "内容", group="自定义分组")
 
             # 验证group参数被传递
             call_args = mock_send.call_args[0][3]
@@ -549,9 +541,7 @@ class TestUnifiedPusher:
         plate_config = PlateConfig(
             plate="京A12345",
             notifications=[
-                NotificationConfig(
-                    type="apprise", urls=["bark://test_key@api.day.app"]
-                )
+                NotificationConfig(type="apprise", urls=["bark://test_key@api.day.app"])
             ],
         )
 
@@ -563,9 +553,7 @@ class TestUnifiedPusher:
                 "notifications": [],
             }
 
-            result = await pusher.push(
-                plate_config, "标题", "内容", priority="high"
-            )
+            result = await pusher.push(plate_config, "标题", "内容", priority="high")
 
             # 验证优先级被正确转换
             call_args = mock_send.call_args[0][3]
@@ -593,9 +581,7 @@ class TestUnifiedPusher:
             plate="京A12345",
             icon="https://example.com/icon.png",
             notifications=[
-                NotificationConfig(
-                    type="apprise", urls=["bark://test_key@api.day.app"]
-                )
+                NotificationConfig(type="apprise", urls=["bark://test_key@api.day.app"])
             ],
         )
 
@@ -630,9 +616,7 @@ class TestUnifiedPusher:
         plate_config = PlateConfig(
             plate="京A12345",
             notifications=[
-                NotificationConfig(
-                    type="apprise", urls=["bark://test_key@api.day.app"]
-                )
+                NotificationConfig(type="apprise", urls=["bark://test_key@api.day.app"])
             ],
         )
 
@@ -731,9 +715,7 @@ class TestUnifiedPusher:
         """测试获取服务状态 - 成功"""
         pusher = UnifiedPusher()
 
-        with patch(
-            "jjz_alert.config.config.config_manager"
-        ) as mock_config:
+        with patch("jjz_alert.config.config.config_manager") as mock_config:
             mock_app_config = Mock()
             mock_app_config.plates = [
                 PlateConfig(
@@ -764,9 +746,7 @@ class TestUnifiedPusher:
         """测试获取服务状态 - Apprise不可用"""
         pusher = UnifiedPusher()
 
-        with patch(
-            "jjz_alert.config.config.config_manager"
-        ) as mock_config:
+        with patch("jjz_alert.config.config.config_manager") as mock_config:
             mock_app_config = Mock()
             mock_app_config.plates = []
             mock_config.load_config.return_value = mock_app_config
@@ -806,9 +786,7 @@ class TestUnifiedPusher:
         plate_config = PlateConfig(
             plate="京A12345",
             notifications=[
-                NotificationConfig(
-                    type="apprise", urls=["bark://test_key@api.day.app"]
-                )
+                NotificationConfig(type="apprise", urls=["bark://test_key@api.day.app"])
             ],
         )
 
@@ -844,15 +822,14 @@ class TestUnifiedPusher:
         pusher = UnifiedPusher()
 
         from jjz_alert.config.config import AppConfig
+
         mock_app_config = AppConfig()
         mock_app_config.plates = []
 
         # 需要patch config.config模块中的config_manager
-        with patch(
-            "jjz_alert.config.config.config_manager"
-        ) as mock_config_manager:
+        with patch("jjz_alert.config.config.config_manager") as mock_config_manager:
             mock_config_manager.load_config.return_value = mock_app_config
-            
+
             # apprise导入成功但初始化失败
             with patch("builtins.__import__") as mock_import:
                 mock_apprise_module = Mock()
@@ -870,24 +847,24 @@ class TestUnifiedPusher:
         pusher = UnifiedPusher()
 
         from jjz_alert.config.config import AppConfig
+
         mock_app_config = AppConfig()
         mock_app_config.plates = []
 
         # 需要patch config.config模块中的config_manager
-        with patch(
-            "jjz_alert.config.config.config_manager"
-        ) as mock_config_manager:
+        with patch("jjz_alert.config.config.config_manager") as mock_config_manager:
             mock_config_manager.load_config.return_value = mock_app_config
-            
+
             with patch("builtins.__import__") as mock_import:
                 mock_apprise_module = Mock()
                 mock_apprise_module.Apprise.return_value = Mock()
                 mock_import.return_value = mock_apprise_module
 
                 # Mock apprise_enabled属性访问时抛出异常
-                with patch.object(pusher, "apprise_enabled", side_effect=Exception("状态检查失败")):
+                with patch.object(
+                    pusher, "apprise_enabled", side_effect=Exception("状态检查失败")
+                ):
                     result = await pusher.get_service_status()
 
                     # 应该捕获异常并设置状态为error
                     assert result["service_details"]["apprise_status"] == "error"
-

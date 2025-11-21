@@ -286,7 +286,10 @@ class TestInitializeTemplatesFromConfig:
         mt.initialize_templates_from_config(DummyConfigManager())
 
         assert custom_manager.get_template("valid_status") == "CUSTOM ${display_name}"
-        assert custom_manager.get_template("expired_status") == "CUSTOM EXPIRED ${display_name}"
+        assert (
+            custom_manager.get_template("expired_status")
+            == "CUSTOM EXPIRED ${display_name}"
+        )
 
     def test_initialize_with_none_config_manager(self, monkeypatch):
         """测试使用None配置管理器（自动创建）"""
@@ -294,6 +297,7 @@ class TestInitializeTemplatesFromConfig:
         monkeypatch.setattr(mt, "template_manager", custom_manager)
 
         with patch("jjz_alert.config.config.config_manager") as mock_cm:
+
             class DummyTemplate(SimpleNamespace):
                 valid_status = "AUTO ${display_name}"
                 expired_status = None
@@ -336,7 +340,10 @@ class TestInitializeTemplatesFromConfig:
         mt.initialize_templates_from_config(DummyConfigManager())
 
         # 模板应该保持不变（使用默认）
-        assert custom_manager.get_template("valid_status") == original_templates["valid_status"]
+        assert (
+            custom_manager.get_template("valid_status")
+            == original_templates["valid_status"]
+        )
 
     def test_initialize_with_exception(self, monkeypatch):
         """测试初始化时发生异常"""
@@ -351,5 +358,7 @@ class TestInitializeTemplatesFromConfig:
         mt.initialize_templates_from_config(DummyConfigManager())
 
         # 异常时应该保持默认模板
-        assert custom_manager.get_template("valid_status") == original_templates["valid_status"]
-
+        assert (
+            custom_manager.get_template("valid_status")
+            == original_templates["valid_status"]
+        )

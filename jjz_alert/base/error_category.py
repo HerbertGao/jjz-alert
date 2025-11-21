@@ -90,4 +90,3 @@ class ErrorCategory:
         """恢复到默认映射（主要用于测试）"""
         cls.SEVERITY_MAPPING = cls.DEFAULT_SEVERITY_MAPPING.copy()
         cls.RECOVERY_MAPPING = cls.DEFAULT_RECOVERY_MAPPING.copy()
-

@@ -393,4 +393,3 @@ class TestParseJJZResponse:
         assert result.plate == plate
         assert result.status == JJZStatusEnum.INVALID.value
         assert "未找到进京证记录" in result.error_message
-

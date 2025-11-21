@@ -145,7 +145,7 @@ class TestFormatJJZPushContent:
     def test_format_jjz_push_content(self, mock_template_manager):
         """测试格式化进京证推送内容"""
         mock_template_manager.format_valid_status.return_value = "测试内容"
-        
+
         result = jjz_utils.format_jjz_push_content(
             display_name="京A12345",
             jjzzlmc="进京证(六环内)",
@@ -156,7 +156,7 @@ class TestFormatJJZPushContent:
             days_remaining=5,
             sycs="8",
         )
-        
+
         assert result == "测试内容"
         mock_template_manager.format_valid_status.assert_called_once()
         call_args = mock_template_manager.format_valid_status.call_args[1]
@@ -172,7 +172,7 @@ class TestFormatJJZPushContent:
     def test_format_jjz_push_content_cross_year(self, mock_template_manager):
         """测试跨年日期格式化"""
         mock_template_manager.format_valid_status.return_value = "测试内容"
-        
+
         jjz_utils.format_jjz_push_content(
             display_name="京A12345",
             jjzzlmc="进京证(六环内)",
@@ -183,7 +183,7 @@ class TestFormatJJZPushContent:
             days_remaining=10,
             sycs="8",
         )
-        
+
         call_args = mock_template_manager.format_valid_status.call_args[1]
         assert call_args["valid_start"] == "2024-12-25"
         assert call_args["valid_end"] == "2025-01-05"
@@ -197,12 +197,12 @@ class TestFormatJJZExpiredContent:
     def test_format_jjz_expired_content(self, mock_template_manager):
         """测试格式化过期推送内容"""
         mock_template_manager.format_expired_status.return_value = "过期内容"
-        
+
         result = jjz_utils.format_jjz_expired_content(
             display_name="京A12345",
             sycs="8",
         )
-        
+
         assert result == "过期内容"
         mock_template_manager.format_expired_status.assert_called_once_with(
             "京A12345", "8"
@@ -217,13 +217,13 @@ class TestFormatJJZPendingContent:
     def test_format_jjz_pending_content(self, mock_template_manager):
         """测试格式化审核中推送内容"""
         mock_template_manager.format_pending_status.return_value = "审核中内容"
-        
+
         result = jjz_utils.format_jjz_pending_content(
             display_name="京A12345",
             jjzzlmc="进京证(六环内)",
             apply_time="2025-08-15 10:00:00",
         )
-        
+
         assert result == "审核中内容"
         mock_template_manager.format_pending_status.assert_called_once()
         call_args = mock_template_manager.format_pending_status.call_args[0]
@@ -240,14 +240,14 @@ class TestFormatJJZErrorContent:
     def test_format_jjz_error_content(self, mock_template_manager):
         """测试格式化错误推送内容"""
         mock_template_manager.format_error_status.return_value = "错误内容"
-        
+
         result = jjz_utils.format_jjz_error_content(
             display_name="京A12345",
             jjzzlmc="进京证(六环内)",
             status="error",
             error_msg="网络连接失败",
         )
-        
+
         assert result == "错误内容"
         mock_template_manager.format_error_status.assert_called_once()
         call_args = mock_template_manager.format_error_status.call_args[0]
@@ -255,4 +255,3 @@ class TestFormatJJZErrorContent:
         assert call_args[1] == "六环内"
         assert call_args[2] == "error"
         assert call_args[3] == "网络连接失败"
-

@@ -82,9 +82,7 @@ def test_log_security_event_sets_error(caplog):
 
 def test_get_level_from_config_reads_custom(monkeypatch):
     dummy_config = _build_config("DEBUG")
-    monkeypatch.setattr(
-        base_logger.config_manager, "load_config", lambda: dummy_config
-    )
+    monkeypatch.setattr(base_logger.config_manager, "load_config", lambda: dummy_config)
 
     level = base_logger._get_level_from_config()
 
@@ -120,7 +118,9 @@ def test_log_structured_with_request_id(caplog):
 
 def test_log_performance_with_extra_data(caplog):
     """测试log_performance包含extra_data"""
-    caplog.set_level(logging.DEBUG)  # 设置为DEBUG级别，因为duration_ms < 1000时使用DEBUG
+    caplog.set_level(
+        logging.DEBUG
+    )  # 设置为DEBUG级别，因为duration_ms < 1000时使用DEBUG
     structured_logger = base_logger.get_structured_logger("jjz-perf")
 
     structured_logger.log_performance(
@@ -168,4 +168,3 @@ def test_log_security_event_with_extra_data(caplog):
     payload = json.loads(record.message.split("STRUCTURED: ")[1])
     assert payload["extra"]["attack_type"] == "sql_injection"
     assert payload["extra"]["blocked"] is True
-

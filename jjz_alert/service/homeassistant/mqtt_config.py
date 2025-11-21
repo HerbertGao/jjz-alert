@@ -19,4 +19,3 @@ class MQTTConfig:
     base_topic: str
     qos: int
     retain: bool
-

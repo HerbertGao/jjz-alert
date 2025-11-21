@@ -162,4 +162,3 @@ class AppConfig:
     global_config: GlobalConfig = field(default_factory=GlobalConfig)
     jjz_accounts: List[JJZAccount] = field(default_factory=list)
     plates: List[PlateConfig] = field(default_factory=list)
-

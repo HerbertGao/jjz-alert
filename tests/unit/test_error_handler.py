@@ -145,6 +145,7 @@ class TestErrorCategory:
 
     def test_register_error(self):
         """测试注册自定义错误类型"""
+
         class CustomError(JJZError):
             pass
 
@@ -166,9 +167,7 @@ class TestErrorCategory:
 
     def test_reset(self):
         """测试重置映射"""
-        ErrorCategory.register_error(
-            ConfigurationError, severity=ErrorSeverity.LOW
-        )
+        ErrorCategory.register_error(ConfigurationError, severity=ErrorSeverity.LOW)
         ErrorCategory.reset()
         error = ConfigurationError("配置错误")
         assert ErrorCategory.get_severity(error) == ErrorSeverity.HIGH
@@ -231,6 +230,7 @@ class TestCircuitBreaker:
         cb.state = "open"
         # 设置失败时间为2秒前，超过timeout，应该进入half_open
         from datetime import timedelta
+
         cb.last_failure_time = datetime.now() - timedelta(seconds=2)
 
         def success_func():
@@ -244,18 +244,87 @@ class TestCircuitBreaker:
     def test_circuit_breaker_should_attempt_reset(self):
         """测试熔断器重置判断"""
         cb = CircuitBreaker(failure_threshold=1, timeout=1)
-        
+
         # last_failure_time为None时应该返回False
         assert cb._should_attempt_reset() is False
-        
+
         # 设置失败时间在timeout内，应该返回False
         cb.last_failure_time = datetime.now()
         assert cb._should_attempt_reset() is False
-        
+
         # 设置失败时间超过timeout，应该返回True
         from datetime import timedelta
+
         cb.last_failure_time = datetime.now() - timedelta(seconds=2)
         assert cb._should_attempt_reset() is True
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_async_success(self):
+        """测试熔断器异步函数成功调用"""
+        cb = CircuitBreaker(failure_threshold=3, timeout=60)
+
+        async def success_func():
+            return "async_success"
+
+        result = await cb.acall(success_func)
+        assert result == "async_success"
+        assert cb.state == "closed"
+        assert cb.failure_count == 0
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_async_failure(self):
+        """测试熔断器异步函数失败处理"""
+        cb = CircuitBreaker(failure_threshold=2, timeout=60)
+
+        async def fail_func():
+            raise Exception("异步失败")
+
+        # 第一次失败
+        try:
+            await cb.acall(fail_func)
+        except Exception:
+            pass
+        assert cb.failure_count == 1
+        assert cb.state == "closed"
+
+        # 第二次失败，触发熔断
+        try:
+            await cb.acall(fail_func)
+        except Exception:
+            pass
+        assert cb.failure_count == 2
+        assert cb.state == "open"
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_async_exception_caught(self):
+        """测试熔断器能正确捕获异步函数的异常"""
+        cb = CircuitBreaker(failure_threshold=1, timeout=60)
+
+        async def fail_func():
+            raise ValueError("测试异常")
+
+        # 验证异常被正确抛出
+        with pytest.raises(ValueError, match="测试异常"):
+            await cb.acall(fail_func)
+
+        # 验证失败计数正确更新
+        assert cb.failure_count == 1
+        assert cb.state == "open"
+
+    def test_circuit_breaker_call_rejects_async_function(self):
+        """测试 call 方法拒绝异步函数，防止误用"""
+        cb = CircuitBreaker(failure_threshold=1, timeout=60)
+
+        async def async_func():
+            return "async_result"
+
+        # 验证使用 call 方法调用异步函数会抛出 TypeError
+        with pytest.raises(TypeError, match="call\\(\\) 方法不支持异步函数"):
+            cb.call(async_func)
+
+        # 验证状态没有被错误地更新
+        assert cb.failure_count == 0
+        assert cb.state == "closed"
 
 
 class TestAutoRecoveryManager:
@@ -498,14 +567,14 @@ class TestAutoRecoveryManager:
     async def test_execute_with_retry_no_exception_caught(self):
         """测试自动恢复失败且未捕获具体异常（触发RetryableError）"""
         from jjz_alert.base.error_exceptions import RetryableError
-        
+
         manager = AutoRecoveryManager()
 
         # 创建一个会在最后一次尝试时不抛出异常的函数
         # 这需要特殊处理，因为正常情况下函数要么成功要么抛出异常
         # 我们可以通过mock来模拟这个场景
         call_count = 0
-        
+
         async def func_with_special_behavior():
             nonlocal call_count
             call_count += 1
@@ -519,7 +588,7 @@ class TestAutoRecoveryManager:
         # 实际上，行93的代码路径很难通过正常流程触发
         # 但我们可以测试RetryableError是否会被正确抛出
         # 让我们直接测试RetryableError的抛出场景
-        
+
         # 更实际的方法：测试一个会导致RetryableError的场景
         # 但由于代码逻辑，这个场景在实际中不太可能发生
         # 我们跳过这个测试，因为它是防御性编程的边界情况
@@ -677,9 +746,7 @@ class TestWithErrorHandling:
         class CriticalError(JJZError):
             pass
 
-        ErrorCategory.register_error(
-            CriticalError, severity=ErrorSeverity.CRITICAL
-        )
+        ErrorCategory.register_error(CriticalError, severity=ErrorSeverity.CRITICAL)
 
         @with_error_handling(
             exceptions=CriticalError, service_name="test_service", default_return=None
@@ -714,6 +781,7 @@ class TestWithErrorHandling:
     @pytest.mark.asyncio
     async def test_with_error_handling_custom_log_level(self):
         """测试自定义日志级别"""
+
         @with_error_handling(
             exceptions=ValueError,
             log_level="debug",
@@ -729,6 +797,7 @@ class TestWithErrorHandling:
     @pytest.mark.asyncio
     async def test_with_error_handling_recovery_without_service_name(self):
         """测试没有服务名时的恢复处理"""
+
         @with_error_handling(
             exceptions=NetworkError,
             enable_recovery=True,
@@ -745,6 +814,7 @@ class TestWithErrorHandling:
     @pytest.mark.asyncio
     async def test_with_error_handling_fallback_error(self):
         """测试备用方案也失败的情况"""
+
         async def fallback_func():
             raise Exception("备用方案失败")
 
@@ -763,6 +833,7 @@ class TestWithErrorHandling:
     @pytest.mark.asyncio
     async def test_with_error_handling_hook_error(self):
         """测试错误钩子执行失败"""
+
         def on_error(error, context):
             raise Exception("钩子失败")
 
@@ -781,6 +852,7 @@ class TestWithErrorHandling:
 
     def test_with_error_handling_sync_with_async_fallback(self):
         """测试同步函数使用异步备用方案"""
+
         async def async_fallback():
             return "async_fallback"
 
@@ -799,6 +871,7 @@ class TestWithErrorHandling:
 
     def test_with_error_handling_sync_with_async_hook(self):
         """测试同步函数使用异步错误钩子"""
+
         async def async_hook(error, context):
             pass
 
@@ -817,6 +890,7 @@ class TestWithErrorHandling:
 
     def test_with_error_handling_sync_critical_error(self):
         """测试同步函数处理关键错误"""
+
         @with_error_handling(
             exceptions=ConfigurationError,
             service_name="test_service",
@@ -866,8 +940,10 @@ class TestWithErrorHandling:
         result = sync_func()
         assert result is None
         # 验证使用了error级别的日志
-        assert any("执行失败" in record.message and record.levelname == "ERROR" 
-                   for record in caplog.records)
+        assert any(
+            "执行失败" in record.message and record.levelname == "ERROR"
+            for record in caplog.records
+        )
         ErrorCategory.reset()
 
     def test_with_error_handling_sync_critical_severity(self, caplog):
@@ -892,8 +968,10 @@ class TestWithErrorHandling:
         result = sync_func()
         assert result is None
         # 验证使用了critical级别的日志
-        assert any("执行失败" in record.message and record.levelname == "CRITICAL" 
-                   for record in caplog.records)
+        assert any(
+            "执行失败" in record.message and record.levelname == "CRITICAL"
+            for record in caplog.records
+        )
         ErrorCategory.reset()
 
     def test_with_error_handling_sync_low_severity(self, caplog):
@@ -918,8 +996,10 @@ class TestWithErrorHandling:
         result = sync_func()
         assert result is None
         # 验证使用了info级别的日志
-        assert any("执行失败" in record.message and record.levelname == "INFO" 
-                   for record in caplog.records)
+        assert any(
+            "执行失败" in record.message and record.levelname == "INFO"
+            for record in caplog.records
+        )
         ErrorCategory.reset()
 
     def test_with_error_handling_sync_with_sync_hook(self):
@@ -945,6 +1025,7 @@ class TestWithErrorHandling:
 
     def test_with_error_handling_sync_with_sync_fallback(self):
         """测试同步函数使用同步备用方案"""
+
         def sync_fallback():
             return "sync_fallback_result"
 
@@ -961,6 +1042,7 @@ class TestWithErrorHandling:
 
     def test_with_error_handling_sync_fallback_error(self, caplog):
         """测试同步函数备用方案执行失败"""
+
         def failing_fallback():
             raise Exception("备用方案失败")
 
@@ -982,6 +1064,7 @@ class TestWithErrorHandling:
 
     def test_with_error_handling_sync_raise_on_error(self):
         """测试同步函数重新抛出异常"""
+
         @with_error_handling(
             exceptions=ValueError,
             raise_on_error=True,
@@ -1003,16 +1086,13 @@ class TestWithErrorHandling:
             raise Exception("通知失败")
 
         monkeypatch.setattr(
-            "jjz_alert.base.error_decorators.handle_critical_error",
-            failing_notify
+            "jjz_alert.base.error_decorators.handle_critical_error", failing_notify
         )
 
         class CriticalError(JJZError):
             pass
 
-        ErrorCategory.register_error(
-            CriticalError, severity=ErrorSeverity.CRITICAL
-        )
+        ErrorCategory.register_error(CriticalError, severity=ErrorSeverity.CRITICAL)
 
         @with_error_handling(
             exceptions=CriticalError,
@@ -1201,9 +1281,7 @@ class TestAdminNotifier:
         """测试通知管理员"""
         notifier = AdminNotifier()
 
-        with patch(
-            "jjz_alert.config.config.config_manager"
-        ) as mock_config, patch(
+        with patch("jjz_alert.config.config.config_manager") as mock_config, patch(
             "jjz_alert.service.notification.unified_pusher.unified_pusher"
         ) as mock_pusher:
             # 模拟配置
@@ -1222,9 +1300,7 @@ class TestAdminNotifier:
         """测试没有配置时不通知"""
         notifier = AdminNotifier()
 
-        with patch(
-            "jjz_alert.config.config.config_manager"
-        ) as mock_config:
+        with patch("jjz_alert.config.config.config_manager") as mock_config:
             mock_config.load_config.return_value.global_config.admin = None
 
             error = ConfigurationError("配置错误")
@@ -1236,9 +1312,7 @@ class TestAdminNotifier:
         """测试没有通知配置时不通知"""
         notifier = AdminNotifier()
 
-        with patch(
-            "jjz_alert.config.config.config_manager"
-        ) as mock_config:
+        with patch("jjz_alert.config.config.config_manager") as mock_config:
             mock_admin_config = Mock()
             mock_admin_config.notifications = []
             mock_config.load_config.return_value.global_config.admin = mock_admin_config
@@ -1253,9 +1327,7 @@ class TestAdminNotifier:
         notifier = AdminNotifier()
         notifier.notification_interval = 3600
 
-        with patch(
-            "jjz_alert.config.config.config_manager"
-        ) as mock_config, patch(
+        with patch("jjz_alert.config.config.config_manager") as mock_config, patch(
             "jjz_alert.service.notification.unified_pusher.unified_pusher"
         ) as mock_pusher:
             mock_admin_config = Mock()
@@ -1281,9 +1353,7 @@ class TestAdminNotifier:
         """测试通知时发生异常"""
         notifier = AdminNotifier()
 
-        with patch(
-            "jjz_alert.config.config.config_manager"
-        ) as mock_config:
+        with patch("jjz_alert.config.config.config_manager") as mock_config:
             mock_config.load_config.side_effect = Exception("配置加载失败")
 
             error = ConfigurationError("配置错误")
@@ -1346,6 +1416,7 @@ class TestRunAsyncSafe:
     @pytest.mark.asyncio
     async def test_run_async_safe_with_running_loop(self):
         """测试在有运行循环时创建任务"""
+
         async def test_coro():
             return "success"
 
@@ -1356,6 +1427,7 @@ class TestRunAsyncSafe:
 
     def test_run_async_safe_without_loop(self):
         """测试在没有运行循环时使用asyncio.run"""
+
         async def test_coro():
             return "success"
 
@@ -1411,4 +1483,3 @@ class TestUtilityFunctions:
             status = get_error_handling_status()
             assert status["status"] == "error"
             assert "error" in status
-

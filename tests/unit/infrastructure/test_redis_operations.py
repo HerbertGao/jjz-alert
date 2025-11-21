@@ -84,7 +84,9 @@ class TestRedisOperations:
         result = await ops.set("key", "value")
 
         assert result is True
-        redis_client.set.assert_awaited_once_with("key", json.dumps("value", ensure_ascii=False))
+        redis_client.set.assert_awaited_once_with(
+            "key", json.dumps("value", ensure_ascii=False)
+        )
 
     @pytest.mark.asyncio
     async def test_set_failure(self, redis_client):
@@ -254,7 +256,9 @@ class TestRedisOperations:
     @pytest.mark.asyncio
     async def test_hget_success(self, redis_client):
         """测试获取哈希字段 - 成功"""
-        redis_client.hget.return_value = json.dumps({"data": "test"}, ensure_ascii=False)
+        redis_client.hget.return_value = json.dumps(
+            {"data": "test"}, ensure_ascii=False
+        )
         ops = RedisOperations(client=redis_client)
 
         result = await ops.hget("hash_key", "field")
@@ -560,7 +564,9 @@ class TestRedisOperations:
         """测试序列化基本类型"""
         ops = RedisOperations(client=redis_client)
 
-        assert ops._serialize_value("string") == json.dumps("string", ensure_ascii=False)
+        assert ops._serialize_value("string") == json.dumps(
+            "string", ensure_ascii=False
+        )
         assert ops._serialize_value(123) == json.dumps(123, ensure_ascii=False)
         assert ops._serialize_value(45.6) == json.dumps(45.6, ensure_ascii=False)
         assert ops._serialize_value(True) == json.dumps(True, ensure_ascii=False)

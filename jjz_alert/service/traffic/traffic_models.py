@@ -53,4 +53,3 @@ class PlateTrafficStatus:
             "rule": self.rule.to_dict() if self.rule else None,
             "error_message": self.error_message,
         }
-

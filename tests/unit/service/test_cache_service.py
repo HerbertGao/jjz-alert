@@ -602,6 +602,7 @@ class TestCacheService:
         with patch("jjz_alert.service.cache.cache_service.datetime") as mock_dt_module:
             # 保留真实的combine和max
             import datetime as real_dt
+
             mock_dt_module.now.return_value = dt(2025, 8, 15, 12, 0, 0)
             mock_dt_module.combine = real_dt.datetime.combine
             mock_dt_module.max = real_dt.datetime.max

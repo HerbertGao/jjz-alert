@@ -82,4 +82,3 @@ class TrafficServiceError(JJZError):
 
     def __init__(self, message: str, details: Dict[str, Any] = None):
         super().__init__(message, "TRAFFIC_SERVICE_ERROR", details)
-

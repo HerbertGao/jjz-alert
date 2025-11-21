@@ -62,4 +62,3 @@ class HAEntityState:
             "attributes": self.attributes,
             "last_updated": self.last_updated.isoformat(),
         }
-

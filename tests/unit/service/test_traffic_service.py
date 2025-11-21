@@ -267,7 +267,9 @@ class TestTrafficService:
             mock_get.return_value = mock_rule
 
             with patch.object(
-                traffic_service, "_is_plate_limited_by_rule", side_effect=ValueError("boom")
+                traffic_service,
+                "_is_plate_limited_by_rule",
+                side_effect=ValueError("boom"),
             ):
                 results = await traffic_service.check_multiple_plates(
                     plates, target_date
@@ -530,7 +532,9 @@ class TestTrafficService:
 
         with patch("jjz_alert.service.traffic.traffic_service.http_get") as mock_get:
             mock_get.return_value = mock_response
-            with patch("jjz_alert.service.traffic.traffic_service.asyncio.sleep") as mock_sleep:
+            with patch(
+                "jjz_alert.service.traffic.traffic_service.asyncio.sleep"
+            ) as mock_sleep:
                 # 由于有错误处理装饰器，异常被捕获并返回默认值[]
                 # 装饰器会重试，所以实际调用次数会更多
                 result = await traffic_service._fetch_rules_from_api()
@@ -548,7 +552,9 @@ class TestTrafficService:
 
         with patch("jjz_alert.service.traffic.traffic_service.http_get") as mock_get:
             mock_get.return_value = mock_response
-            with patch("jjz_alert.service.traffic.traffic_service.asyncio.sleep") as mock_sleep:
+            with patch(
+                "jjz_alert.service.traffic.traffic_service.asyncio.sleep"
+            ) as mock_sleep:
                 # 由于有错误处理装饰器，异常被捕获并返回默认值[]
                 # 装饰器会重试，所以实际调用次数会更多
                 result = await traffic_service._fetch_rules_from_api()
@@ -578,7 +584,9 @@ class TestTrafficService:
 
         with patch("jjz_alert.service.traffic.traffic_service.http_get") as mock_get:
             mock_get.side_effect = [mock_response_fail, mock_response_success]
-            with patch("jjz_alert.service.traffic.traffic_service.asyncio.sleep") as mock_sleep:
+            with patch(
+                "jjz_alert.service.traffic.traffic_service.asyncio.sleep"
+            ) as mock_sleep:
                 with patch.object(traffic_service, "_cache_rules") as mock_cache:
                     mock_cache.return_value = True
 
@@ -619,7 +627,9 @@ class TestTrafficService:
             )
         ]
 
-        traffic_service.cache_service.cache_traffic_rules.side_effect = Exception("Cache error")
+        traffic_service.cache_service.cache_traffic_rules.side_effect = Exception(
+            "Cache error"
+        )
 
         result = await traffic_service._cache_rules(rules)
 
@@ -652,7 +662,9 @@ class TestTrafficService:
         """测试获取限行规则 - 异常处理"""
         target_date = date(2025, 8, 15)
 
-        traffic_service.cache_service.get_traffic_rule.side_effect = Exception("Cache error")
+        traffic_service.cache_service.get_traffic_rule.side_effect = Exception(
+            "Cache error"
+        )
 
         # 由于有错误处理装饰器，异常被捕获并返回默认值None
         result = await traffic_service.get_traffic_rule(target_date, use_cache=False)
@@ -696,7 +708,9 @@ class TestTrafficService:
         )
 
         # 模拟规则对象属性访问异常
-        with patch.object(rule, "limited_numbers", side_effect=Exception("Attribute error")):
+        with patch.object(
+            rule, "limited_numbers", side_effect=Exception("Attribute error")
+        ):
             result = traffic_service._is_plate_limited_by_rule("4", rule)
 
             assert result is False
@@ -720,7 +734,9 @@ class TestTrafficService:
             else:  # 后4天缓存未命中
                 cache_result[target_date] = None
 
-        traffic_service.cache_service.get_traffic_rules_batch.return_value = cache_result
+        traffic_service.cache_service.get_traffic_rules_batch.return_value = (
+            cache_result
+        )
 
         # Mock API返回规则
         mock_rules = []
@@ -754,7 +770,9 @@ class TestTrafficService:
     @pytest.mark.asyncio
     async def test_get_service_status_exception(self, traffic_service):
         """测试获取服务状态 - 异常处理"""
-        traffic_service.cache_service.get_cache_stats.side_effect = Exception("Stats error")
+        traffic_service.cache_service.get_cache_stats.side_effect = Exception(
+            "Stats error"
+        )
 
         status = await traffic_service.get_service_status()
 
@@ -845,11 +863,16 @@ class TestTrafficService:
     def test_update_memory_cache_success(self, traffic_service):
         """测试更新内存缓存 - 成功"""
         import time as time_module
+
         with patch.object(traffic_service, "_fetch_limit_rules_sync") as mock_fetch:
-            mock_fetch.return_value = [{"limitedTime": "2025年08月15日", "limitedNumber": "4和9"}]
+            mock_fetch.return_value = [
+                {"limitedTime": "2025年08月15日", "limitedNumber": "4和9"}
+            ]
             with patch.object(time_module, "time") as mock_time:
                 mock_time.return_value = 1692096000.0
-                with patch.object(time_module, "sleep"):  # Mock sleep to avoid actual delay
+                with patch.object(
+                    time_module, "sleep"
+                ):  # Mock sleep to avoid actual delay
 
                     traffic_service._update_memory_cache()
 
@@ -861,6 +884,7 @@ class TestTrafficService:
     def test_update_memory_cache_failure_retry(self, traffic_service):
         """测试更新内存缓存 - 失败重试"""
         import time as time_module
+
         with patch.object(traffic_service, "_fetch_limit_rules_sync") as mock_fetch:
             mock_fetch.return_value = None  # 返回None表示失败
             with patch.object(time_module, "sleep") as mock_sleep:
@@ -877,6 +901,7 @@ class TestTrafficService:
     def test_update_memory_cache_exception_retry(self, traffic_service):
         """测试更新内存缓存 - 异常重试"""
         import time as time_module
+
         with patch.object(traffic_service, "_fetch_limit_rules_sync") as mock_fetch:
             mock_fetch.side_effect = Exception("Network error")
             with patch.object(time_module, "sleep") as mock_sleep:
@@ -919,7 +944,9 @@ class TestTrafficService:
 
     def test_is_limited_today_memory_no_rule(self, traffic_service):
         """测试使用内存缓存检查限行 - 无今日规则"""
-        traffic_service._memory_cache = [{"limitedTime": "2025年08月16日", "limitedNumber": "4和9"}]
+        traffic_service._memory_cache = [
+            {"limitedTime": "2025年08月16日", "limitedNumber": "4和9"}
+        ]
         traffic_service._memory_cache_date = date(2025, 8, 15)
 
         with patch("jjz_alert.service.traffic.traffic_service.date") as mock_date:
@@ -1014,14 +1041,21 @@ class TestTrafficService:
             }
         }
 
-        traffic_service.cache_service.get_traffic_rules_batch.return_value = cached_rules
+        traffic_service.cache_service.get_traffic_rules_batch.return_value = (
+            cached_rules
+        )
 
-        with patch("jjz_alert.service.traffic.traffic_service.datetime") as mock_datetime:
+        with patch(
+            "jjz_alert.service.traffic.traffic_service.datetime"
+        ) as mock_datetime:
             with patch("jjz_alert.service.traffic.traffic_service.date") as mock_date:
-                mock_datetime.now.return_value = datetime(2025, 8, 15, 20, 0, 0)  # 20:00
+                mock_datetime.now.return_value = datetime(
+                    2025, 8, 15, 20, 0, 0
+                )  # 20:00
                 mock_date.today.return_value = today
                 # 保留真实的fromisoformat方法
                 import datetime as dt_module
+
                 mock_datetime.fromisoformat = dt_module.datetime.fromisoformat
 
                 result = await traffic_service.get_smart_traffic_rules()
@@ -1046,16 +1080,21 @@ class TestTrafficService:
             }
         }
 
-        traffic_service.cache_service.get_traffic_rules_batch.return_value = cached_rules
+        traffic_service.cache_service.get_traffic_rules_batch.return_value = (
+            cached_rules
+        )
 
         # 需要mock方法内部的datetime.now()，因为方法内部有 from datetime import datetime
         with patch("jjz_alert.service.traffic.traffic_service.date") as mock_date:
             mock_date.today.return_value = today
             # 直接patch datetime模块的now方法
             with patch("datetime.datetime") as mock_datetime_class:
-                mock_datetime_class.now.return_value = datetime(2025, 8, 15, 21, 0, 0)  # 21:00
+                mock_datetime_class.now.return_value = datetime(
+                    2025, 8, 15, 21, 0, 0
+                )  # 21:00
                 mock_datetime_class.fromisoformat = datetime.fromisoformat
                 import datetime as dt_module
+
                 mock_datetime_class.timedelta = dt_module.timedelta
 
                 result = await traffic_service.get_smart_traffic_rules()
@@ -1080,16 +1119,21 @@ class TestTrafficService:
             }
         }
 
-        traffic_service.cache_service.get_traffic_rules_batch.return_value = cached_rules
+        traffic_service.cache_service.get_traffic_rules_batch.return_value = (
+            cached_rules
+        )
 
         # 需要mock方法内部的datetime.now()，因为方法内部有 from datetime import datetime
         with patch("jjz_alert.service.traffic.traffic_service.date") as mock_date:
             mock_date.today.return_value = today
             # 直接patch datetime模块的now方法
             with patch("datetime.datetime") as mock_datetime_class:
-                mock_datetime_class.now.return_value = datetime(2025, 8, 15, 20, 30, 0)  # 20:30
+                mock_datetime_class.now.return_value = datetime(
+                    2025, 8, 15, 20, 30, 0
+                )  # 20:30
                 mock_datetime_class.fromisoformat = datetime.fromisoformat
                 import datetime as dt_module
+
                 mock_datetime_class.timedelta = dt_module.timedelta
 
                 result = await traffic_service.get_smart_traffic_rules()
@@ -1105,7 +1149,9 @@ class TestTrafficService:
         today = date(2025, 8, 15)
         cached_rules = {today: None}  # 缓存未命中
 
-        traffic_service.cache_service.get_traffic_rules_batch.return_value = cached_rules
+        traffic_service.cache_service.get_traffic_rules_batch.return_value = (
+            cached_rules
+        )
 
         mock_rule = TrafficRule(
             date=today,
@@ -1114,11 +1160,14 @@ class TestTrafficService:
             is_limited=True,
         )
 
-        with patch("jjz_alert.service.traffic.traffic_service.datetime") as mock_datetime:
+        with patch(
+            "jjz_alert.service.traffic.traffic_service.datetime"
+        ) as mock_datetime:
             with patch("jjz_alert.service.traffic.traffic_service.date") as mock_date:
                 mock_datetime.now.return_value = datetime(2025, 8, 15, 20, 0, 0)
                 mock_date.today.return_value = today
                 import datetime as dt_module
+
                 mock_datetime.fromisoformat = dt_module.datetime.fromisoformat
 
                 with patch.object(traffic_service, "get_traffic_rule") as mock_get:

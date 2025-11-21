@@ -25,7 +25,9 @@ class TestApprisePusher:
     def test_init_apprise_success(self):
         """测试初始化Apprise实例成功"""
         pusher = ApprisePusher()
-        with patch("jjz_alert.service.notification.apprise_pusher.apprise") as mock_apprise:
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
             mock_instance = Mock()
             mock_apprise.Apprise.return_value = mock_instance
 
@@ -37,7 +39,9 @@ class TestApprisePusher:
     def test_init_apprise_failure(self):
         """测试初始化Apprise实例失败"""
         pusher = ApprisePusher()
-        with patch("jjz_alert.service.notification.apprise_pusher.apprise") as mock_apprise:
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
             mock_apprise.Apprise.side_effect = Exception("初始化失败")
 
             result = pusher._init_apprise()
@@ -53,7 +57,9 @@ class TestApprisePusher:
         title = "测试标题"
         body = "测试内容"
 
-        with patch("jjz_alert.service.notification.apprise_pusher.apprise") as mock_apprise:
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
             mock_instance = Mock()
             mock_instance.add.return_value = True
             mock_instance.notify.return_value = True
@@ -80,7 +86,9 @@ class TestApprisePusher:
         title = "测试标题"
         body = "测试内容"
 
-        with patch("jjz_alert.service.notification.apprise_pusher.apprise") as mock_apprise:
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
             mock_instance = Mock()
             mock_instance.add.return_value = False
             mock_apprise.Apprise.return_value = mock_instance
@@ -100,7 +108,9 @@ class TestApprisePusher:
         title = "测试标题"
         body = "测试内容"
 
-        with patch("jjz_alert.service.notification.apprise_pusher.apprise") as mock_apprise:
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
             mock_instance = Mock()
             mock_instance.add.side_effect = [True, False]
             mock_instance.notify.return_value = True
@@ -125,7 +135,9 @@ class TestApprisePusher:
         title = "测试标题"
         body = "测试内容"
 
-        with patch("jjz_alert.service.notification.apprise_pusher.apprise") as mock_apprise:
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
             mock_instance = Mock()
             mock_instance.add.return_value = True
             mock_instance.notify.return_value = False
@@ -149,7 +161,9 @@ class TestApprisePusher:
         title = "测试标题"
         body = "测试内容"
 
-        with patch("jjz_alert.service.notification.apprise_pusher.apprise") as mock_apprise:
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
             mock_apprise.Apprise.side_effect = Exception("网络错误")
 
             result = await pusher.send_notification(urls, title, body)
@@ -297,7 +311,9 @@ class TestApprisePusher:
         pusher = ApprisePusher()
         urls = ["bark://test_key@api.day.app"]
 
-        with patch.object(pusher, "send_notification", side_effect=Exception("测试异常")):
+        with patch.object(
+            pusher, "send_notification", side_effect=Exception("测试异常")
+        ):
             result = await pusher.test_connection(urls)
 
             assert result["success"] is False
@@ -401,4 +417,3 @@ class TestAppriseConfig:
             "https://example.com/webhook", method="POST", timeout=30
         )
         assert "timeout=30" in url
-

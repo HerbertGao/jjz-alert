@@ -90,4 +90,3 @@ class PriorityMapper:
             platform: mapping.value
             for platform, mapping in cls.PRIORITY_MAPPINGS[priority].items()
         }
-

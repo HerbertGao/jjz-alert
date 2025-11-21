@@ -36,7 +36,9 @@ def _patch_session(monkeypatch, outcomes):
             return outcome
 
     monkeypatch.setattr(http, "Session", DummySession)
-    monkeypatch.setattr(http, "time", type("T", (), {"sleep": staticmethod(lambda *a: None)}))
+    monkeypatch.setattr(
+        http, "time", type("T", (), {"sleep": staticmethod(lambda *a: None)})
+    )
     return DummySession
 
 
@@ -107,4 +109,3 @@ def test_http_post_success(monkeypatch):
     )
 
     assert result is expected
-

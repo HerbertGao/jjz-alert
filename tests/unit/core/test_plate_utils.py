@@ -196,4 +196,3 @@ class TestValidatePlateNumber:
         """测试第一个字符无效"""
         assert validate_plate_number("112345") is False  # 数字开头且不是汉字
         assert validate_plate_number("-12345") is False  # 特殊字符开头
-

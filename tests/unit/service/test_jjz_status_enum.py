@@ -41,28 +41,28 @@ class TestJJZStatusEnum:
         # approved -> VALID
         assert JJZStatusEnum.from_string("approved") == JJZStatusEnum.VALID
         assert JJZStatusEnum.from_string("APPROVED") == JJZStatusEnum.VALID
-        
+
         # active -> VALID
         assert JJZStatusEnum.from_string("active") == JJZStatusEnum.VALID
-        
+
         # effective -> VALID
         assert JJZStatusEnum.from_string("effective") == JJZStatusEnum.VALID
-        
+
         # reviewing -> PENDING
         assert JJZStatusEnum.from_string("reviewing") == JJZStatusEnum.PENDING
-        
+
         # auditing -> PENDING
         assert JJZStatusEnum.from_string("auditing") == JJZStatusEnum.PENDING
-        
+
         # rejected -> INVALID
         assert JJZStatusEnum.from_string("rejected") == JJZStatusEnum.INVALID
-        
+
         # denied -> INVALID
         assert JJZStatusEnum.from_string("denied") == JJZStatusEnum.INVALID
-        
+
         # failed -> ERROR
         assert JJZStatusEnum.from_string("failed") == JJZStatusEnum.ERROR
-        
+
         # exception -> ERROR
         assert JJZStatusEnum.from_string("exception") == JJZStatusEnum.ERROR
 
@@ -142,4 +142,3 @@ class TestJJZStatusEnum:
         assert JJZStatusEnum.INVALID.description == "无效"
         assert JJZStatusEnum.ERROR.description == "错误"
         assert JJZStatusEnum.UNKNOWN.description == "未知"
-

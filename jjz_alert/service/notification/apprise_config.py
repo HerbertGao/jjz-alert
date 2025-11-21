@@ -79,4 +79,3 @@ class AppriseConfig:
             param_str = "&".join([f"{k}={v}" for k, v in params.items()])
             webhook_url += f"?{param_str}"
         return webhook_url
-

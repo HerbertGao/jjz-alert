@@ -165,8 +165,10 @@ class ConfigManager:
                     timeout=30,
                     # 设备创建策略（默认值）
                     create_device_per_plate=True,
-                    device_manufacturer="JJZ Alert",
-                    device_model="Beijing Vehicle",
+                    device_manufacturer=ha_data.get(
+                        "device_manufacturer", "进京证提醒"
+                    ),
+                    device_model=ha_data.get("device_model", "jjz_alert"),
                     # MQTT Discovery（可选）
                     mqtt_enabled=ha_data.get("mqtt_enabled", False),
                     mqtt_host=ha_data.get("mqtt_host", "localhost"),
@@ -269,7 +271,7 @@ class ConfigManager:
 
         # 日志级别覆盖
         if os.getenv("LOG_LEVEL"):
-            config.global_config.log_level = os.getenv("LOG_LEVEL").upper()
+            config.global_config.log.level = os.getenv("LOG_LEVEL").upper()
 
 
 # =============================================================================

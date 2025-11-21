@@ -82,4 +82,3 @@ def get_error_handling_status() -> Dict[str, Any]:
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}
-

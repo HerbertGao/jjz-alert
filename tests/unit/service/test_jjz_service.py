@@ -424,7 +424,9 @@ class TestJJZService:
         valid_account = build_account("valid_account")
 
         with patch.object(
-            jjz_service, "_load_accounts", return_value=[token_error_account, valid_account]
+            jjz_service,
+            "_load_accounts",
+            return_value=[token_error_account, valid_account],
         ):
             with patch.object(
                 jjz_service,
@@ -514,7 +516,9 @@ class TestJJZService:
 
         with patch("jjz_alert.service.jjz.jjz_service.http_post") as mock_post:
             mock_post.side_effect = Exception("TLS connect error")
-            with patch("jjz_alert.service.jjz.jjz_service.asyncio.create_task") as mock_task:
+            with patch(
+                "jjz_alert.service.jjz.jjz_service.asyncio.create_task"
+            ) as mock_task:
                 result = jjz_service._check_jjz_status(url, token)
 
                 assert "error" in result
@@ -529,7 +533,9 @@ class TestJJZService:
 
         with patch("jjz_alert.service.jjz.jjz_service.http_post") as mock_post:
             mock_post.side_effect = Exception("Connection timeout")
-            with patch("jjz_alert.service.jjz.jjz_service.asyncio.create_task") as mock_task:
+            with patch(
+                "jjz_alert.service.jjz.jjz_service.asyncio.create_task"
+            ) as mock_task:
                 result = jjz_service._check_jjz_status(url, token)
 
                 assert "error" in result
@@ -543,7 +549,9 @@ class TestJJZService:
 
         with patch("jjz_alert.service.jjz.jjz_service.http_post") as mock_post:
             mock_post.side_effect = Exception("HTTP POST请求失败")
-            with patch("jjz_alert.service.jjz.jjz_service.asyncio.create_task") as mock_task:
+            with patch(
+                "jjz_alert.service.jjz.jjz_service.asyncio.create_task"
+            ) as mock_task:
                 result = jjz_service._check_jjz_status(url, token)
 
                 assert "error" in result
@@ -559,7 +567,9 @@ class TestJJZService:
             mock_post.side_effect = Exception(
                 "Session.request() got an unexpected keyword argument"
             )
-            with patch("jjz_alert.service.jjz.jjz_service.asyncio.create_task") as mock_task:
+            with patch(
+                "jjz_alert.service.jjz.jjz_service.asyncio.create_task"
+            ) as mock_task:
                 result = jjz_service._check_jjz_status(url, token)
 
                 assert "error" in result
@@ -774,7 +784,9 @@ class TestJJZService:
             assert results["京B67890"].status == "error"
 
     @pytest.mark.asyncio
-    async def test_get_multiple_status_optimized_no_match(self, jjz_service, sample_jjz_account):
+    async def test_get_multiple_status_optimized_no_match(
+        self, jjz_service, sample_jjz_account
+    ):
         """测试优化的批量获取状态 - 无匹配记录"""
         plates = ["京C99999"]
 
@@ -812,7 +824,9 @@ class TestJJZService:
                     assert "未找到匹配车牌的记录" in results["京C99999"].error_message
 
     @pytest.mark.asyncio
-    async def test_get_multiple_status_optimized_account_error(self, jjz_service, sample_jjz_account):
+    async def test_get_multiple_status_optimized_account_error(
+        self, jjz_service, sample_jjz_account
+    ):
         """测试优化的批量获取状态 - 账户返回错误"""
         plates = ["京A12345"]
 
@@ -859,7 +873,9 @@ class TestJJZService:
                     assert results["京A12345"].status == JJZStatusEnum.VALID.value
 
     @pytest.mark.asyncio
-    async def test_get_multiple_status_optimized_account_exception(self, jjz_service, sample_jjz_account):
+    async def test_get_multiple_status_optimized_account_exception(
+        self, jjz_service, sample_jjz_account
+    ):
         """测试优化的批量获取状态 - 账户查询抛出异常"""
         plates = ["京A12345"]
 
@@ -967,9 +983,7 @@ class TestJJZService:
     @pytest.mark.asyncio
     async def test_get_cached_plates_exception(self, jjz_service):
         """测试获取缓存车牌 - 异常处理"""
-        jjz_service.cache_service.get_all_jjz_plates.side_effect = Exception(
-            "获取失败"
-        )
+        jjz_service.cache_service.get_all_jjz_plates.side_effect = Exception("获取失败")
 
         result = await jjz_service.get_cached_plates()
 
@@ -978,9 +992,7 @@ class TestJJZService:
     @pytest.mark.asyncio
     async def test_check_expiring_permits_exception(self, jjz_service):
         """测试检查即将过期的进京证 - 异常处理"""
-        jjz_service.cache_service.get_all_jjz_plates.side_effect = Exception(
-            "获取失败"
-        )
+        jjz_service.cache_service.get_all_jjz_plates.side_effect = Exception("获取失败")
 
         result = await jjz_service.check_expiring_permits()
 

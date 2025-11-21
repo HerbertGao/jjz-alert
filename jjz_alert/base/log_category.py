@@ -14,4 +14,3 @@ class LogCategory(Enum):
     SECURITY = "security"  # 安全相关日志
     API = "api"  # API调用日志
     ERROR = "error"  # 错误日志
-

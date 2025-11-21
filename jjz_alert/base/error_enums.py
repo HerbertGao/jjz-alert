@@ -22,4 +22,3 @@ class RecoveryStrategy(Enum):
     FALLBACK = "fallback"  # 使用备用方案
     CIRCUIT_BREAKER = "circuit_breaker"  # 熔断
     GRACEFUL_DEGRADATION = "graceful_degradation"  # 优雅降级
-

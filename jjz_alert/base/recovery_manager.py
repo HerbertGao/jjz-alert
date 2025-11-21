@@ -50,14 +50,21 @@ class AutoRecoveryManager:
             entry["failures"] += 1
         entry["last_strategy"] = strategy.value
 
-    def _merge_retry_config(self, retry_config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _merge_retry_config(
+        self, retry_config: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         merged = self.default_retry_config.copy()
         if retry_config:
             merged.update(
                 {
-                    "max_attempts": max(1, retry_config.get("max_attempts", merged["max_attempts"])),
+                    "max_attempts": max(
+                        1, retry_config.get("max_attempts", merged["max_attempts"])
+                    ),
                     "delay": max(0.0, retry_config.get("delay", merged["delay"])),
-                    "backoff_factor": max(1.0, retry_config.get("backoff_factor", merged["backoff_factor"])),
+                    "backoff_factor": max(
+                        1.0,
+                        retry_config.get("backoff_factor", merged["backoff_factor"]),
+                    ),
                 }
             )
         return merged
@@ -112,9 +119,8 @@ class AutoRecoveryManager:
         try:
             if recovery_strategy == RecoveryStrategy.CIRCUIT_BREAKER:
                 circuit_breaker = self.get_circuit_breaker(service_name)
-                result = circuit_breaker.call(func, *args, **kwargs)
-                if asyncio.iscoroutine(result):
-                    result = await result
+                # 使用 acall 方法正确处理异步函数，确保异常能被正确捕获
+                result = await circuit_breaker.acall(func, *args, **kwargs)
                 self._record_attempt(service_name, recovery_strategy, True)
                 return result
 
@@ -125,9 +131,7 @@ class AutoRecoveryManager:
                 return result
 
             if recovery_strategy == RecoveryStrategy.FALLBACK and fallback_func:
-                logging.warning(
-                    f"服务 {service_name} 失败，使用备用方案: {error}"
-                )
+                logging.warning(f"服务 {service_name} 失败，使用备用方案: {error}")
                 self._record_attempt(service_name, recovery_strategy, True)
                 if asyncio.iscoroutinefunction(fallback_func):
                     return await fallback_func(*args, **kwargs)
