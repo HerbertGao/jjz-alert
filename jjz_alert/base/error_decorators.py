@@ -219,11 +219,13 @@ def with_retry(
     重试装饰器
 
     Args:
-        max_attempts: 最大重试次数
+        max_attempts: 最大重试次数（至少为1）
         delay: 初始延迟秒数
         backoff_factor: 延迟增长因子
         exceptions: 需要重试的异常类型
     """
+    # 确保 max_attempts 至少为 1
+    validated_max_attempts = max(1, max_attempts)
 
     def decorator(func):
         @wraps(func)
@@ -231,12 +233,12 @@ def with_retry(
             last_exception = None
             current_delay = delay
 
-            for attempt in range(max_attempts):
+            for attempt in range(validated_max_attempts):
                 try:
                     return await func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    if attempt < max_attempts - 1:
+                    if attempt < validated_max_attempts - 1:
                         logging.warning(
                             f"{func.__name__} 第{attempt + 1}次尝试失败: {e}, "
                             f"{current_delay}秒后重试"
@@ -244,7 +246,7 @@ def with_retry(
                         await asyncio.sleep(current_delay)
                         current_delay *= backoff_factor
                     else:
-                        logging.error(f"{func.__name__} 重试{max_attempts}次后仍然失败")
+                        logging.error(f"{func.__name__} 重试{validated_max_attempts}次后仍然失败")
                 except Exception as e:
                     # 非可重试异常直接抛出
                     raise
@@ -257,12 +259,12 @@ def with_retry(
             last_exception = None
             current_delay = delay
 
-            for attempt in range(max_attempts):
+            for attempt in range(validated_max_attempts):
                 try:
                     return func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    if attempt < max_attempts - 1:
+                    if attempt < validated_max_attempts - 1:
                         logging.warning(
                             f"{func.__name__} 第{attempt + 1}次尝试失败: {e}, "
                             f"{current_delay}秒后重试"
@@ -272,7 +274,7 @@ def with_retry(
                         time.sleep(current_delay)
                         current_delay *= backoff_factor
                     else:
-                        logging.error(f"{func.__name__} 重试{max_attempts}次后仍然失败")
+                        logging.error(f"{func.__name__} 重试{validated_max_attempts}次后仍然失败")
                 except Exception as e:
                     # 非可重试异常直接抛出
                     raise

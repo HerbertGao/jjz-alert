@@ -88,7 +88,11 @@ class HAPlateDevice:
         safe_remainder = re.sub(r"[^a-z0-9_]", "_", plate_remainder.lower())
 
         # 构建实体ID：前缀_省份_车牌号剩余部分（全部小写）
-        entity_id = f"sensor.{safe_prefix}_{province_pinyin}_{safe_remainder}"
+        # 如果 province_pinyin 为空，则跳过以避免双下划线
+        if province_pinyin:
+            entity_id = f"sensor.{safe_prefix}_{province_pinyin}_{safe_remainder}"
+        else:
+            entity_id = f"sensor.{safe_prefix}_{safe_remainder}"
 
         # 状态值：优先显示进京证状态，如果进京证有效则显示限行状态
         if self.jjz_status == JJZStatusEnum.VALID.value:
