@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-JJZ-Alert v2.0 CLI工具
+JJZ-Alert CLI工具
 
-提供配置迁移、推送测试等功能
+提供配置验证、推送测试、HA辅助等功能
 """
 
 import argparse
@@ -12,59 +12,23 @@ import sys
 
 # 设置基本日志
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
 def setup_path():
     """设置模块路径"""
     import os
+
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 setup_path()
 
-from config.migration import ConfigMigration
-from config.validation import ConfigValidator
-from config import config_manager
-from service.notification.adapter import notification_adapter
-from service.homeassistant import ha_sync_service
-
-
-async def cmd_migrate(args):
-    """配置迁移命令"""
-    print(f"🔄 开始迁移配置文件: {args.config}")
-
-    migration = ConfigMigration(args.config)
-
-    # 检查是否需要迁移
-    if not migration.need_migration():
-        print("✅ 配置文件已是v2.0格式，无需迁移")
-        return
-
-    # 显示迁移信息
-    info = migration.get_migration_info()
-    print(f"📋 迁移信息:")
-    print(f"   配置文件: {info['config_file']}")
-    print(f"   备份文件: {info['backup_file']}")
-    print(f"   需要迁移: {info['need_migration']}")
-
-    if not args.force:
-        confirm = input("🤔 确认执行迁移? (y/N): ")
-        if confirm.lower() != 'y':
-            print("❌ 迁移已取消")
-            return
-
-    # 执行迁移
-    success = migration.migrate(backup=not args.no_backup)
-
-    if success:
-        print("✅ 配置迁移成功!")
-        if not args.no_backup:
-            print(f"📦 原配置已备份到: {migration.backup_file}")
-    else:
-        print("❌ 配置迁移失败")
+from jjz_alert.config.validation import ConfigValidator
+from jjz_alert.config import config_manager
+from jjz_alert.service.notification.adapter import notification_adapter
+from jjz_alert.service.homeassistant import ha_sync_service
 
 
 async def cmd_validate(args):
@@ -88,17 +52,17 @@ async def cmd_validate(args):
         print(f"   错误数: {summary['error_count']}")
         print(f"   警告数: {summary['warning_count']}")
 
-        if summary['errors']:
+        if summary["errors"]:
             print(f"\n❌ 错误列表:")
-            for error in summary['errors']:
+            for error in summary["errors"]:
                 print(f"   - {error}")
 
-        if summary['warnings']:
+        if summary["warnings"]:
             print(f"\n⚠️ 警告列表:")
-            for warning in summary['warnings']:
+            for warning in summary["warnings"]:
                 print(f"   - {warning}")
 
-        if summary['valid']:
+        if summary["valid"]:
             print(f"\n✅ 配置文件验证通过!")
         else:
             print(f"\n❌ 配置文件验证失败，请修复上述错误")
@@ -123,12 +87,16 @@ async def cmd_test_push(args):
 
             print(f"📊 测试结果:")
             print(f"   车牌: {result.get('plate', 'unknown')}")
-            print(f"   成功: {'✅ 是' if result.get('success_count', 0) > 0 else '❌ 否'}")
-            print(f"   推送数: {result.get('success_count', 0)}/{result.get('total_count', 0)}")
+            print(
+                f"   成功: {'✅ 是' if result.get('success_count', 0) > 0 else '❌ 否'}"
+            )
+            print(
+                f"   推送数: {result.get('success_count', 0)}/{result.get('total_count', 0)}"
+            )
 
-            if result.get('errors'):
+            if result.get("errors"):
                 print(f"\n❌ 错误信息:")
-                for error in result['errors']:
+                for error in result["errors"]:
                     print(f"   - {error}")
         else:
             # 测试所有车牌
@@ -141,14 +109,16 @@ async def cmd_test_push(args):
             print(f"   无效配置: {result.get('invalid_plates', 0)}")
             print(f"   整体有效: {'✅ 是' if result.get('valid', False) else '❌ 否'}")
 
-            if args.verbose and result.get('results'):
+            if args.verbose and result.get("results"):
                 print(f"\n📋 详细结果:")
-                for plate_result in result['results']:
-                    status = '✅' if plate_result.get('valid', False) else '❌'
+                for plate_result in result["results"]:
+                    status = "✅" if plate_result.get("valid", False) else "❌"
                     print(f"   {status} {plate_result.get('plate', 'unknown')}")
 
-                    if not plate_result.get('valid', False) and plate_result.get('errors'):
-                        for error in plate_result['errors']:
+                    if not plate_result.get("valid", False) and plate_result.get(
+                        "errors"
+                    ):
+                        for error in plate_result["errors"]:
                             print(f"      - {error}")
 
     except Exception as e:
@@ -157,7 +127,7 @@ async def cmd_test_push(args):
 
 async def cmd_status(args):
     """状态查看命令"""
-    print(f"📊 JJZ-Alert v2.0 状态信息")
+    print(f"📊 JJZ-Alert 状态信息")
 
     try:
         # 加载配置
@@ -168,9 +138,9 @@ async def cmd_status(args):
         status = notification_adapter.get_notification_status()
 
         print(f"\n🔧 推送服务状态:")
-        service_status = status.get('service_status', {})
+        service_status = status.get("service_status", {})
         print(f"\n📋 配置统计:")
-        config_info = status.get('configuration', {})
+        config_info = status.get("configuration", {})
         print(f"   车牌数量: {config_info.get('total_plates', 0)}")
 
         print(f"   Apprise通道: {config_info.get('apprise_channels', 0)}")
@@ -178,7 +148,7 @@ async def cmd_status(args):
 
         if args.verbose:
             print(f"\n🛠️ 支持的Apprise服务:")
-            supported_services = service_status.get('supported_apprise_services', [])
+            supported_services = service_status.get("supported_apprise_services", [])
             for service in supported_services[:10]:  # 显示前10个
                 print(f"   - {service}")
             if len(supported_services) > 10:
@@ -188,22 +158,26 @@ async def cmd_status(args):
         print(f"\n🏠 Home Assistant状态:")
         try:
             ha_status = await ha_sync_service.get_sync_status()
-            if ha_status.get('enabled'):
-                connection_status = ha_status.get('connection_status', {})
-                if connection_status.get('success'):
+            if ha_status.get("enabled"):
+                connection_status = ha_status.get("connection_status", {})
+                if connection_status.get("success"):
                     print(f"   状态: ✅ 已连接")
                     print(f"   版本: {connection_status.get('version', 'unknown')}")
                 else:
                     print(f"   状态: ❌ 连接失败")
                     print(f"   错误: {connection_status.get('error', 'unknown')}")
 
-                config_info = ha_status.get('config', {})
+                config_info = ha_status.get("config", {})
                 print(f"   URL: {config_info.get('url')}")
                 print(f"   实体前缀: {config_info.get('entity_prefix')}")
-                print(f"   查询后同步: {'✅' if config_info.get('sync_after_query') else '❌'}")
-                print(f"   车牌设备模式: {'✅' if config_info.get('create_device_per_plate') else '❌'}")
+                print(
+                    f"   查询后同步: {'✅' if config_info.get('sync_after_query') else '❌'}"
+                )
+                print(
+                    f"   车牌设备模式: {'✅' if config_info.get('create_device_per_plate') else '❌'}"
+                )
 
-                last_sync = ha_status.get('last_sync_time')
+                last_sync = ha_status.get("last_sync_time")
                 if last_sync:
                     print(f"   最后同步: {last_sync}")
                 else:
@@ -227,7 +201,7 @@ async def cmd_ha_test(args):
 
         result = await ha_sync_service.test_connection()
 
-        if result['success']:
+        if result["success"]:
             print(f"✅ 连接成功!")
             print(f"   版本: {result.get('version', 'unknown')}")
             print(f"   消息: {result.get('message', '')}")
@@ -248,7 +222,8 @@ async def cmd_ha_sync(args):
         config_manager._config = None  # 重置缓存
 
         # 检查HA是否启用
-        from config import get_homeassistant_config
+        from jjz_alert.config import get_homeassistant_config
+
         ha_config = get_homeassistant_config()
 
         if not ha_config.enabled:
@@ -256,12 +231,12 @@ async def cmd_ha_sync(args):
             return
 
         # 模拟主流程数据获取（简化版）
-        from service.jjz.jjz_service import jjz_service
-        from service.traffic.traffic_service import traffic_service
-        from config import get_plates_v2
+        from jjz_alert.service.jjz.jjz_service import jjz_service
+        from jjz_alert.service.traffic.traffic_service import traffic_service
+        from jjz_alert.config import get_plates
 
         print("📊 获取车牌数据...")
-        plates_config = get_plates_v2()
+        plates_config = get_plates()
 
         if not plates_config:
             print("❌ 未配置任何车牌")
@@ -293,31 +268,35 @@ async def cmd_ha_sync(args):
         print(f"🔄 同步 {len(jjz_results)} 个车牌数据到Home Assistant...")
 
         # 执行同步
-        result = await ha_sync_service.sync_from_query_results(jjz_results, traffic_results)
+        result = await ha_sync_service.sync_from_query_results(
+            jjz_results, traffic_results
+        )
 
         # 显示结果
-        success_count = result.get('success_plates', 0)
-        total_count = result.get('total_plates', 0)
-        success_rate = result.get('success_rate', 0)
+        success_count = result.get("success_plates", 0)
+        total_count = result.get("total_plates", 0)
+        success_rate = result.get("success_rate", 0)
 
         if success_count > 0:
-            print(f"✅ 同步完成: {success_count}/{total_count} 车牌成功 ({success_rate}%)")
+            print(
+                f"✅ 同步完成: {success_count}/{total_count} 车牌成功 ({success_rate}%)"
+            )
 
             if args.verbose:
                 print(f"\n📋 详细结果:")
-                for plate_result in result.get('plate_results', []):
-                    plate = plate_result.get('plate_number')
-                    success = plate_result.get('success')
-                    entity_count = plate_result.get('entity_count', 0)
+                for plate_result in result.get("plate_results", []):
+                    plate = plate_result.get("plate_number")
+                    success = plate_result.get("success")
+                    entity_count = plate_result.get("entity_count", 0)
 
                     status_icon = "✅" if success else "❌"
                     print(f"   {status_icon} {plate}: {entity_count} 个实体")
 
-                    if not success and plate_result.get('error'):
+                    if not success and plate_result.get("error"):
                         print(f"      错误: {plate_result['error']}")
         else:
             print(f"❌ 同步失败")
-            for error in result.get('errors', []):
+            for error in result.get("errors", []):
                 print(f"   错误: {error}")
 
     except Exception as e:
@@ -334,23 +313,23 @@ async def cmd_ha_cleanup(args):
 
         if not args.force:
             confirm = input("⚠️ 这将删除不在当前配置中的HA实体，确认继续? (y/N): ")
-            if confirm.lower() != 'y':
+            if confirm.lower() != "y":
                 print("❌ 取消操作")
                 return
 
         result = await ha_sync_service.cleanup_stale_entities()
 
-        if result['success']:
-            deleted_count = result.get('deleted_count', 0)
-            total_found = result.get('total_found', 0)
+        if result["success"]:
+            deleted_count = result.get("deleted_count", 0)
+            total_found = result.get("total_found", 0)
 
             print(f"✅ 清理完成!")
             print(f"   发现实体: {total_found} 个")
             print(f"   删除实体: {deleted_count} 个")
 
-            if result.get('errors'):
+            if result.get("errors"):
                 print(f"⚠️ 部分删除失败:")
-                for error in result['errors'][:5]:  # 只显示前5个错误
+                for error in result["errors"][:5]:  # 只显示前5个错误
                     print(f"   - {error}")
         else:
             print(f"❌ 清理失败: {result.get('error')}")
@@ -362,13 +341,10 @@ async def cmd_ha_cleanup(args):
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(
-        description="JJZ-Alert v2.0 CLI工具",
+        description="JJZ-Alert CLI工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
-  # 迁移配置文件
-  python cli_tools.py migrate
-  
   # 验证配置文件
   python cli_tools.py validate
   
@@ -385,51 +361,42 @@ def main():
   python cli_tools.py ha test          # 测试HA连接
   python cli_tools.py ha sync -v       # 手动同步数据到HA
   python cli_tools.py ha cleanup       # 清理HA过期实体
-        """
+        """,
     )
 
     parser.add_argument(
-        '--config', '-c',
-        default='config.yaml',
-        help='配置文件路径 (默认: config.yaml)'
+        "--config", "-c", default="config.yaml", help="配置文件路径 (默认: config.yaml)"
     )
 
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='显示详细信息'
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="显示详细信息")
 
-    subparsers = parser.add_subparsers(dest='command', help='可用命令')
-
-    # 迁移命令
-    migrate_parser = subparsers.add_parser('migrate', help='迁移v1.x配置到v2.0')
-    migrate_parser.add_argument('--force', action='store_true', help='强制执行，不询问确认')
-    migrate_parser.add_argument('--no-backup', action='store_true', help='不创建备份文件')
+    subparsers = parser.add_subparsers(dest="command", help="可用命令")
 
     # 验证命令
-    validate_parser = subparsers.add_parser('validate', help='验证配置文件')
+    validate_parser = subparsers.add_parser("validate", help="验证配置文件")
 
     # 推送测试命令
-    test_parser = subparsers.add_parser('test-push', help='测试推送功能')
-    test_parser.add_argument('--plate', help='指定要测试的车牌号')
+    test_parser = subparsers.add_parser("test-push", help="测试推送功能")
+    test_parser.add_argument("--plate", help="指定要测试的车牌号")
 
     # 状态查看命令
-    status_parser = subparsers.add_parser('status', help='查看系统状态')
+    status_parser = subparsers.add_parser("status", help="查看系统状态")
 
     # Home Assistant相关命令
-    ha_parser = subparsers.add_parser('ha', help='Home Assistant相关操作')
-    ha_subparsers = ha_parser.add_subparsers(dest='ha_command', help='HA子命令')
+    ha_parser = subparsers.add_parser("ha", help="Home Assistant相关操作")
+    ha_subparsers = ha_parser.add_subparsers(dest="ha_command", help="HA子命令")
 
     # HA连接测试
-    ha_test_parser = ha_subparsers.add_parser('test', help='测试HA连接')
+    ha_test_parser = ha_subparsers.add_parser("test", help="测试HA连接")
 
     # HA手动同步
-    ha_sync_parser = ha_subparsers.add_parser('sync', help='手动同步数据到HA')
+    ha_sync_parser = ha_subparsers.add_parser("sync", help="手动同步数据到HA")
 
     # HA实体清理
-    ha_cleanup_parser = ha_subparsers.add_parser('cleanup', help='清理HA过期实体')
-    ha_cleanup_parser.add_argument('--force', action='store_true', help='强制执行，不询问确认')
+    ha_cleanup_parser = ha_subparsers.add_parser("cleanup", help="清理HA过期实体")
+    ha_cleanup_parser.add_argument(
+        "--force", action="store_true", help="强制执行，不询问确认"
+    )
 
     args = parser.parse_args()
 
@@ -442,20 +409,18 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     # 执行命令
-    if args.command == 'migrate':
-        asyncio.run(cmd_migrate(args))
-    elif args.command == 'validate':
+    if args.command == "validate":
         asyncio.run(cmd_validate(args))
-    elif args.command == 'test-push':
+    elif args.command == "test-push":
         asyncio.run(cmd_test_push(args))
-    elif args.command == 'status':
+    elif args.command == "status":
         asyncio.run(cmd_status(args))
-    elif args.command == 'ha':
-        if args.ha_command == 'test':
+    elif args.command == "ha":
+        if args.ha_command == "test":
             asyncio.run(cmd_ha_test(args))
-        elif args.ha_command == 'sync':
+        elif args.ha_command == "sync":
             asyncio.run(cmd_ha_sync(args))
-        elif args.ha_command == 'cleanup':
+        elif args.ha_command == "cleanup":
             asyncio.run(cmd_ha_cleanup(args))
         else:
             print(f"❌ 未知HA命令: {args.ha_command}")
@@ -465,5 +430,5 @@ def main():
         parser.print_help()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

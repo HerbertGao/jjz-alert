@@ -1,5 +1,5 @@
 # 初始化日志（需在其他自定义模块之前导入）
-import utils.logger
+import jjz_alert.base.logger
 
 """
 RESTful API for querying JJZ status for a single plate and pushing notification.
@@ -22,8 +22,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from config.config_v2 import config_manager
-from utils.logger import get_structured_logger
+from jjz_alert.config.config import config_manager
+from jjz_alert.base.logger import get_structured_logger
 
 
 @asynccontextmanager
@@ -34,32 +34,35 @@ async def lifespan(app: FastAPI):
     yield
     # 关闭时执行
     logging.info("开始清理应用资源...")
-    
+
     try:
         # 关闭 MQTT 连接
-        from service.homeassistant.ha_mqtt import ha_mqtt_publisher
+        from jjz_alert.service.homeassistant.ha_mqtt import ha_mqtt_publisher
+
         if ha_mqtt_publisher.enabled():
             await ha_mqtt_publisher.close()
             logging.info("MQTT 连接已关闭")
     except Exception as e:
         logging.error(f"关闭 MQTT 连接时出错: {e}")
-    
+
     try:
         # 关闭 Redis 连接
-        from config.redis.connection import close_redis
+        from jjz_alert.config.redis.connection import close_redis
+
         await close_redis()
         logging.info("Redis 连接已关闭")
     except Exception as e:
         logging.error(f"关闭 Redis 连接时出错: {e}")
-    
+
     try:
         # 关闭 Home Assistant 客户端
-        from service.homeassistant.ha_client import close_ha_client
+        from jjz_alert.service.homeassistant.ha_client import close_ha_client
+
         await close_ha_client()
         logging.info("Home Assistant 客户端已关闭")
     except Exception as e:
         logging.error(f"关闭 Home Assistant 客户端时出错: {e}")
-    
+
     logging.info("应用资源清理完成")
 
 
@@ -89,15 +92,17 @@ async def log_requests(request: Request, call_next):
             extra_data={
                 "query_params": dict(request.query_params),
                 "user_agent": request.headers.get("user-agent"),
-                "client_ip": request.client.host if request.client else None
-            }
+                "client_ip": request.client.host if request.client else None,
+            },
         )
 
     return response
 
 
 class QueryRequest(BaseModel):
-    plates: List[str] = Field(..., min_items=1, description="车牌号列表，如 [\"京A12345\", \"津B67890\"]")
+    plates: List[str] = Field(
+        ..., min_items=1, description='车牌号列表，如 ["京A12345", "津B67890"]'
+    )
 
 
 @app.get("/health")
@@ -123,30 +128,34 @@ async def health() -> Dict[str, Any]:
                 "status": config_status,
                 "accounts_count": len(app_config.jjz_accounts),
                 "plates_count": len(app_config.plates),
-                "admin_notifications": len(app_config.global_config.admin.notifications)
+                "admin_notifications": len(
+                    app_config.global_config.admin.notifications
+                ),
             },
-            "services": {}
+            "services": {},
         }
 
         # 检查Redis连接
         try:
-            from config.redis.connection import redis_manager
+            from jjz_alert.config.redis.connection import redis_manager
+
             redis_health = await redis_manager.health_check()
             health_data["services"]["redis"] = {
                 "status": redis_health.get("status", "unknown"),
                 "ping_ms": redis_health.get("ping_ms", -1),
-                "connected": redis_health.get("status") == "healthy"
+                "connected": redis_health.get("status") == "healthy",
             }
         except Exception as e:
             health_data["services"]["redis"] = {
                 "status": "error",
                 "error": str(e),
-                "connected": False
+                "connected": False,
             }
 
         # 检查缓存服务
         try:
-            from service.cache.cache_service import CacheService
+            from jjz_alert.service.cache.cache_service import CacheService
+
             cache_service = CacheService()
             cache_info = await cache_service.get_cache_info()
             cache_stats = await cache_service.get_cache_stats(days=1)
@@ -156,71 +165,70 @@ async def health() -> Dict[str, Any]:
                 "total_keys": cache_info.get("key_counts", {}).get("total", 0),
                 "jjz_keys": cache_info.get("key_counts", {}).get("jjz", 0),
                 "traffic_keys": cache_info.get("key_counts", {}).get("traffic", 0),
-                "hit_rate": cache_stats.get("overall", {}).get("hit_rate", 0)
+                "hit_rate": cache_stats.get("overall", {}).get("hit_rate", 0),
             }
         except Exception as e:
-            health_data["services"]["cache"] = {
-                "status": "error",
-                "error": str(e)
-            }
+            health_data["services"]["cache"] = {"status": "error", "error": str(e)}
 
         # 检查JJZ服务
         try:
-            from service.jjz.jjz_service import jjz_service
+            from jjz_alert.service.jjz.jjz_service import jjz_service
+
             jjz_status = await jjz_service.get_service_status()
             health_data["services"]["jjz"] = {
                 "status": jjz_status.get("status", "unknown"),
                 "cached_plates": jjz_status.get("cached_plates_count", 0),
-                "accounts_count": jjz_status.get("accounts_count", 0)
+                "accounts_count": jjz_status.get("accounts_count", 0),
             }
         except Exception as e:
-            health_data["services"]["jjz"] = {
-                "status": "error",
-                "error": str(e)
-            }
+            health_data["services"]["jjz"] = {"status": "error", "error": str(e)}
 
         # 检查推送服务
         try:
-            from service.notification.unified_pusher import unified_pusher
+            from jjz_alert.service.notification.unified_pusher import unified_pusher
+
             push_status = await unified_pusher.get_service_status()
             health_data["services"]["notification"] = {
                 "status": push_status.get("status", "unknown"),
-                "apprise_enabled": push_status.get("service_details", {}).get("apprise_enabled", False),
-                "apprise_available": push_status.get("service_details", {}).get("apprise_available", False)
+                "apprise_enabled": push_status.get("service_details", {}).get(
+                    "apprise_enabled", False
+                ),
+                "apprise_available": push_status.get("service_details", {}).get(
+                    "apprise_available", False
+                ),
             }
         except Exception as e:
             health_data["services"]["notification"] = {
                 "status": "error",
-                "error": str(e)
+                "error": str(e),
             }
 
         # 检查Home Assistant集成
         try:
-            from service.homeassistant.ha_sync import get_ha_service_status
+            from jjz_alert.service.homeassistant.ha_sync import get_ha_service_status
+
             ha_status = await get_ha_service_status()
             health_data["services"]["homeassistant"] = ha_status
         except Exception as e:
             health_data["services"]["homeassistant"] = {
                 "status": "error",
-                "error": str(e)
+                "error": str(e),
             }
 
         # 检查错误处理系统
         try:
-            from utils.error_handler import get_error_handling_status
+            from jjz_alert.base.error_handler import get_error_handling_status
+
             error_handling_status = get_error_handling_status()
             health_data["error_handling"] = error_handling_status
         except Exception as e:
-            health_data["error_handling"] = {
-                "status": "error",
-                "error": str(e)
-            }
+            health_data["error_handling"] = {"status": "error", "error": str(e)}
 
         # 计算总体健康状态
         service_statuses = [
             health_data["services"].get("redis", {}).get("status") == "healthy",
             health_data["services"].get("cache", {}).get("status") == "ok",
-            health_data["services"].get("jjz", {}).get("status") == "healthy"
+            health_data["services"].get("jjz", {}).get("status") == "healthy",
         ]
 
         if all(service_statuses):
@@ -242,7 +250,7 @@ async def health() -> Dict[str, Any]:
             "version": "2.0.0",
             "error": str(e),
             "timestamp": timestamp,
-            "response_time_ms": round((time.time() - start_time) * 1000, 2)
+            "response_time_ms": round((time.time() - start_time) * 1000, 2),
         }
 
 
@@ -262,17 +270,19 @@ async def metrics() -> Dict[str, Any]:
             "system": {},
             "performance": {},
             "business": {},
-            "errors": {}
+            "errors": {},
         }
 
         # 系统指标
         try:
             # Redis指标
-            from config.redis.connection import redis_manager
+            from jjz_alert.config.redis.connection import redis_manager
+
             redis_health = await redis_manager.health_check()
 
             # 缓存指标
-            from service.cache.cache_service import CacheService
+            from jjz_alert.service.cache.cache_service import CacheService
+
             cache_service = CacheService()
             cache_info = await cache_service.get_cache_info()
             cache_stats = await cache_service.get_cache_stats(days=7)  # 过去7天统计
@@ -282,15 +292,19 @@ async def metrics() -> Dict[str, Any]:
                     "status": redis_health.get("status", "unknown"),
                     "ping_ms": redis_health.get("ping_ms", -1),
                     "memory_used": redis_health.get("memory_used", 0),
-                    "total_keys": cache_info.get("key_counts", {}).get("total", 0)
+                    "total_keys": cache_info.get("key_counts", {}).get("total", 0),
                 },
                 "cache": {
                     "jjz_keys": cache_info.get("key_counts", {}).get("jjz", 0),
                     "traffic_keys": cache_info.get("key_counts", {}).get("traffic", 0),
-                    "push_history_keys": cache_info.get("key_counts", {}).get("push_history", 0),
+                    "push_history_keys": cache_info.get("key_counts", {}).get(
+                        "push_history", 0
+                    ),
                     "hit_rate_7d": cache_stats.get("overall", {}).get("hit_rate", 0),
-                    "total_operations_7d": cache_stats.get("overall", {}).get("total_operations", 0)
-                }
+                    "total_operations_7d": cache_stats.get("overall", {}).get(
+                        "total_operations", 0
+                    ),
+                },
             }
         except Exception as e:
             metrics_data["system"]["error"] = str(e)
@@ -298,33 +312,44 @@ async def metrics() -> Dict[str, Any]:
         # 性能指标
         try:
             # JJZ服务指标
-            from service.jjz.jjz_service import jjz_service
+            from jjz_alert.service.jjz.jjz_service import jjz_service
+
             jjz_status = await jjz_service.get_service_status()
 
             # 推送服务指标
-            from service.notification.unified_pusher import unified_pusher
+            from jjz_alert.service.notification.unified_pusher import unified_pusher
+
             push_status = await unified_pusher.get_service_status()
 
             # Home Assistant指标
-            from service.homeassistant.ha_sync import get_ha_service_status
+            from jjz_alert.service.homeassistant.ha_sync import get_ha_service_status
+
             ha_status = await get_ha_service_status()
 
             metrics_data["performance"] = {
                 "jjz_service": {
                     "cached_plates": jjz_status.get("cached_plates_count", 0),
                     "accounts_configured": jjz_status.get("accounts_count", 0),
-                    "cache_hit_rate": jjz_status.get("cache_stats", {}).get("hit_rate", 0)
+                    "cache_hit_rate": jjz_status.get("cache_stats", {}).get(
+                        "hit_rate", 0
+                    ),
                 },
                 "notification_service": {
-                    "total_channels": push_status.get("configuration", {}).get("total_channels", 0),
-                    "apprise_channels": push_status.get("configuration", {}).get("apprise_channels", 0),
-                    "apprise_enabled": push_status.get("service_details", {}).get("apprise_enabled", False)
+                    "total_channels": push_status.get("configuration", {}).get(
+                        "total_channels", 0
+                    ),
+                    "apprise_channels": push_status.get("configuration", {}).get(
+                        "apprise_channels", 0
+                    ),
+                    "apprise_enabled": push_status.get("service_details", {}).get(
+                        "apprise_enabled", False
+                    ),
                 },
                 "homeassistant": {
                     "enabled": ha_status.get("enabled", False),
                     "connection_ok": ha_status.get("connection", False),
-                    "last_sync": ha_status.get("last_sync")
-                }
+                    "last_sync": ha_status.get("last_sync"),
+                },
             }
         except Exception as e:
             metrics_data["performance"]["error"] = str(e)
@@ -341,35 +366,56 @@ async def metrics() -> Dict[str, Any]:
                 "configuration": {
                     "total_plates": len(app_config.plates),
                     "total_accounts": len(app_config.jjz_accounts),
-                    "admin_notifications": len(app_config.global_config.admin.notifications)
+                    "admin_notifications": len(
+                        app_config.global_config.admin.notifications
+                    ),
                 },
                 "operations_24h": {
                     "estimated_queries": 0,  # 需要从日志或缓存中统计
                     "estimated_pushes": 0,  # 需要从推送历史中统计
-                    "ha_syncs": 0  # 需要从HA同步历史中统计
-                }
+                    "ha_syncs": 0,  # 需要从HA同步历史中统计
+                },
             }
         except Exception as e:
             metrics_data["business"]["error"] = str(e)
 
         # 错误指标
         try:
-            from utils.error_handler import get_error_handling_status
+            from jjz_alert.base.error_handler import get_error_handling_status
+
             error_status = get_error_handling_status()
 
             metrics_data["errors"] = {
-                "total_errors": error_status.get("error_collector", {}).get("total_errors", 0),
-                "error_types": error_status.get("error_collector", {}).get("error_types", {}),
-                "recent_errors": error_status.get("error_collector", {}).get("recent_errors", 0),
+                "total_errors": error_status.get("error_collector", {}).get(
+                    "total_errors", 0
+                ),
+                "error_types": error_status.get("error_collector", {}).get(
+                    "error_types", {}
+                ),
+                "recent_errors": error_status.get("error_collector", {}).get(
+                    "recent_errors", 0
+                ),
                 "circuit_breakers": {
-                    "total": error_status.get("recovery_manager", {}).get("circuit_breakers_count", 0),
-                    "open": len(error_status.get("recovery_manager", {}).get("open_circuit_breakers", [])),
-                    "open_list": error_status.get("recovery_manager", {}).get("open_circuit_breakers", [])
+                    "total": error_status.get("recovery_manager", {}).get(
+                        "circuit_breakers_count", 0
+                    ),
+                    "open": len(
+                        error_status.get("recovery_manager", {}).get(
+                            "open_circuit_breakers", []
+                        )
+                    ),
+                    "open_list": error_status.get("recovery_manager", {}).get(
+                        "open_circuit_breakers", []
+                    ),
                 },
                 "admin_notifications": {
-                    "interval_seconds": error_status.get("admin_notifier", {}).get("notification_interval", 0),
-                    "recent_notifications": error_status.get("admin_notifier", {}).get("last_notifications", 0)
-                }
+                    "interval_seconds": error_status.get("admin_notifier", {}).get(
+                        "notification_interval", 0
+                    ),
+                    "recent_notifications": error_status.get("admin_notifier", {}).get(
+                        "last_notifications", 0
+                    ),
+                },
             }
         except Exception as e:
             metrics_data["errors"]["error"] = str(e)
@@ -384,9 +430,8 @@ async def metrics() -> Dict[str, Any]:
         return {
             "timestamp": timestamp,
             "error": str(e),
-            "response_time_ms": round((time.time() - start_time) * 1000, 2)
+            "response_time_ms": round((time.time() - start_time) * 1000, 2),
         }
-
 
 
 @app.post("/query")
@@ -398,17 +443,19 @@ async def query_plates(request: QueryRequest):
 
     # Check if API is enabled
     if not is_api_enabled():
-        raise HTTPException(status_code=403, detail="REST API 已关闭，请在配置中启用后再试")
+        raise HTTPException(
+            status_code=403, detail="REST API 已关闭，请在配置中启用后再试"
+        )
 
     # 使用统一的推送服务
-    from service.notification.jjz_push_service import jjz_push_service
+    from jjz_alert.service.notification.jjz_push_service import jjz_push_service
 
     try:
         # 执行统一的推送工作流
         workflow_result = await jjz_push_service.execute_push_workflow(
             plate_numbers=input_plates,
             force_refresh=False,  # API推送不强制刷新缓存
-            include_ha_sync=True
+            include_ha_sync=True,
         )
 
         # 转换为API响应格式
@@ -417,7 +464,11 @@ async def query_plates(request: QueryRequest):
         # 检查是否有配置错误
         if not workflow_result["success"] and workflow_result["errors"]:
             # 检查是否是配置相关错误
-            config_errors = [err for err in workflow_result["errors"] if "配置" in err or "未找到车牌配置" in err]
+            config_errors = [
+                err
+                for err in workflow_result["errors"]
+                if "配置" in err or "未找到车牌配置" in err
+            ]
             if config_errors:
                 if "未找到车牌配置" in config_errors[0]:
                     raise HTTPException(status_code=404, detail=config_errors[0])
@@ -434,7 +485,7 @@ async def query_plates(request: QueryRequest):
                     "jjz_status": plate_result["jjz_status"],
                     "traffic_status": plate_result["traffic_status"],
                     "push_results": plate_result["push_result"],
-                    "error": plate_result.get("error")
+                    "error": plate_result.get("error"),
                 }
             else:
                 # 车牌未在结果中找到，可能是配置问题
@@ -443,7 +494,7 @@ async def query_plates(request: QueryRequest):
                     "jjz_status": None,
                     "traffic_status": None,
                     "push_results": None,
-                    "error": "车牌处理失败或未找到配置"
+                    "error": "车牌处理失败或未找到配置",
                 }
 
         # 添加总体统计信息
@@ -452,7 +503,7 @@ async def query_plates(request: QueryRequest):
             "success_plates": workflow_result["success_plates"],
             "failed_plates": workflow_result["failed_plates"],
             "ha_sync_result": workflow_result["ha_sync_result"],
-            "workflow_success": workflow_result["success"]
+            "workflow_success": workflow_result["success"],
         }
 
         return response_data
@@ -493,8 +544,10 @@ def run_api(host: str = None, port: int = None):
     try:
         app_config = config_manager.load_config()
         if (
-                app_config and app_config.global_config and app_config.global_config.remind
-                and app_config.global_config.remind.api
+            app_config
+            and app_config.global_config
+            and app_config.global_config.remind
+            and app_config.global_config.remind.api
         ):
             cfg_host = app_config.global_config.remind.api.host
             cfg_port = app_config.global_config.remind.api.port
@@ -504,4 +557,6 @@ def run_api(host: str = None, port: int = None):
     final_host = host or cfg_host or "0.0.0.0"
     final_port = port or cfg_port or 8000
 
-    uvicorn.run(app, host=final_host, port=final_port, log_level="warning", access_log=False)
+    uvicorn.run(
+        app, host=final_host, port=final_port, log_level="warning", access_log=False
+    )

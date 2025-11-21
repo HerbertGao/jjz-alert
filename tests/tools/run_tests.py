@@ -4,7 +4,7 @@ JJZ Alert 测试运行器
 
 提供不同级别的测试运行选项:
 - 单元测试 (--unit)
-- 集成测试 (--integration) 
+- 集成测试 (--integration)
 - Redis测试 (--redis)
 - 性能测试 (--performance)
 - 覆盖率报告 (--coverage)
@@ -25,7 +25,9 @@ def run_command(cmd, description):
     print(f"{'=' * 60}")
 
     try:
-        result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd, shell=True, check=True, capture_output=True, text=True
+        )
         print(result.stdout)
         if result.stderr:
             print("STDERR:", result.stderr)
@@ -50,8 +52,9 @@ def main():
 
     # 检查pytest是否安装
     try:
-        subprocess.run(["python", "-m", "pytest", "--version"],
-                       check=True, capture_output=True)
+        subprocess.run(
+            ["python", "-m", "pytest", "--version"], check=True, capture_output=True
+        )
     except subprocess.CalledProcessError:
         print("❌ pytest未安装，请运行: pip install pytest pytest-asyncio")
         return False
@@ -70,7 +73,9 @@ def main():
         base_cmd += " -m 'not slow'"
 
     if args.coverage:
-        base_cmd += " --cov=service --cov=config"
+        base_cmd += (
+            " --cov=jjz_alert.base --cov=jjz_alert.service --cov=jjz_alert.config"
+        )
         base_cmd += " --cov-report=term-missing --cov-report=html"
 
     base_cmd += " -v"
@@ -85,7 +90,9 @@ def main():
         success &= run_command(f"{base_cmd} tests/integration/", "运行集成测试")
 
     if args.performance:
-        success &= run_command("python tests/performance/test_performance.py", "运行性能测试")
+        success &= run_command(
+            "python tests/performance/test_performance.py", "运行性能测试"
+        )
 
     if not any([args.unit, args.integration, args.redis, args.performance]):
         # 运行所有测试
