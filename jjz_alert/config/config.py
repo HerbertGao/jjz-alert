@@ -189,13 +189,13 @@ class ConfigManager:
                     # ========== REST 模式 ==========
                     rest_url=ha_data.get("rest_url", "http://homeassistant.local:8123"),
                     rest_token=ha_data.get("rest_token", ""),
-                    rest_entity_prefix=ha_data.get("entity_prefix", "jjz_alert"),
+                    rest_entity_prefix=ha_data.get("rest_entity_prefix", "jjz_alert"),
                     rest_device_manufacturer=ha_data.get(
-                        "device_manufacturer", "进京证提醒"
+                        "rest_device_manufacturer", "进京证提醒"
                     ),
-                    rest_device_model=ha_data.get("device_model", "jjz_alert"),
-                    rest_retry_count=ha_data.get("retry_count", 3),
-                    rest_timeout=ha_data.get("timeout", 30),
+                    rest_device_model=ha_data.get("rest_device_model", "jjz_alert"),
+                    rest_retry_count=ha_data.get("rest_retry_count", 3),
+                    rest_timeout=ha_data.get("rest_timeout", 30),
                     # ========== MQTT 模式 ==========
                     mqtt_host=ha_data.get("mqtt_host", "localhost"),
                     mqtt_port=ha_data.get("mqtt_port", 1883),
