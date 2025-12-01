@@ -10,12 +10,12 @@ COPY requirements-prod.txt ./
 RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
     pip download --only-binary=:all: \
-      --implementation cp --python-version 313 --abi cp313 \
+      --implementation cp --python-version 314 --abi cp314 \
       --platform manylinux_2_17_x86_64 \
       --dest /wheels/x86_64 \
       -r requirements-prod.txt && \
     pip download --only-binary=:all: \
-      --implementation cp --python-version 313 --abi cp313 \
+      --implementation cp --python-version 314 --abi cp314 \
       --platform manylinux_2_17_aarch64 \
       --dest /wheels/aarch64 \
       -r requirements-prod.txt
