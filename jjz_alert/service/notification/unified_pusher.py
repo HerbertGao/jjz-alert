@@ -6,9 +6,10 @@
 
 import logging
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Set
 
 from jjz_alert.config import PlateConfig, NotificationConfig
+from jjz_alert.config.config_models import AppriseUrlConfig
 from jjz_alert.service.cache.cache_service import cache_service
 from jjz_alert.service.notification.apprise_pusher import apprise_pusher
 from jjz_alert.service.notification.push_priority import (
@@ -46,6 +47,7 @@ class UnifiedPusher:
         badge: Optional[int] = None,
         url: Optional[str] = None,
         actions: Optional[List[str]] = None,
+        exclude_batch_urls: Optional[Set[str]] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -62,6 +64,7 @@ class UnifiedPusher:
             badge: 角标数字
             url: 点击跳转URL
             actions: 操作按钮列表
+            exclude_batch_urls: 需要排除的已批量推送的 URL 集合（原始 URL）
             **kwargs: 其他参数
 
         Returns:
@@ -90,6 +93,7 @@ class UnifiedPusher:
                 "badge": badge,
                 "url": url,
                 "actions": actions,
+                "exclude_batch_urls": exclude_batch_urls or set(),
                 **kwargs,
             }
 
@@ -346,11 +350,29 @@ class UnifiedPusher:
                     "success_count": 0,
                 }
 
-            # 处理URL中的变量占位符
+            # 获取需要排除的已批量推送 URL
+            exclude_batch_urls = push_params.get("exclude_batch_urls", set())
+
+            # 处理URL中的变量占位符，同时过滤已批量推送的 URL
             processed_urls = []
-            for url in notification.urls:
+            skipped_batch_urls = 0
+            for url_item in notification.urls:
+                # 解析 URL 配置
+                if isinstance(url_item, AppriseUrlConfig):
+                    raw_url = url_item.url
+                elif isinstance(url_item, str):
+                    raw_url = url_item
+                else:
+                    continue
+
+                # 检查是否需要排除（已通过批量推送发送）
+                if raw_url in exclude_batch_urls:
+                    logging.debug(f"跳过已批量推送的 URL: {raw_url[:50]}...")
+                    skipped_batch_urls += 1
+                    continue
+
                 processed_url = self._process_url_placeholders(
-                    url, plate, display_name, push_params
+                    raw_url, plate, display_name, push_params
                 )
                 processed_urls.append(processed_url)
 

@@ -3,6 +3,7 @@
 """
 
 import asyncio
+import inspect
 from datetime import datetime, timedelta
 
 
@@ -22,7 +23,7 @@ class CircuitBreaker:
         注意：此方法仅适用于同步函数。对于异步函数，请使用 acall() 方法。
         """
         # 检测异步函数，防止误用
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             raise TypeError(
                 "call() 方法不支持异步函数。请使用 acall() 方法来执行异步函数。"
             )
@@ -60,7 +61,7 @@ class CircuitBreaker:
 
         try:
             # 检查函数是否是异步的
-            if asyncio.iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
                 result = await func(*args, **kwargs)
             else:
                 # 同步函数在线程池中执行，避免阻塞事件循环

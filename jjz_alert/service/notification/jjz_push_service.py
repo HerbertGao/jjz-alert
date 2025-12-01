@@ -19,6 +19,10 @@ from jjz_alert.service.notification.push_helpers import (
     push_admin_notification,
 )
 from jjz_alert.service.notification.push_priority import PushPriority
+from jjz_alert.service.notification.batch_pusher import (
+    batch_pusher,
+    BatchPushItem,
+)
 from jjz_alert.service.traffic.traffic_service import TrafficService
 from jjz_alert.base.logger import get_structured_logger
 from jjz_alert.service.homeassistant.ha_mqtt import ha_mqtt_publisher
@@ -187,19 +191,158 @@ class JJZPushService:
                 logging.warning(f"批量获取限行状态失败: {e}")
                 all_traffic_results = {}
 
+            # 步骤5.5: 执行批量推送（如果有配置 batch_key 的 URL）
+            batched_urls_by_plate: Dict[str, set] = {}  # 记录每个车牌已批量推送的 URL
+            batch_push_result = None
+
+            try:
+                # 收集批量推送数据
+                batch_items: List[BatchPushItem] = []
+
+                # 判断是否需要次日推送
+                now = datetime.datetime.now()
+                send_next_day = now.hour > 20 or (now.hour == 20 and now.minute >= 30)
+                today_str = datetime.date.today().strftime("%Y-%m-%d")
+                tomorrow_date = datetime.date.today() + datetime.timedelta(days=1)
+                tomorrow_str = tomorrow_date.strftime("%Y-%m-%d")
+
+                for plate_config in target_plates:
+                    plate = plate_config.plate
+                    display_name = plate_config.display_name or plate
+
+                    # 检查该车牌是否有 batch_key 配置
+                    batch_urls = batch_pusher.get_batch_urls_for_plate(plate_config)
+                    if not batch_urls:
+                        continue
+
+                    # 获取进京证状态
+                    jjz_status = all_jjz_results.get(plate)
+                    if not jjz_status or jjz_status.status == JJZStatusEnum.ERROR.value:
+                        continue
+
+                    # 获取限行状态
+                    traffic_result = all_traffic_results.get(plate)
+
+                    # 构建推送内容（复用现有逻辑）
+                    from jjz_alert.service.jjz.jjz_utils import (
+                        format_jjz_push_content,
+                        format_jjz_expired_content,
+                        format_jjz_pending_content,
+                        format_jjz_error_content,
+                    )
+
+                    jjz_data = jjz_status.to_dict()
+                    status = jjz_data.get("status", "unknown")
+
+                    if status == JJZStatusEnum.VALID.value:
+                        priority = PushPriority.NORMAL
+                        body = format_jjz_push_content(
+                            display_name=display_name,
+                            jjzzlmc=jjz_data.get("jjzzlmc", ""),
+                            blztmc=jjz_data.get("blztmc", ""),
+                            status=status,
+                            valid_start=jjz_data.get("valid_start", "未知"),
+                            valid_end=jjz_data.get("valid_end"),
+                            days_remaining=jjz_data.get("days_remaining"),
+                            sycs=jjz_data.get("sycs"),
+                        )
+                    elif status == JJZStatusEnum.EXPIRED.value:
+                        priority = PushPriority.HIGH
+                        body = format_jjz_expired_content(
+                            display_name, jjz_data.get("sycs")
+                        )
+                    elif status == JJZStatusEnum.PENDING.value:
+                        priority = PushPriority.HIGH
+                        body = format_jjz_pending_content(
+                            display_name=display_name,
+                            jjzzlmc=jjz_data.get("jjzzlmc", ""),
+                            apply_time=jjz_data.get("apply_time", "未知"),
+                        )
+                    else:
+                        priority = PushPriority.NORMAL
+                        body = format_jjz_error_content(
+                            display_name=display_name,
+                            jjzzlmc=jjz_data.get("jjzzlmc", ""),
+                            status=status,
+                            error_msg=jjz_data.get("error_message", ""),
+                        )
+
+                    # 添加限行提醒
+                    if not send_next_day:
+                        if traffic_result and getattr(
+                            traffic_result, "is_limited", False
+                        ):
+                            from jjz_alert.base.message_templates import (
+                                template_manager,
+                            )
+
+                            reminder_prefix = template_manager.format_traffic_reminder(
+                                "今日限行"
+                            )
+                            body = reminder_prefix + body
+
+                    # 创建批量推送项
+                    batch_items.append(
+                        BatchPushItem(
+                            plate_config=plate_config,
+                            title=display_name,
+                            body=body,
+                            priority=priority,
+                            jjz_data=jjz_data,
+                            traffic_reminder=(
+                                "今日限行"
+                                if (
+                                    not send_next_day
+                                    and traffic_result
+                                    and getattr(traffic_result, "is_limited", False)
+                                )
+                                else None
+                            ),
+                        )
+                    )
+
+                # 执行批量推送
+                if batch_items:
+                    logging.info(f"开始执行批量推送，共 {len(batch_items)} 个车牌参与")
+
+                    # 按 batch_key 分组
+                    batch_groups = batch_pusher.group_push_items(
+                        batch_items, target_plates
+                    )
+
+                    if batch_groups:
+                        logging.info(f"批量推送分组数: {len(batch_groups)}")
+                        batch_push_result = await batch_pusher.execute_batch_push(
+                            batch_groups
+                        )
+
+                        # 记录每个车牌已批量推送的 URL
+                        for batch_key, group in batch_groups.items():
+                            for item in group.items:
+                                plate = item.plate_config.plate
+                                if plate not in batched_urls_by_plate:
+                                    batched_urls_by_plate[plate] = set()
+                                batched_urls_by_plate[plate].add(group.url)
+
+                        if batch_push_result:
+                            logging.info(
+                                f"批量推送完成: 成功 {batch_push_result.get('success_groups', 0)}/{batch_push_result.get('total_groups', 0)} 组"
+                            )
+                    else:
+                        logging.debug("没有符合条件的批量推送分组")
+                else:
+                    logging.debug("没有配置 batch_key 的车牌，跳过批量推送")
+
+            except Exception as e:
+                logging.warning(f"批量推送阶段异常: {e}")
+                batch_push_result = None
+
             # 步骤6: 并发处理推送
             logging.info("开始并发处理推送")
 
             # 准备HA同步数据
             jjz_results_for_ha = {}
             traffic_results_for_ha = {}
-
-            # 判断是否需要次日推送
-            now = datetime.datetime.now()
-            send_next_day = now.hour > 20 or (now.hour == 20 and now.minute >= 30)
-            today_str = datetime.date.today().strftime("%Y-%m-%d")
-            tomorrow_date = datetime.date.today() + datetime.timedelta(days=1)
-            tomorrow_str = tomorrow_date.strftime("%Y-%m-%d")
 
             async def process_single_plate(plate_config: PlateConfig) -> Dict[str, Any]:
                 """处理单个车牌的推送"""
@@ -242,6 +385,9 @@ class JJZPushService:
                     # 执行推送逻辑
                     jjz_data = jjz_status.to_dict()
 
+                    # 获取该车牌已批量推送的 URL
+                    exclude_urls = batched_urls_by_plate.get(plate, set())
+
                     if not send_next_day:
                         # 当日推送
                         traffic_reminder_text = None
@@ -255,6 +401,7 @@ class JJZPushService:
                             plate_config,
                             jjz_data,
                             traffic_reminder=traffic_reminder_text,
+                            exclude_batch_urls=exclude_urls,
                         )
                     else:
                         # 次日推送逻辑
@@ -291,6 +438,7 @@ class JJZPushService:
                                 target_date=tomorrow_date,
                                 is_next_day=True,
                                 traffic_reminder=traffic_reminder_text,
+                                exclude_batch_urls=exclude_urls,
                             )
                         else:
                             # 次日无效或过期，发送提醒

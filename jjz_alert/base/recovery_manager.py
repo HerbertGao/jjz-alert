@@ -3,6 +3,7 @@
 """
 
 import asyncio
+import inspect
 import logging
 from typing import Any, Callable, Dict, Optional
 
@@ -32,7 +33,7 @@ class AutoRecoveryManager:
 
     async def _invoke(self, func: Callable, *args, **kwargs):
         """在自动恢复流程中执行函数，兼容同步与异步实现"""
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return await func(*args, **kwargs)
         return await asyncio.to_thread(func, *args, **kwargs)
 
@@ -132,7 +133,7 @@ class AutoRecoveryManager:
 
             if recovery_strategy == RecoveryStrategy.FALLBACK and fallback_func:
                 logging.warning(f"服务 {service_name} 失败，使用备用方案: {error}")
-                if asyncio.iscoroutinefunction(fallback_func):
+                if inspect.iscoroutinefunction(fallback_func):
                     result = await fallback_func()
                 else:
                     result = fallback_func()
@@ -153,7 +154,7 @@ class AutoRecoveryManager:
                     logging.warning(
                         f"服务 {service_name} 自动恢复失败，尝试备用方案: {exc}"
                     )
-                    if asyncio.iscoroutinefunction(fallback_func):
+                    if inspect.iscoroutinefunction(fallback_func):
                         return await fallback_func()
                     return fallback_func()
                 except Exception as fallback_error:
