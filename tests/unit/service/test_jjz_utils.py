@@ -2,7 +2,7 @@
 JJZ Utils 单元测试
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -255,3 +255,111 @@ class TestFormatJJZErrorContent:
         assert call_args[1] == "六环内"
         assert call_args[2] == "error"
         assert call_args[3] == "网络连接失败"
+
+
+@pytest.mark.unit
+class TestFormatJJZBodyAndPriority:
+    """format_jjz_body_and_priority 函数测试类"""
+
+    @patch("jjz_alert.base.message_templates.template_manager")
+    def test_format_valid_status(self, mock_template_manager):
+        """测试有效状态格式化"""
+        mock_template_manager.format_valid_status.return_value = "有效内容"
+
+        jjz_data = {
+            "status": "valid",
+            "jjzzlmc": "进京证（六环内）",
+            "blztmc": "审核通过（生效中）",
+            "valid_start": "2025-08-15",
+            "valid_end": "2025-08-20",
+            "days_remaining": 5,
+            "sycs": "8",
+        }
+
+        body, priority = jjz_utils.format_jjz_body_and_priority("京A12345", jjz_data)
+
+        assert body == "有效内容"
+        assert priority == "normal"
+        mock_template_manager.format_valid_status.assert_called_once()
+
+    @patch("jjz_alert.base.message_templates.template_manager")
+    def test_format_expired_status(self, mock_template_manager):
+        """测试过期状态格式化"""
+        mock_template_manager.format_expired_status.return_value = "过期内容"
+
+        jjz_data = {
+            "status": "expired",
+            "sycs": "5",
+        }
+
+        body, priority = jjz_utils.format_jjz_body_and_priority("京A12345", jjz_data)
+
+        assert body == "过期内容"
+        assert priority == "high"
+        mock_template_manager.format_expired_status.assert_called_once_with(
+            "京A12345", "5"
+        )
+
+    @patch("jjz_alert.base.message_templates.template_manager")
+    def test_format_pending_status(self, mock_template_manager):
+        """测试审核中状态格式化"""
+        mock_template_manager.format_pending_status.return_value = "审核中内容"
+
+        jjz_data = {
+            "status": "pending",
+            "jjzzlmc": "进京证（六环外）",
+            "apply_time": "2025-08-15 10:30:00",
+        }
+
+        body, priority = jjz_utils.format_jjz_body_and_priority("京A12345", jjz_data)
+
+        assert body == "审核中内容"
+        assert priority == "high"
+        mock_template_manager.format_pending_status.assert_called_once()
+
+    @patch("jjz_alert.base.message_templates.template_manager")
+    def test_format_error_status(self, mock_template_manager):
+        """测试错误状态格式化"""
+        mock_template_manager.format_error_status.return_value = "错误内容"
+
+        jjz_data = {
+            "status": "error",
+            "jjzzlmc": "进京证（六环内）",
+            "error_message": "查询失败",
+        }
+
+        body, priority = jjz_utils.format_jjz_body_and_priority("京A12345", jjz_data)
+
+        assert body == "错误内容"
+        assert priority == "normal"
+        mock_template_manager.format_error_status.assert_called_once()
+
+    @patch("jjz_alert.base.message_templates.template_manager")
+    def test_format_unknown_status(self, mock_template_manager):
+        """测试未知状态格式化"""
+        mock_template_manager.format_error_status.return_value = "未知状态内容"
+
+        jjz_data = {
+            "status": "unknown",
+            "jjzzlmc": "",
+            "error_message": "",
+        }
+
+        body, priority = jjz_utils.format_jjz_body_and_priority("京A12345", jjz_data)
+
+        assert body == "未知状态内容"
+        assert priority == "normal"
+        mock_template_manager.format_error_status.assert_called_once()
+
+    @patch("jjz_alert.base.message_templates.template_manager")
+    def test_format_missing_status(self, mock_template_manager):
+        """测试缺少状态字段"""
+        mock_template_manager.format_error_status.return_value = "默认内容"
+
+        jjz_data = {}  # 无状态字段
+
+        body, priority = jjz_utils.format_jjz_body_and_priority("京A12345", jjz_data)
+
+        assert body == "默认内容"
+        assert priority == "normal"
+        mock_template_manager.format_error_status.assert_called_once()

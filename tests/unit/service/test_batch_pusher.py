@@ -606,6 +606,24 @@ class TestProcessUrlPlaceholders:
         assert result == url
         assert isinstance(result, str)
 
+    def test_exception_handling(self):
+        """测试异常处理 - 当占位符处理失败时返回原始 URL"""
+        url = "https://api.example.com/?level={level}"
+
+        # Mock PriorityMapper.get_bark_level to raise an exception
+        with patch(
+            "jjz_alert.service.notification.url_utils.PriorityMapper.get_bark_level",
+            side_effect=Exception("Test exception"),
+        ):
+            result = process_url_placeholders(
+                url=url,
+                plate="京A12345",
+                display_name="测试车辆",
+                priority=PushPriority.NORMAL,
+            )
+            # 异常时应该返回原始 URL
+            assert result == url
+
 
 @pytest.mark.unit
 class TestExecuteBatchPush:
