@@ -95,6 +95,30 @@ class BatchPusher:
 
         return batch_urls
 
+    def get_batch_url_for_plate_and_key(
+        self, plate_config: PlateConfig, target_batch_key: str
+    ) -> Optional[str]:
+        """
+        获取单个车牌在指定 batch_key 下配置的 URL
+
+        Args:
+            plate_config: 车牌配置
+            target_batch_key: 目标批量推送键
+
+        Returns:
+            该车牌在指定 batch_key 下的 URL，如果不存在则返回 None
+        """
+        for notification in plate_config.notifications:
+            if notification.type != "apprise":
+                continue
+
+            for url_item in notification.urls:
+                url, batch_key = parse_apprise_url_item(url_item)
+                if batch_key == target_batch_key:
+                    return url
+
+        return None
+
     def group_push_items(
         self,
         items: List[BatchPushItem],

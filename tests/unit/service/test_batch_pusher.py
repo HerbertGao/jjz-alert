@@ -281,6 +281,78 @@ class TestGetBatchUrlsForPlate:
 
 
 @pytest.mark.unit
+class TestGetBatchUrlForPlateAndKey:
+    """get_batch_url_for_plate_and_key 方法测试"""
+
+    def test_found_batch_key(self):
+        """测试找到指定 batch_key 的 URL"""
+        pusher = BatchPusher()
+        plate_config = PlateConfig(
+            plate="京A12345",
+            notifications=[
+                NotificationConfig(
+                    type="apprise",
+                    urls=[
+                        AppriseUrlConfig(url="https://batch1.com", batch_key="family"),
+                        AppriseUrlConfig(url="https://batch2.com", batch_key="work"),
+                    ],
+                )
+            ],
+        )
+        result = pusher.get_batch_url_for_plate_and_key(plate_config, "family")
+        assert result == "https://batch1.com"
+
+        result = pusher.get_batch_url_for_plate_and_key(plate_config, "work")
+        assert result == "https://batch2.com"
+
+    def test_batch_key_not_found(self):
+        """测试未找到指定 batch_key"""
+        pusher = BatchPusher()
+        plate_config = PlateConfig(
+            plate="京A12345",
+            notifications=[
+                NotificationConfig(
+                    type="apprise",
+                    urls=[
+                        AppriseUrlConfig(url="https://batch1.com", batch_key="family"),
+                    ],
+                )
+            ],
+        )
+        result = pusher.get_batch_url_for_plate_and_key(plate_config, "nonexistent")
+        assert result is None
+
+    def test_no_batch_urls(self):
+        """测试没有任何批量 URL"""
+        pusher = BatchPusher()
+        plate_config = PlateConfig(
+            plate="京A12345",
+            notifications=[
+                NotificationConfig(type="apprise", urls=["https://normal.com"])
+            ],
+        )
+        result = pusher.get_batch_url_for_plate_and_key(plate_config, "family")
+        assert result is None
+
+    def test_skip_non_apprise(self):
+        """测试跳过非 apprise 类型"""
+        pusher = BatchPusher()
+        plate_config = PlateConfig(
+            plate="京A12345",
+            notifications=[
+                NotificationConfig(
+                    type="other",
+                    urls=[
+                        AppriseUrlConfig(url="https://batch.com", batch_key="family")
+                    ],
+                )
+            ],
+        )
+        result = pusher.get_batch_url_for_plate_and_key(plate_config, "family")
+        assert result is None
+
+
+@pytest.mark.unit
 class TestGroupPushItems:
     """group_push_items 方法测试"""
 

@@ -301,7 +301,15 @@ class JJZPushService:
                                         plate = item.plate_config.plate
                                         if plate not in batched_urls_by_plate:
                                             batched_urls_by_plate[plate] = set()
-                                        batched_urls_by_plate[plate].add(group.url)
+                                        # 获取该车牌在此 batch_key 下的实际配置 URL
+                                        # 而非使用 group.url（可能是其他车牌的 URL）
+                                        plate_batch_url = batch_pusher.get_batch_url_for_plate_and_key(
+                                            item.plate_config, batch_key
+                                        )
+                                        if plate_batch_url:
+                                            batched_urls_by_plate[plate].add(
+                                                plate_batch_url
+                                            )
 
                         if batch_push_result:
                             logging.info(
