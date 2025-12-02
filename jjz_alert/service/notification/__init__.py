@@ -6,13 +6,12 @@
 - Apprise 多通道推送（主推送系统）
 """
 
-from .apprise_pusher import ApprisePusher, AppriseConfig, apprise_pusher
-from .unified_pusher import UnifiedPusher, unified_pusher
+from .apprise_pusher import ApprisePusher, apprise_pusher
 from .push_priority import PushPriority, PlatformPriority, PriorityMapper
+from .unified_pusher import UnifiedPusher, unified_pusher
 
 __all__ = [
     "ApprisePusher",
-    "AppriseConfig",
     "apprise_pusher",
     "UnifiedPusher",
     "PushPriority",

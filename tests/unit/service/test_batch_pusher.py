@@ -2,10 +2,12 @@
 BatchPusher 单元测试
 """
 
-from unittest.mock import AsyncMock, patch, Mock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from jjz_alert.config.config import PlateConfig, NotificationConfig
+from jjz_alert.config.config_models import AppriseUrlConfig
 from jjz_alert.service.notification.batch_pusher import (
     BatchPusher,
     BatchPushItem,
@@ -13,8 +15,10 @@ from jjz_alert.service.notification.batch_pusher import (
     batch_pusher,
 )
 from jjz_alert.service.notification.push_priority import PushPriority
-from jjz_alert.config.config import PlateConfig, NotificationConfig
-from jjz_alert.config.config_models import AppriseUrlConfig
+from jjz_alert.service.notification.url_utils import (
+    parse_apprise_url_item,
+    process_url_placeholders,
+)
 
 
 @pytest.mark.unit
@@ -95,36 +99,40 @@ class TestBatchPusher:
 
 
 @pytest.mark.unit
-class TestParseUrlItem:
-    """_parse_url_item 方法测试"""
+class TestParseAppriseUrlItem:
+    """parse_apprise_url_item 函数测试"""
 
     def test_parse_string_url(self):
         """测试解析字符串 URL"""
-        pusher = BatchPusher()
-        url, batch_key = pusher._parse_url_item("https://example.com")
+        url, batch_key = parse_apprise_url_item("https://example.com")
         assert url == "https://example.com"
         assert batch_key is None
 
     def test_parse_apprise_url_config_without_batch_key(self):
         """测试解析 AppriseUrlConfig（无 batch_key）"""
-        pusher = BatchPusher()
         config = AppriseUrlConfig(url="https://example.com")
-        url, batch_key = pusher._parse_url_item(config)
+        url, batch_key = parse_apprise_url_item(config)
         assert url == "https://example.com"
         assert batch_key is None
 
     def test_parse_apprise_url_config_with_batch_key(self):
         """测试解析 AppriseUrlConfig（有 batch_key）"""
-        pusher = BatchPusher()
         config = AppriseUrlConfig(url="https://example.com", batch_key="group1")
-        url, batch_key = pusher._parse_url_item(config)
+        url, batch_key = parse_apprise_url_item(config)
+        assert url == "https://example.com"
+        assert batch_key == "group1"
+
+    def test_parse_dict_url(self):
+        """测试解析字典格式 URL"""
+        url, batch_key = parse_apprise_url_item(
+            {"url": "https://example.com", "batch_key": "group1"}
+        )
         assert url == "https://example.com"
         assert batch_key == "group1"
 
     def test_parse_invalid_type(self):
         """测试解析无效类型"""
-        pusher = BatchPusher()
-        url, batch_key = pusher._parse_url_item(12345)
+        url, batch_key = parse_apprise_url_item(12345)
         assert url == ""
         assert batch_key is None
 
@@ -507,13 +515,12 @@ class TestGetMaxPriority:
 
 @pytest.mark.unit
 class TestProcessUrlPlaceholders:
-    """_process_url_placeholders 方法测试"""
+    """process_url_placeholders 函数测试"""
 
     def test_basic_placeholders(self):
         """测试基本占位符替换"""
-        pusher = BatchPusher()
         url = "https://api.example.com/?plate={plate}&name={display_name}"
-        result = pusher._process_url_placeholders(
+        result = process_url_placeholders(
             url=url,
             plate="京A12345",
             display_name="测试车辆",
@@ -526,9 +533,8 @@ class TestProcessUrlPlaceholders:
 
     def test_with_icon(self):
         """测试带图标的占位符"""
-        pusher = BatchPusher()
         url = "https://api.example.com/?icon={icon}"
-        result = pusher._process_url_placeholders(
+        result = process_url_placeholders(
             url=url,
             plate="京A12345",
             display_name="测试车辆",
@@ -540,9 +546,8 @@ class TestProcessUrlPlaceholders:
 
     def test_without_icon_ampersand(self):
         """测试无图标时移除 &icon={icon}"""
-        pusher = BatchPusher()
         url = "https://api.example.com/?param=1&icon={icon}"
-        result = pusher._process_url_placeholders(
+        result = process_url_placeholders(
             url=url,
             plate="京A12345",
             display_name="测试车辆",
@@ -553,9 +558,8 @@ class TestProcessUrlPlaceholders:
 
     def test_without_icon_question_ampersand(self):
         """测试无图标时移除 ?icon={icon}&"""
-        pusher = BatchPusher()
         url = "https://api.example.com/?icon={icon}&param=1"
-        result = pusher._process_url_placeholders(
+        result = process_url_placeholders(
             url=url,
             plate="京A12345",
             display_name="测试车辆",
@@ -566,9 +570,8 @@ class TestProcessUrlPlaceholders:
 
     def test_without_icon_question_only(self):
         """测试无图标时移除 ?icon={icon}"""
-        pusher = BatchPusher()
         url = "https://api.example.com/?icon={icon}"
-        result = pusher._process_url_placeholders(
+        result = process_url_placeholders(
             url=url,
             plate="京A12345",
             display_name="测试车辆",
@@ -579,9 +582,8 @@ class TestProcessUrlPlaceholders:
 
     def test_priority_placeholders(self):
         """测试优先级占位符"""
-        pusher = BatchPusher()
         url = "https://api.example.com/?level={level}&priority={priority}"
-        result = pusher._process_url_placeholders(
+        result = process_url_placeholders(
             url=url,
             plate="京A12345",
             display_name="测试车辆",
@@ -593,10 +595,8 @@ class TestProcessUrlPlaceholders:
 
     def test_normal_url_processing(self):
         """测试正常 URL 处理（不含占位符）"""
-        pusher = BatchPusher()
         url = "https://api.example.com/"
-
-        result = pusher._process_url_placeholders(
+        result = process_url_placeholders(
             url=url,
             plate="京A12345",
             display_name="测试车辆",

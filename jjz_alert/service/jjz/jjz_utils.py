@@ -198,3 +198,55 @@ def format_jjz_error_content(
     return template_manager.format_error_status(
         display_name, jjz_type, status, error_msg
     )
+
+
+def format_jjz_body_and_priority(
+    display_name: str,
+    jjz_data: dict,
+) -> tuple[str, str]:
+    """
+    根据进京证数据格式化推送内容和优先级
+
+    Args:
+        display_name: 显示名称
+        jjz_data: 进京证数据字典
+
+    Returns:
+        (body, priority) - 推送内容和优先级字符串 ("normal" 或 "high")
+    """
+    from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
+
+    status = jjz_data.get("status", "unknown")
+
+    if status == JJZStatusEnum.VALID.value:
+        priority = "normal"
+        body = format_jjz_push_content(
+            display_name=display_name,
+            jjzzlmc=jjz_data.get("jjzzlmc", ""),
+            blztmc=jjz_data.get("blztmc", ""),
+            status=status,
+            valid_start=jjz_data.get("valid_start", "未知"),
+            valid_end=jjz_data.get("valid_end"),
+            days_remaining=jjz_data.get("days_remaining"),
+            sycs=jjz_data.get("sycs"),
+        )
+    elif status == JJZStatusEnum.EXPIRED.value:
+        priority = "high"
+        body = format_jjz_expired_content(display_name, jjz_data.get("sycs"))
+    elif status == JJZStatusEnum.PENDING.value:
+        priority = "high"
+        body = format_jjz_pending_content(
+            display_name=display_name,
+            jjzzlmc=jjz_data.get("jjzzlmc", ""),
+            apply_time=jjz_data.get("apply_time", "未知"),
+        )
+    else:
+        priority = "normal"
+        body = format_jjz_error_content(
+            display_name=display_name,
+            jjzzlmc=jjz_data.get("jjzzlmc", ""),
+            status=status,
+            error_msg=jjz_data.get("error_message", ""),
+        )
+
+    return body, priority

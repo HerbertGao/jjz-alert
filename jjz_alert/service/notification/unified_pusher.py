@@ -8,6 +8,11 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union, Set
 
+from jjz_alert.base.error_handler import (
+    with_error_handling,
+    PushError,
+    NetworkError,
+)
 from jjz_alert.config import PlateConfig, NotificationConfig
 from jjz_alert.config.config_models import AppriseUrlConfig
 from jjz_alert.service.cache.cache_service import cache_service
@@ -15,11 +20,6 @@ from jjz_alert.service.notification.apprise_pusher import apprise_pusher
 from jjz_alert.service.notification.push_priority import (
     PushPriority,
     PriorityMapper,
-)
-from jjz_alert.base.error_handler import (
-    with_error_handling,
-    PushError,
-    NetworkError,
 )
 
 
@@ -355,7 +355,6 @@ class UnifiedPusher:
 
             # 处理URL中的变量占位符，同时过滤已批量推送的 URL
             processed_urls = []
-            skipped_batch_urls = 0
             for url_item in notification.urls:
                 # 解析 URL 配置
                 if isinstance(url_item, AppriseUrlConfig):
@@ -368,7 +367,6 @@ class UnifiedPusher:
                 # 检查是否需要排除（已通过批量推送发送）
                 if raw_url in exclude_batch_urls:
                     logging.debug(f"跳过已批量推送的 URL: {raw_url[:50]}...")
-                    skipped_batch_urls += 1
                     continue
 
                 processed_url = self._process_url_placeholders(

@@ -7,7 +7,7 @@ JJZ-Alert 配置管理模块
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import yaml
 
@@ -286,7 +286,7 @@ class ConfigManager:
 
         return notification
 
-    def _parse_apprise_url(self, url_item):
+    def _parse_apprise_url(self, url_item) -> Optional[Union[str, AppriseUrlConfig]]:
         """
         解析单个 Apprise URL 配置
 

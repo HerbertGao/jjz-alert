@@ -8,12 +8,15 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Set, Tuple, Union
+from typing import Dict, List, Any, Optional, Set, Tuple
 
 from jjz_alert.config import PlateConfig
-from jjz_alert.config.config_models import AppriseUrlConfig
 from jjz_alert.service.notification.apprise_pusher import apprise_pusher
 from jjz_alert.service.notification.push_priority import PushPriority, PriorityMapper
+from jjz_alert.service.notification.url_utils import (
+    process_url_placeholders,
+    parse_apprise_url_item,
+)
 
 
 @dataclass
@@ -63,7 +66,7 @@ class BatchPusher:
                     continue
 
                 for url_item in notification.urls:
-                    url, batch_key = self._parse_url_item(url_item)
+                    url, batch_key = parse_apprise_url_item(url_item)
                     if batch_key:
                         batch_urls[batch_key].append((plate_config, url))
 
@@ -86,7 +89,7 @@ class BatchPusher:
                 continue
 
             for url_item in notification.urls:
-                url, batch_key = self._parse_url_item(url_item)
+                url, batch_key = parse_apprise_url_item(url_item)
                 if batch_key:
                     batch_urls.add(url)
 
@@ -115,7 +118,7 @@ class BatchPusher:
                 if notification.type != "apprise":
                     continue
                 for url_item in notification.urls:
-                    url, batch_key = self._parse_url_item(url_item)
+                    url, batch_key = parse_apprise_url_item(url_item)
                     if batch_key:
                         plate_batch_map[plate_config.plate][batch_key] = url
 
@@ -246,7 +249,7 @@ class BatchPusher:
         # 处理 URL 占位符
         # 对于批量推送，使用第一个车牌的信息处理占位符
         first_item = group.items[0]
-        processed_url = self._process_url_placeholders(
+        processed_url = process_url_placeholders(
             url=group.url,
             plate=first_item.plate_config.plate,
             display_name=first_item.plate_config.display_name
@@ -277,25 +280,6 @@ class BatchPusher:
             "url_result": result,
         }
 
-    def _parse_url_item(
-        self, url_item: Union[str, AppriseUrlConfig]
-    ) -> Tuple[str, Optional[str]]:
-        """
-        解析 URL 配置项
-
-        Args:
-            url_item: URL 配置（字符串或 AppriseUrlConfig）
-
-        Returns:
-            (url, batch_key)
-        """
-        if isinstance(url_item, str):
-            return url_item, None
-        elif isinstance(url_item, AppriseUrlConfig):
-            return url_item.url, url_item.batch_key
-        else:
-            return "", None
-
     def _get_max_priority(self, items: List[BatchPushItem]) -> PushPriority:
         """
         获取推送项列表中的最高优先级
@@ -313,56 +297,6 @@ class BatchPusher:
         if PushPriority.HIGH in priorities:
             return PushPriority.HIGH
         return PushPriority.NORMAL
-
-    def _process_url_placeholders(
-        self,
-        url: str,
-        plate: str,
-        display_name: str,
-        priority: PushPriority,
-        icon: Optional[str] = None,
-    ) -> str:
-        """
-        处理 URL 中的变量占位符
-
-        Args:
-            url: 原始 URL
-            plate: 车牌号
-            display_name: 显示名称
-            priority: 优先级
-            icon: 图标 URL
-
-        Returns:
-            处理后的 URL
-        """
-        try:
-            # 替换图标占位符
-            if icon:
-                url = url.replace("{icon}", icon)
-            else:
-                # 如果没有指定图标，移除 icon 参数
-                url = (
-                    url.replace("&icon={icon}", "")
-                    .replace("?icon={icon}&", "?")
-                    .replace("?icon={icon}", "")
-                )
-
-            # 替换基本占位符
-            url = url.replace("{plate}", plate)
-            url = url.replace("{display_name}", display_name)
-
-            # 替换优先级占位符
-            url = url.replace("{level}", PriorityMapper.get_bark_level(priority))
-            url = url.replace(
-                "{priority}",
-                PriorityMapper.get_platform_priority(priority, "apprise"),
-            )
-
-            return url
-
-        except Exception as e:
-            logging.error(f"处理 URL 占位符失败: {e}")
-            return url
 
 
 # 全局实例
