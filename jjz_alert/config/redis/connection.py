@@ -14,11 +14,6 @@ import redis.asyncio as aioredis
 from redis.exceptions import ConnectionError, TimeoutError
 
 from jjz_alert.config import get_redis_config, RedisConfig
-from jjz_alert.base.error_handler import RedisError
-from jjz_alert.config.redis.redis_errors import (
-    RedisConnectionError,
-    RedisTimeoutError,
-)
 
 
 class RedisConnectionManager:

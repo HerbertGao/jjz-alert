@@ -2,18 +2,18 @@
 UnifiedPusher 单元测试
 """
 
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from datetime import datetime
+from unittest.mock import Mock, AsyncMock, patch
 
 import pytest
 
-from jjz_alert.service.notification.unified_pusher import UnifiedPusher
+from jjz_alert.config.config import PlateConfig, NotificationConfig
 from jjz_alert.service.notification.push_priority import (
     PushPriority,
     PlatformPriority,
     PriorityMapper,
 )
-from jjz_alert.config.config import PlateConfig, NotificationConfig
+from jjz_alert.service.notification.unified_pusher import UnifiedPusher
 
 
 @pytest.mark.unit

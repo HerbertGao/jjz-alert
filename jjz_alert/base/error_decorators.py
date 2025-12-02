@@ -8,18 +8,17 @@ import logging
 from functools import wraps
 from typing import Any, Callable, Dict, Optional, Type, Union
 
+from jjz_alert.base.error_category import ErrorCategory
+from jjz_alert.base.error_collector import error_collector
+from jjz_alert.base.error_enums import ErrorSeverity
 from jjz_alert.base.error_exceptions import (
-    JJZError,
     NetworkError,
     APIError,
     CacheError,
 )
-from jjz_alert.base.error_enums import ErrorSeverity
-from jjz_alert.base.error_category import ErrorCategory
-from jjz_alert.base.error_collector import error_collector
-from jjz_alert.base.recovery_manager import recovery_manager
-from jjz_alert.base.error_utils import handle_critical_error
 from jjz_alert.base.error_utils import _run_async_safe
+from jjz_alert.base.error_utils import handle_critical_error
+from jjz_alert.base.recovery_manager import recovery_manager
 
 
 def with_error_handling(

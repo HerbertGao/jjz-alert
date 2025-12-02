@@ -16,7 +16,6 @@ from jjz_alert.config.config import (
     PlateConfig,
 )
 from jjz_alert.config.config_models import AppriseUrlConfig
-from jjz_alert.config.validation_errors import ConfigValidationError
 
 
 class ConfigValidator:

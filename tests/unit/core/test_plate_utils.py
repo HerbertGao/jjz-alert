@@ -2,8 +2,6 @@
 车牌工具函数测试
 """
 
-import pytest
-
 from jjz_alert.base.plate_utils import (
     PlatePrefix,
     get_plate_pinyin,

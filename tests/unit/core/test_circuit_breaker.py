@@ -3,8 +3,8 @@ CircuitBreaker 单元测试
 """
 
 import asyncio
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
 
 from jjz_alert.base.circuit_breaker import CircuitBreaker
 

@@ -10,10 +10,6 @@ import time
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional
 
-from jjz_alert.config.config import JJZAccount
-from jjz_alert.service.cache.cache_service import CacheService
-from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
-from jjz_alert.service.jjz.jjz_status import JJZStatus
 from jjz_alert.base.error_handler import (
     APIError,
     handle_critical_error,
@@ -25,7 +21,11 @@ from jjz_alert.base.error_handler import (
 )
 from jjz_alert.base.http import http_post
 from jjz_alert.base.logger import get_structured_logger, LogCategory
+from jjz_alert.config.config import JJZAccount
+from jjz_alert.service.cache.cache_service import CacheService
 from jjz_alert.service.jjz.jjz_parse import parse_all_jjz_records
+from jjz_alert.service.jjz.jjz_status import JJZStatus
+from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 
 
 class JJZService:

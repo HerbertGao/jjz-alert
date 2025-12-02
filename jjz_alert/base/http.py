@@ -1,7 +1,7 @@
-import urllib3
 import logging
 import time
-from curl_cffi import requests
+
+import urllib3
 from curl_cffi.requests import Session
 
 # 禁用SSL警告

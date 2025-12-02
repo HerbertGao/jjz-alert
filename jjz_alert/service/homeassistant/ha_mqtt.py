@@ -10,14 +10,13 @@ Home Assistant MQTT Discovery 发布模块（最小可用）
 import asyncio
 import json
 import logging
-from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
-from jjz_alert.config.config import get_homeassistant_config
 from jjz_alert.base.plate_utils import (
     normalize_plate_for_ha_entity_id,
     extract_province_from_plate,
 )
+from jjz_alert.config.config import get_homeassistant_config
 from jjz_alert.service.homeassistant.mqtt_config import MQTTConfig
 
 # 尝试导入 gmqtt（推荐）或 asyncio-mqtt（备用）

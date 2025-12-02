@@ -5,8 +5,8 @@
 """
 
 import logging
-from typing import Dict, Any, Optional
 from string import Template
+from typing import Dict, Optional
 
 
 class MessageTemplateManager:

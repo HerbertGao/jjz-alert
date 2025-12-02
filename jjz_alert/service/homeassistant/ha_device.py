@@ -4,21 +4,21 @@ Home Assistant设备模型
 定义车牌设备的数据结构和属性
 """
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Any, Optional
-import re
 
-from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
+from jjz_alert.base.plate_utils import (
+    normalize_plate_for_ha_entity_id,
+    extract_province_from_plate,
+)
 from jjz_alert.service.homeassistant.ha_models import (
     HAEntityType,
     HADeviceInfo,
     HAEntityState,
 )
-from jjz_alert.base.plate_utils import (
-    normalize_plate_for_ha_entity_id,
-    extract_province_from_plate,
-)
+from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 
 
 @dataclass

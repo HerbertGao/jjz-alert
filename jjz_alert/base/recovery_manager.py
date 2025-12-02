@@ -7,10 +7,10 @@ import inspect
 import logging
 from typing import Any, Callable, Dict, Optional
 
-from jjz_alert.base.error_exceptions import JJZError, RetryableError
-from jjz_alert.base.error_enums import RecoveryStrategy
-from jjz_alert.base.error_category import ErrorCategory
 from jjz_alert.base.circuit_breaker import CircuitBreaker
+from jjz_alert.base.error_category import ErrorCategory
+from jjz_alert.base.error_enums import RecoveryStrategy
+from jjz_alert.base.error_exceptions import JJZError, RetryableError
 
 
 class AutoRecoveryManager:

@@ -4,8 +4,8 @@
 
 from typing import Type, Optional
 
+from jjz_alert.base.error_enums import ErrorSeverity, RecoveryStrategy
 from jjz_alert.base.error_exceptions import (
-    JJZError,
     ConfigurationError,
     NetworkError,
     APIError,
@@ -15,7 +15,6 @@ from jjz_alert.base.error_exceptions import (
     PushError,
     TrafficServiceError,
 )
-from jjz_alert.base.error_enums import ErrorSeverity, RecoveryStrategy
 
 
 class ErrorCategory:

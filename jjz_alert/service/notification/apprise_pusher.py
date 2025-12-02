@@ -7,10 +7,9 @@ Apprise多通道推送服务
 import asyncio
 import logging
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 import apprise
-from jjz_alert.service.notification.apprise_config import AppriseConfig
 
 
 class ApprisePusher:

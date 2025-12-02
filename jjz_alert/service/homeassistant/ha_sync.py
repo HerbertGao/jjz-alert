@@ -9,16 +9,16 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
-from jjz_alert.config import get_homeassistant_config, get_plates
-from jjz_alert.service.jjz.jjz_status import JJZStatus
-from jjz_alert.service.traffic.traffic_service import PlateTrafficStatus
-from .ha_client import HomeAssistantClient, get_ha_client, HomeAssistantAPIError
-from .ha_device import HAPlateDevice
 from jjz_alert.base.error_handler import (
     with_error_handling,
     APIError,
     NetworkError,
 )
+from jjz_alert.config import get_homeassistant_config, get_plates
+from jjz_alert.service.jjz.jjz_status import JJZStatus
+from jjz_alert.service.traffic.traffic_service import PlateTrafficStatus
+from .ha_client import HomeAssistantClient, get_ha_client, HomeAssistantAPIError
+from .ha_device import HAPlateDevice
 
 
 class HomeAssistantSyncService:

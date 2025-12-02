@@ -8,15 +8,15 @@ import logging
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Any
 
-from jjz_alert.service.cache.cache_service import CacheService
-from jjz_alert.service.traffic.traffic_models import TrafficRule, PlateTrafficStatus
-from jjz_alert.base.http import http_get
 from jjz_alert.base.error_handler import (
     with_error_handling,
     TrafficServiceError,
     NetworkError,
     APIError,
 )
+from jjz_alert.base.http import http_get
+from jjz_alert.service.cache.cache_service import CacheService
+from jjz_alert.service.traffic.traffic_models import TrafficRule, PlateTrafficStatus
 
 
 class TrafficService:

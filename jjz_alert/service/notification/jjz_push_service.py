@@ -192,7 +192,9 @@ class JJZPushService:
                 all_traffic_results = {}
 
             # 步骤5.5: 执行批量推送（如果有配置 batch_key 的 URL）
-            batched_urls_by_plate: Dict[str, Set[str]] = {}  # 记录每个车牌已批量推送的 URL
+            batched_urls_by_plate: Dict[str, Set[str]] = (
+                {}
+            )  # 记录每个车牌已批量推送的 URL
             batch_push_result = None
 
             # 判断是否需要次日推送

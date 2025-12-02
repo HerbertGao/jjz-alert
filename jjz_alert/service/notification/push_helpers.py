@@ -10,8 +10,8 @@ from typing import Dict, Any, Optional, Set
 
 from jjz_alert.config import PlateConfig
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
-from jjz_alert.service.notification.unified_pusher import unified_pusher
 from jjz_alert.service.notification.push_priority import PushPriority
+from jjz_alert.service.notification.unified_pusher import unified_pusher
 
 
 async def push_jjz_status(
