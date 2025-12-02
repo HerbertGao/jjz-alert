@@ -241,18 +241,49 @@ class JJZPushService:
                     )
 
                     # 添加限行提醒
+                    traffic_reminder_text = None
                     if not send_next_day:
+                        # 当日推送：检查今日限行
                         if traffic_result and getattr(
                             traffic_result, "is_limited", False
                         ):
-                            from jjz_alert.base.message_templates import (
-                                template_manager,
-                            )
+                            traffic_reminder_text = "今日限行"
+                    else:
+                        # 次日推送：检查进京证是否明日有效，若有效则检查明日限行
+                        jjz_status = all_jjz_results.get(plate)
+                        has_valid_tomorrow = (
+                            jjz_status
+                            and jjz_status.valid_start
+                            and jjz_status.valid_end
+                            and jjz_status.valid_start
+                            <= tomorrow_str
+                            <= jjz_status.valid_end
+                        )
+                        if has_valid_tomorrow:
+                            try:
+                                tomorrow_limit_status = (
+                                    await self.traffic_service.check_plate_limited(
+                                        plate, target_date=tomorrow_date
+                                    )
+                                )
+                                if (
+                                    tomorrow_limit_status
+                                    and tomorrow_limit_status.is_limited
+                                ):
+                                    traffic_reminder_text = "明日限行"
+                            except Exception:
+                                pass
 
-                            reminder_prefix = template_manager.format_traffic_reminder(
-                                "今日限行"
-                            )
-                            body = reminder_prefix + body
+                    # 添加限行提醒到正文
+                    if traffic_reminder_text:
+                        from jjz_alert.base.message_templates import (
+                            template_manager,
+                        )
+
+                        reminder_prefix = template_manager.format_traffic_reminder(
+                            traffic_reminder_text
+                        )
+                        body = reminder_prefix + body
 
                     # 创建批量推送项
                     batch_items.append(
@@ -262,15 +293,7 @@ class JJZPushService:
                             body=body,
                             priority=priority,
                             jjz_data=jjz_data,
-                            traffic_reminder=(
-                                "今日限行"
-                                if (
-                                    not send_next_day
-                                    and traffic_result
-                                    and getattr(traffic_result, "is_limited", False)
-                                )
-                                else None
-                            ),
+                            traffic_reminder=traffic_reminder_text,
                         )
                     )
 
