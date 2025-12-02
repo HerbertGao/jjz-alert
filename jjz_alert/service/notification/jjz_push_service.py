@@ -250,7 +250,7 @@ class JJZPushService:
                             traffic_reminder_text = "今日限行"
                     else:
                         # 次日推送：检查进京证是否明日有效，若有效则检查明日限行
-                        jjz_status = all_jjz_results.get(plate)
+                        # 若明日无效/过期，跳过批量推送（由步骤6的 push_jjz_reminder 处理）
                         has_valid_tomorrow = (
                             jjz_status
                             and jjz_status.valid_start
@@ -259,20 +259,23 @@ class JJZPushService:
                             <= tomorrow_str
                             <= jjz_status.valid_end
                         )
-                        if has_valid_tomorrow:
-                            try:
-                                tomorrow_limit_status = (
-                                    await self.traffic_service.check_plate_limited(
-                                        plate, target_date=tomorrow_date
-                                    )
+                        if not has_valid_tomorrow:
+                            # 过期或明日无效的车牌不参与批量推送
+                            # 将由步骤6发送单独的提醒消息
+                            continue
+                        try:
+                            tomorrow_limit_status = (
+                                await self.traffic_service.check_plate_limited(
+                                    plate, target_date=tomorrow_date
                                 )
-                                if (
-                                    tomorrow_limit_status
-                                    and tomorrow_limit_status.is_limited
-                                ):
-                                    traffic_reminder_text = "明日限行"
-                            except Exception:
-                                pass
+                            )
+                            if (
+                                tomorrow_limit_status
+                                and tomorrow_limit_status.is_limited
+                            ):
+                                traffic_reminder_text = "明日限行"
+                        except Exception:
+                            pass
 
                     # 添加限行提醒到正文
                     if traffic_reminder_text:
