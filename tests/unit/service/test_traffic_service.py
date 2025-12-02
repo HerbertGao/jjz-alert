@@ -1209,8 +1209,12 @@ class TestTrafficService:
         traffic_service = TrafficService()
         traffic_service._memory_cache = None
 
-        result = traffic_service.check_plate_limited_on("京A12345", date.today())
-        assert result is False
+        # Mock _update_memory_cache_if_needed to prevent API calls
+        with patch.object(
+            traffic_service, "_update_memory_cache_if_needed", return_value=None
+        ):
+            result = traffic_service.check_plate_limited_on("京A12345", date.today())
+            assert result is False
 
     def test_check_plate_limited_on_with_single_number(self):
         """测试检查车牌限行 - 单个数字限行（不含'和'字符）"""
