@@ -12,11 +12,10 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from enum import Enum
 from typing import Any, Dict, Optional
 
-from jjz_alert.config.config import config_manager
 from jjz_alert.base.log_category import LogCategory
+from jjz_alert.config.config import config_manager
 
 
 class StructuredLogger:

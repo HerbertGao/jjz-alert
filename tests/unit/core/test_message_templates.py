@@ -1,7 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import patch, Mock
-
-import pytest
+from unittest.mock import patch
 
 from jjz_alert.base import message_templates as mt
 

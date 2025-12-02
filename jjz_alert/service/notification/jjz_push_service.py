@@ -7,12 +7,23 @@
 import asyncio
 import datetime
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 
+from jjz_alert.base.error_handler import (
+    with_error_handling,
+    ConfigurationError,
+    PushError,
+)
+from jjz_alert.base.logger import get_structured_logger
 from jjz_alert.config.config import config_manager, PlateConfig
 from jjz_alert.service.cache.cache_service import CacheService
+from jjz_alert.service.homeassistant.ha_mqtt import ha_mqtt_publisher
 from jjz_alert.service.jjz.jjz_service import JJZService
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
+from jjz_alert.service.notification.batch_pusher import (
+    batch_pusher,
+    BatchPushItem,
+)
 from jjz_alert.service.notification.push_helpers import (
     push_jjz_status,
     push_jjz_reminder,
@@ -20,13 +31,6 @@ from jjz_alert.service.notification.push_helpers import (
 )
 from jjz_alert.service.notification.push_priority import PushPriority
 from jjz_alert.service.traffic.traffic_service import TrafficService
-from jjz_alert.base.logger import get_structured_logger
-from jjz_alert.service.homeassistant.ha_mqtt import ha_mqtt_publisher
-from jjz_alert.base.error_handler import (
-    with_error_handling,
-    ConfigurationError,
-    PushError,
-)
 
 
 class JJZPushService:
@@ -187,12 +191,11 @@ class JJZPushService:
                 logging.warning(f"批量获取限行状态失败: {e}")
                 all_traffic_results = {}
 
-            # 步骤6: 并发处理推送
-            logging.info("开始并发处理推送")
-
-            # 准备HA同步数据
-            jjz_results_for_ha = {}
-            traffic_results_for_ha = {}
+            # 步骤5.5: 执行批量推送（如果有配置 batch_key 的 URL）
+            batched_urls_by_plate: Dict[str, Set[str]] = (
+                {}
+            )  # 记录每个车牌已批量推送的 URL
+            batch_push_result = None
 
             # 判断是否需要次日推送
             now = datetime.datetime.now()
@@ -200,6 +203,158 @@ class JJZPushService:
             today_str = datetime.date.today().strftime("%Y-%m-%d")
             tomorrow_date = datetime.date.today() + datetime.timedelta(days=1)
             tomorrow_str = tomorrow_date.strftime("%Y-%m-%d")
+
+            try:
+                # 收集批量推送数据
+                batch_items: List[BatchPushItem] = []
+
+                for plate_config in target_plates:
+                    plate = plate_config.plate
+                    display_name = plate_config.display_name or plate
+
+                    # 检查该车牌是否有 batch_key 配置
+                    batch_urls = batch_pusher.get_batch_urls_for_plate(plate_config)
+                    if not batch_urls:
+                        continue
+
+                    # 获取进京证状态
+                    jjz_status = all_jjz_results.get(plate)
+                    if not jjz_status or jjz_status.status == JJZStatusEnum.ERROR.value:
+                        continue
+
+                    # 获取限行状态
+                    traffic_result = all_traffic_results.get(plate)
+
+                    # 构建推送内容
+                    from jjz_alert.service.jjz.jjz_utils import (
+                        format_jjz_body_and_priority,
+                    )
+
+                    jjz_data = jjz_status.to_dict()
+                    body, priority_str = format_jjz_body_and_priority(
+                        display_name, jjz_data
+                    )
+                    priority = (
+                        PushPriority.HIGH
+                        if priority_str == "high"
+                        else PushPriority.NORMAL
+                    )
+
+                    # 添加限行提醒
+                    traffic_reminder_text = None
+                    if not send_next_day:
+                        # 当日推送：检查今日限行
+                        if traffic_result and getattr(
+                            traffic_result, "is_limited", False
+                        ):
+                            traffic_reminder_text = "今日限行"
+                    else:
+                        # 次日推送：检查进京证是否明日有效，若有效则检查明日限行
+                        # 若明日无效/过期，跳过批量推送（由步骤6的 push_jjz_reminder 处理）
+                        has_valid_tomorrow = (
+                            jjz_status
+                            and jjz_status.valid_start
+                            and jjz_status.valid_end
+                            and jjz_status.valid_start
+                            <= tomorrow_str
+                            <= jjz_status.valid_end
+                        )
+                        if not has_valid_tomorrow:
+                            # 过期或明日无效的车牌不参与批量推送
+                            # 将由步骤6发送单独的提醒消息
+                            continue
+                        try:
+                            tomorrow_limit_status = (
+                                await self.traffic_service.check_plate_limited(
+                                    plate, target_date=tomorrow_date
+                                )
+                            )
+                            if (
+                                tomorrow_limit_status
+                                and tomorrow_limit_status.is_limited
+                            ):
+                                traffic_reminder_text = "明日限行"
+                        except Exception:
+                            pass
+
+                    # 添加限行提醒到正文
+                    if traffic_reminder_text:
+                        from jjz_alert.base.message_templates import (
+                            template_manager,
+                        )
+
+                        reminder_prefix = template_manager.format_traffic_reminder(
+                            traffic_reminder_text
+                        )
+                        body = reminder_prefix + body
+
+                    # 创建批量推送项
+                    batch_items.append(
+                        BatchPushItem(
+                            plate_config=plate_config,
+                            title=display_name,
+                            body=body,
+                            priority=priority,
+                            jjz_data=jjz_data,
+                            traffic_reminder=traffic_reminder_text,
+                        )
+                    )
+
+                # 执行批量推送
+                if batch_items:
+                    logging.info(f"开始执行批量推送，共 {len(batch_items)} 个车牌参与")
+
+                    # 按 batch_key 分组
+                    batch_groups = batch_pusher.group_push_items(
+                        batch_items, target_plates
+                    )
+
+                    if batch_groups:
+                        logging.info(f"批量推送分组数: {len(batch_groups)}")
+                        batch_push_result = await batch_pusher.execute_batch_push(
+                            batch_groups
+                        )
+
+                        # 仅记录成功批量推送的 URL，失败的组不排除，允许步骤6中重试
+                        if batch_push_result:
+                            group_results = batch_push_result.get("group_results", {})
+                            for batch_key, group in batch_groups.items():
+                                group_success = group_results.get(batch_key, {}).get(
+                                    "success", False
+                                )
+                                if group_success:
+                                    for item in group.items:
+                                        plate = item.plate_config.plate
+                                        if plate not in batched_urls_by_plate:
+                                            batched_urls_by_plate[plate] = set()
+                                        # 获取该车牌在此 batch_key 下的实际配置 URL
+                                        # 而非使用 group.url（可能是其他车牌的 URL）
+                                        plate_batch_url = batch_pusher.get_batch_url_for_plate_and_key(
+                                            item.plate_config, batch_key
+                                        )
+                                        if plate_batch_url:
+                                            batched_urls_by_plate[plate].add(
+                                                plate_batch_url
+                                            )
+
+                        if batch_push_result:
+                            logging.info(
+                                f"批量推送完成: 成功 {batch_push_result.get('success_groups', 0)}/{batch_push_result.get('total_groups', 0)} 组"
+                            )
+                    else:
+                        logging.debug("没有符合条件的批量推送分组")
+                else:
+                    logging.debug("没有配置 batch_key 的车牌，跳过批量推送")
+
+            except Exception as e:
+                logging.warning(f"批量推送阶段异常 ({type(e).__name__}): {e}")
+
+            # 步骤6: 并发处理推送
+            logging.info("开始并发处理推送")
+
+            # 准备HA同步数据
+            jjz_results_for_ha = {}
+            traffic_results_for_ha = {}
 
             async def process_single_plate(plate_config: PlateConfig) -> Dict[str, Any]:
                 """处理单个车牌的推送"""
@@ -242,6 +397,9 @@ class JJZPushService:
                     # 执行推送逻辑
                     jjz_data = jjz_status.to_dict()
 
+                    # 获取该车牌已批量推送的 URL
+                    exclude_urls = batched_urls_by_plate.get(plate, set())
+
                     if not send_next_day:
                         # 当日推送
                         traffic_reminder_text = None
@@ -255,6 +413,7 @@ class JJZPushService:
                             plate_config,
                             jjz_data,
                             traffic_reminder=traffic_reminder_text,
+                            exclude_batch_urls=exclude_urls,
                         )
                     else:
                         # 次日推送逻辑
@@ -291,6 +450,7 @@ class JJZPushService:
                                 target_date=tomorrow_date,
                                 is_next_day=True,
                                 traffic_reminder=traffic_reminder_text,
+                                exclude_batch_urls=exclude_urls,
                             )
                         else:
                             # 次日无效或过期，发送提醒

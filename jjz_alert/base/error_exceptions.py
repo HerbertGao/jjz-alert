@@ -3,7 +3,7 @@ JJZ系统异常定义
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 class JJZError(Exception):

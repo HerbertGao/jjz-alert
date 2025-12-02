@@ -7,7 +7,7 @@ JJZ-Alert 配置管理模块
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import yaml
 
@@ -23,6 +23,7 @@ from jjz_alert.config.config_models import (
     GlobalConfig,
     JJZConfig,
     JJZAccount,
+    AppriseUrlConfig,
     NotificationConfig,
     PlateConfig,
     AppConfig,
@@ -274,10 +275,39 @@ class ConfigManager:
         notification = NotificationConfig(type=notif_data["type"])
 
         if notif_data["type"] == "apprise":
-            # Apprise配置
-            notification.urls = notif_data.get("urls", [])
+            # Apprise配置 - 支持两种格式：纯字符串或带 batch_key 的对象
+            raw_urls = notif_data.get("urls", [])
+            parsed_urls = []
+            for url_item in raw_urls:
+                parsed_url = self._parse_apprise_url(url_item)
+                if parsed_url:
+                    parsed_urls.append(parsed_url)
+            notification.urls = parsed_urls
 
         return notification
+
+    def _parse_apprise_url(self, url_item) -> Optional[Union[str, AppriseUrlConfig]]:
+        """
+        解析单个 Apprise URL 配置
+
+        支持两种格式：
+        1. 纯字符串: "barks://..."
+        2. 对象格式: {"url": "barks://...", "batch_key": "family"}
+        """
+        if isinstance(url_item, str):
+            # 纯字符串格式，保持向后兼容
+            return url_item
+        elif isinstance(url_item, dict):
+            # 对象格式，转换为 AppriseUrlConfig
+            url = url_item.get("url")
+            if not url:
+                logging.warning(f"Apprise URL 配置缺少 url 字段: {url_item}")
+                return None
+            batch_key = url_item.get("batch_key")
+            return AppriseUrlConfig(url=url, batch_key=batch_key)
+        else:
+            logging.warning(f"无效的 Apprise URL 配置格式: {url_item}")
+            return None
 
     def _apply_env_overrides(self, config: AppConfig):
         """应用环境变量覆盖"""

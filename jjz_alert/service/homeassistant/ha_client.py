@@ -12,8 +12,8 @@ import aiohttp
 
 from jjz_alert.config import HomeAssistantConfig
 from .ha_device import HAPlateDevice
-from .ha_models import HAEntityState, HADeviceInfo
 from .ha_errors import HomeAssistantAPIError
+from .ha_models import HAEntityState, HADeviceInfo
 
 
 class HomeAssistantClient:

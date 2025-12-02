@@ -15,7 +15,7 @@ from jjz_alert.config.config import (
     JJZAccount,
     PlateConfig,
 )
-from jjz_alert.config.validation_errors import ConfigValidationError
+from jjz_alert.config.config_models import AppriseUrlConfig
 
 
 class ConfigValidator:
@@ -232,7 +232,28 @@ class ConfigValidator:
         if not notification.urls:
             self.errors.append(f"{context}: Apprise推送URL列表不能为空")
 
-        for i, url in enumerate(notification.urls):
+        for i, url_item in enumerate(notification.urls):
+            # 支持两种格式：纯字符串或 AppriseUrlConfig 对象
+            if isinstance(url_item, AppriseUrlConfig):
+                url = url_item.url
+                batch_key = url_item.batch_key
+                # 验证 batch_key 格式（如果有）
+                if batch_key is not None and not isinstance(batch_key, str):
+                    self.errors.append(
+                        f"{context}: Apprise URL[{i}] batch_key 必须是字符串"
+                    )
+                elif batch_key is not None and len(batch_key) == 0:
+                    self.warnings.append(
+                        f"{context}: Apprise URL[{i}] batch_key 为空字符串，将被忽略"
+                    )
+            elif isinstance(url_item, str):
+                url = url_item
+            else:
+                self.errors.append(
+                    f"{context}: Apprise URL[{i}] 格式无效，必须是字符串或对象"
+                )
+                continue
+
             if not url:
                 self.errors.append(f"{context}: Apprise URL[{i}]不能为空")
             elif not self._validate_apprise_url(url):

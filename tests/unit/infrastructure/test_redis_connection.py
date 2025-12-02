@@ -3,23 +3,24 @@ Redis连接管理单元测试
 """
 
 import asyncio
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-import redis.asyncio as aioredis
 from redis.exceptions import ConnectionError, TimeoutError
 
+from jjz_alert.config import RedisConfig
 from jjz_alert.config.redis.connection import (
     RedisConnectionManager,
-    RedisConnectionError,
-    RedisTimeoutError,
     get_redis_client,
     init_redis,
     close_redis,
     redis_client,
     redis_manager,
 )
-from jjz_alert.config import RedisConfig
+from jjz_alert.config.redis.redis_errors import (
+    RedisConnectionError,
+    RedisTimeoutError,
+)
 
 
 @pytest.mark.unit

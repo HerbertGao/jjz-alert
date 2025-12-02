@@ -3,22 +3,22 @@
 """
 
 import asyncio
+import inspect
 import logging
 from functools import wraps
 from typing import Any, Callable, Dict, Optional, Type, Union
 
+from jjz_alert.base.error_category import ErrorCategory
+from jjz_alert.base.error_collector import error_collector
+from jjz_alert.base.error_enums import ErrorSeverity
 from jjz_alert.base.error_exceptions import (
-    JJZError,
     NetworkError,
     APIError,
     CacheError,
 )
-from jjz_alert.base.error_enums import ErrorSeverity
-from jjz_alert.base.error_category import ErrorCategory
-from jjz_alert.base.error_collector import error_collector
-from jjz_alert.base.recovery_manager import recovery_manager
-from jjz_alert.base.error_utils import handle_critical_error
 from jjz_alert.base.error_utils import _run_async_safe
+from jjz_alert.base.error_utils import handle_critical_error
+from jjz_alert.base.recovery_manager import recovery_manager
 
 
 def with_error_handling(
@@ -89,7 +89,7 @@ def with_error_handling(
                 # 执行错误钩子
                 if on_error:
                     try:
-                        if asyncio.iscoroutinefunction(on_error):
+                        if inspect.iscoroutinefunction(on_error):
                             await on_error(e, context)
                         else:
                             on_error(e, context)
@@ -127,7 +127,7 @@ def with_error_handling(
                 # 如果未尝试自动恢复或未提供服务名，则直接使用兜底方案
                 if fallback_func and not recovery_attempted:
                     try:
-                        if asyncio.iscoroutinefunction(fallback_func):
+                        if inspect.iscoroutinefunction(fallback_func):
                             return await fallback_func()
                         return fallback_func()
                     except Exception as fallback_error:
@@ -177,7 +177,7 @@ def with_error_handling(
 
                 if on_error:
                     try:
-                        if asyncio.iscoroutinefunction(on_error):
+                        if inspect.iscoroutinefunction(on_error):
                             logger.warning("同步函数不支持异步错误钩子，已跳过")
                         else:
                             on_error(e, context)
@@ -189,7 +189,7 @@ def with_error_handling(
                     _run_async_safe(handle_critical_error(e, context))
 
                 # 同步函数仅支持直接兜底方案
-                if fallback_func and not asyncio.iscoroutinefunction(fallback_func):
+                if fallback_func and not inspect.iscoroutinefunction(fallback_func):
                     try:
                         return fallback_func()
                     except Exception as fallback_error:
@@ -201,7 +201,7 @@ def with_error_handling(
                     raise
                 return default_return
 
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return async_wrapper
         else:
             return sync_wrapper
@@ -286,7 +286,7 @@ def with_retry(
             # 所有重试都失败了
             raise last_exception
 
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return async_wrapper
         else:
             return sync_wrapper

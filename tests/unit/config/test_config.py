@@ -2,17 +2,13 @@
 Config 模块单元测试
 """
 
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 import pytest
 import yaml
 
 from jjz_alert.config.config import (
     ConfigManager,
-    config_manager,
     get_redis_config,
     get_cache_config,
     get_homeassistant_config,

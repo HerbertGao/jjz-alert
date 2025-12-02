@@ -32,9 +32,9 @@ from .config import (
 # 配置验证
 from .validation import (
     ConfigValidator,
-    ConfigValidationError,
     validate_config,
 )
+from .validation_errors import ConfigValidationError
 
 __all__ = [
     # 数据类

@@ -6,9 +6,7 @@
 """
 
 import re
-from enum import Enum
 from typing import Dict, Optional
-
 
 PlatePrefix = {
     "京": "beijing",

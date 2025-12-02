@@ -2,8 +2,6 @@ import json
 import logging
 from types import SimpleNamespace
 
-import pytest
-
 from jjz_alert.base import logger as base_logger
 
 

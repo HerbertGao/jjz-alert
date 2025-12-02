@@ -6,13 +6,13 @@ import asyncio
 import logging
 from typing import Any, Coroutine, Dict
 
+from jjz_alert.base.admin_notifier import admin_notifier
+from jjz_alert.base.error_collector import error_collector
 from jjz_alert.base.error_exceptions import (
     ConfigurationError,
     APIError,
     NetworkError,
 )
-from jjz_alert.base.error_collector import error_collector
-from jjz_alert.base.admin_notifier import admin_notifier
 
 logger = logging.getLogger(__name__)
 

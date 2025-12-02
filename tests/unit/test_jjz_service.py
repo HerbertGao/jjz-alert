@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from jjz_alert.service.jjz.jjz_service import JJZService, JJZStatus
-from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 from jjz_alert.service.jjz.jjz_parse import (
     parse_all_jjz_records,
     parse_jjz_response,
 )
+from jjz_alert.service.jjz.jjz_service import JJZService, JJZStatus
+from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 
 
 @pytest.mark.unit

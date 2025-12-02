@@ -6,12 +6,12 @@
 
 import logging
 from datetime import datetime, date
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Set
 
 from jjz_alert.config import PlateConfig
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
-from jjz_alert.service.notification.unified_pusher import unified_pusher
 from jjz_alert.service.notification.push_priority import PushPriority
+from jjz_alert.service.notification.unified_pusher import unified_pusher
 
 
 async def push_jjz_status(
@@ -20,6 +20,7 @@ async def push_jjz_status(
     target_date: Optional[date] = None,
     is_next_day: bool = False,
     traffic_reminder: str = None,
+    exclude_batch_urls: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     """
     推送进京证状态
@@ -30,6 +31,7 @@ async def push_jjz_status(
         target_date: 目标日期
         is_next_day: 是否为次日推送
         traffic_reminder: 限行提醒信息（如"今日限行"、"明日限行"）
+        exclude_batch_urls: 需要排除的已批量推送的 URL 集合（原始 URL）
 
     Returns:
         推送结果
@@ -146,6 +148,7 @@ async def push_jjz_status(
             body=body,
             priority=priority,
             icon=plate_config.icon,  # 传递图标
+            exclude_batch_urls=exclude_batch_urls,  # 排除已批量推送的 URL
         )
 
         return result

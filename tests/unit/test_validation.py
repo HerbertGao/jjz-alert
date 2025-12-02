@@ -6,7 +6,6 @@ import pytest
 
 from jjz_alert.config.config import (
     AppConfig,
-    GlobalConfig,
     RedisConfig,
     CacheConfig,
     RemindConfig,
@@ -19,9 +18,9 @@ from jjz_alert.config.config import (
 )
 from jjz_alert.config.validation import (
     ConfigValidator,
-    ConfigValidationError,
     validate_config,
 )
+from jjz_alert.config.validation_errors import ConfigValidationError
 
 
 @pytest.mark.unit

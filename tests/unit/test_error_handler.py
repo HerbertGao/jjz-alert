@@ -2,10 +2,10 @@
 错误处理模块单元测试
 """
 
-import asyncio
-import pytest
-from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime
+from unittest.mock import Mock, patch, AsyncMock
+
+import pytest
 
 from jjz_alert.base.error_handler import (
     JJZError,
@@ -27,12 +27,11 @@ from jjz_alert.base.error_handler import (
     ErrorCollector,
     AdminNotifier,
     error_collector,
-    recovery_manager,
     handle_critical_error,
     is_token_error,
     get_error_handling_status,
-    _run_async_safe,
 )
+from jjz_alert.base.error_utils import _run_async_safe
 
 
 class TestJJZError:
@@ -566,7 +565,6 @@ class TestAutoRecoveryManager:
     @pytest.mark.asyncio
     async def test_execute_with_retry_no_exception_caught(self):
         """测试自动恢复失败且未捕获具体异常（触发RetryableError）"""
-        from jjz_alert.base.error_exceptions import RetryableError
 
         manager = AutoRecoveryManager()
 

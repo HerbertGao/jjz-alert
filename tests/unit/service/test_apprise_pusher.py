@@ -7,10 +7,8 @@ from datetime import datetime
 
 import pytest
 
-from jjz_alert.service.notification.apprise_pusher import (
-    ApprisePusher,
-    AppriseConfig,
-)
+from jjz_alert.service.notification.apprise_pusher import ApprisePusher
+from jjz_alert.service.notification.apprise_config import AppriseConfig
 
 
 @pytest.mark.unit

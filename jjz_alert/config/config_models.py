@@ -3,7 +3,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Union
 
 
 @dataclass
@@ -134,11 +134,20 @@ class JJZAccount:
 
 
 @dataclass
+class AppriseUrlConfig:
+    """Apprise URL 配置（支持合并选项）"""
+
+    url: str
+    batch_key: Optional[str] = None  # 非空时表示支持合并，相同 key 的消息合并
+
+
+@dataclass
 class NotificationConfig:
     """推送通知配置"""
 
     type: str  # "apprise"
-    urls: List[str] = field(default_factory=list)
+    # 支持两种格式：纯字符串 URL 或 AppriseUrlConfig 对象
+    urls: List[Union[str, AppriseUrlConfig]] = field(default_factory=list)
     server: Optional[str] = None
 
 

@@ -1,5 +1,5 @@
 # 初始化日志（需在其他自定义模块之前导入）
-import jjz_alert.base.logger
+import jjz_alert.base.logger  # noqa: F401
 
 """
 RESTful API for querying JJZ status for a single plate and pushing notification.
@@ -22,8 +22,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from jjz_alert.config.config import config_manager
 from jjz_alert.base.logger import get_structured_logger
+from jjz_alert.config.config import config_manager
 
 
 @asynccontextmanager

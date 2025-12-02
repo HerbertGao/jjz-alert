@@ -2,11 +2,12 @@
 push_helpers 单元测试
 """
 
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from datetime import datetime, date
+from unittest.mock import patch
 
 import pytest
 
+from jjz_alert.config.config import PlateConfig, NotificationConfig
+from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 from jjz_alert.service.notification.push_helpers import (
     push_jjz_status,
     push_jjz_reminder,
@@ -15,8 +16,6 @@ from jjz_alert.service.notification.push_helpers import (
     _notify_admin_system_error,
     _notify_admin_network_error,
 )
-from jjz_alert.config.config import PlateConfig, NotificationConfig
-from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 from jjz_alert.service.notification.push_priority import PushPriority
 
 
