@@ -244,11 +244,16 @@ class TestApprisePusher:
         url = "bark://test_key@api.day.app/test_path"
         masked = pusher._mask_url(url)
 
+        # 验证 scheme 保留
         assert "bark://" in masked
-        # URL遮蔽只遮蔽路径部分，host部分（包括test_key）仍然可见
-        assert "api.day.app" in masked
-        assert "****" in masked
-        # 路径部分被遮蔽
+        # 验证所有部分被遮蔽（显示前3字符 + ****）
+        assert "tes****" in masked  # test_key -> tes****
+        assert "api****" in masked  # api.day.app -> api****
+        # 验证分隔符保留
+        assert "@" in masked
+        assert "/" in masked
+        # 验证敏感信息被遮蔽
+        assert "test_key" not in masked
         assert "test_path" not in masked
 
     def test_mask_url_short_path(self):
@@ -275,7 +280,9 @@ class TestApprisePusher:
         url = "invalid_url"
         masked = pusher._mask_url(url)
 
-        assert masked == "****"
+        # 无 scheme 的 URL，整个作为一个部分遮蔽
+        # "invalid_url" 长度 >= 3，显示前3字符 + ****
+        assert masked == "inv****"
 
     def test_mask_url_exception(self):
         """测试URL遮蔽 - 异常情况"""
@@ -295,14 +302,16 @@ class TestApprisePusher:
 
         # 验证 scheme 保留
         assert "smtp://" in masked
-        # 验证 host 正确识别（不应包含密码的一部分）
-        assert "smtp.example.com" in masked
-        # 验证 userinfo 被遮蔽
+        # 验证所有部分被遮蔽（新的简化逻辑按 @ 和 / 分隔，每部分都遮蔽）
         assert "****" in masked
-        # 验证密码中的 @ 不会导致错误的 host 识别
-        assert "ssw0rd@smtp.example.com" not in masked
-        # 验证整个 userinfo（user:p@ssw0rd）被遮蔽
+        # 验证 @ 分隔符保留
+        assert masked.count("@") == 2  # 保留2个@符号
+        # 验证密码不泄露
         assert "p@ssw0rd" not in masked
+        assert "ssw0rd" not in masked
+        # 预期结果类似: smtp://use****@ssw****@smt****/pat****
+        assert "use****" in masked  # user:p -> use****（前3字符+****）
+        assert "ssw****" in masked  # ssw0rd -> ssw****
 
     def test_mask_url_with_at_in_password_no_path(self):
         """测试URL遮蔽 - 密码包含@符号且无路径"""
@@ -310,10 +319,15 @@ class TestApprisePusher:
         url = "smtp://user:p@ssw0rd@smtp.example.com"
         masked = pusher._mask_url(url)
 
+        # 验证 scheme 保留
         assert "smtp://" in masked
-        assert "smtp.example.com" in masked
+        # 验证所有部分被遮蔽
         assert "****" in masked
+        # 验证 @ 分隔符保留
+        assert masked.count("@") == 2
+        # 验证密码不泄露
         assert "p@ssw0rd" not in masked
+        assert "ssw0rd" not in masked
 
     def test_sanitize_error_message_with_url(self):
         """测试错误消息清理 - 包含URL"""

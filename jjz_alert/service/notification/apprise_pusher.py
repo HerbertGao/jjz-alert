@@ -69,15 +69,30 @@ class ApprisePusher:
             apobj = apprise.Apprise()
 
             # 添加URL配置并记录结果（基于本地实例）
-            valid_urls = []
+            # 存储 (url, masked_url) 元组以避免重复调用 _mask_url()
+            valid_url_data = []  # List[(str, str)]
             invalid_urls = []
             url_results = []
 
             for url in urls:
+                # 添加输入验证：跳过 None 或空字符串
+                if not url or not isinstance(url, str):
+                    logging.warning(f"跳过无效URL类型: {type(url).__name__}")
+                    invalid_urls.append(url if url else "<empty>")
+                    url_results.append(
+                        {
+                            "url": "****",
+                            "valid": False,
+                            "success": False,
+                            "error": "URL为空或类型无效",
+                        }
+                    )
+                    continue
+
                 # 预计算遮蔽后的URL，避免多次调用 _mask_url()
                 masked_url = self._mask_url(url)
                 if apobj.add(url):
-                    valid_urls.append(url)
+                    valid_url_data.append((url, masked_url))
                     url_results.append(
                         {
                             "url": masked_url,
@@ -97,7 +112,7 @@ class ApprisePusher:
                     )
                     logging.warning(f"Apprise URL无效: {masked_url}")
 
-            if not valid_urls:
+            if not valid_url_data:
                 return {
                     "success": False,
                     "error": "没有有效的推送URL",
@@ -115,7 +130,7 @@ class ApprisePusher:
                 f"[APPRISE_DEBUG] 推送内容: {body[:100]}..."
             )  # 只显示前100字符
             logging.debug(f"[APPRISE_DEBUG] 推送参数: {kwargs}")
-            logging.debug(f"[APPRISE_DEBUG] 有效URL数量: {len(valid_urls)}")
+            logging.debug(f"[APPRISE_DEBUG] 有效URL数量: {len(valid_url_data)}")
 
             # 为了获取每个URL的详细推送结果，我们需要单独发送每个URL
             # Apprise的notify()和async_notify()都只返回全局布尔值，无法区分每个URL的状态
@@ -156,32 +171,36 @@ class ApprisePusher:
                 except Exception as exc:
                     # 记录异常类型和详细信息，包含堆栈跟踪便于调试
                     error_msg = f"推送异常: {type(exc).__name__}: {str(exc)}"
-                    logging.warning(f"URL {masked_url} {error_msg}", exc_info=True)
+                    # 清理日志中的敏感信息（URL已经遮蔽，但异常信息可能包含敏感数据）
+                    sanitized_log_msg = self._sanitize_error_message(error_msg, url)
+                    logging.warning(
+                        f"URL {masked_url} {sanitized_log_msg}", exc_info=True
+                    )
                     return (False, error_msg)
 
-            # 为每个有效URL创建推送任务
+            # 为每个有效URL创建推送任务，使用缓存的 masked_url
             push_tasks = [
-                send_single_url(url, self._mask_url(url), body, final_title)
-                for url in valid_urls
+                send_single_url(url, masked_url, body, final_title)
+                for url, masked_url in valid_url_data
             ]
             # 使用 return_exceptions=True 确保一个URL失败不会影响其他URL
             push_results = await asyncio.gather(*push_tasks, return_exceptions=True)
 
             # 验证结果数量与URL数量匹配（防御性编程）
             # 使用 RuntimeError 而不是 assert，确保在 Python -O 模式下也能捕获错误
-            if len(push_results) != len(valid_urls):
+            if len(push_results) != len(valid_url_data):
                 raise RuntimeError(
-                    f"推送结果数量({len(push_results)})与有效URL数量({len(valid_urls)})不匹配"
+                    f"推送结果数量({len(push_results)})与有效URL数量({len(valid_url_data)})不匹配"
                 )
 
             # 更新url_results中有效URL的推送结果
-            # 由于url_results和valid_urls都保持了原始URLs的顺序，可以用索引直接对应
+            # 由于url_results和valid_url_data都保持了原始URLs的顺序，可以用索引直接对应
             success_count = 0
             valid_index = 0
             for url_result in url_results:
                 if url_result["valid"]:
-                    # 从push_results中获取对应的结果
-                    orig_url = valid_urls[valid_index]
+                    # 从valid_url_data和push_results中获取对应的结果
+                    orig_url, cached_masked_url = valid_url_data[valid_index]
                     result = push_results[valid_index]
                     valid_index += 1
 
@@ -189,11 +208,13 @@ class ApprisePusher:
                     if isinstance(result, Exception):
                         url_result["success"] = False
                         error_msg = f"推送异常: {type(result).__name__}: {str(result)}"
-                        url_result["error"] = self._sanitize_error_message(
+                        sanitized_error = self._sanitize_error_message(
                             error_msg, orig_url
                         )
+                        url_result["error"] = sanitized_error
+                        # 清理日志中的敏感信息
                         logging.error(
-                            f"URL {self._mask_url(orig_url)} 推送失败: {error_msg}"
+                            f"URL {cached_masked_url} 推送失败: {sanitized_error}"
                         )
                     else:
                         push_success, error_msg = result
@@ -212,14 +233,14 @@ class ApprisePusher:
             # 整体成功标志：至少有一个URL推送成功
             success = success_count > 0
             # 部分成功标志：有成功但不是全部成功
-            partial_success = 0 < success_count < len(valid_urls)
+            partial_success = 0 < success_count < len(valid_url_data)
 
             result = {
                 "success": success,
                 "partial_success": partial_success,
                 "title": final_title,
                 "body": body,
-                "valid_urls": len(valid_urls),
+                "valid_urls": len(valid_url_data),
                 "invalid_urls": len(invalid_urls),
                 "duration_ms": round(duration_ms, 2),
                 "timestamp": end_time.isoformat(),
@@ -228,77 +249,73 @@ class ApprisePusher:
 
             if success:
                 logging.info(
-                    f"Apprise推送完成: {success_count}/{len(valid_urls)}个通道成功, 耗时{duration_ms:.0f}ms"
+                    f"Apprise推送完成: {success_count}/{len(valid_url_data)}个通道成功, 耗时{duration_ms:.0f}ms"
                 )
             else:
                 logging.error(
-                    f"Apprise推送失败: 0/{len(valid_urls)}个通道成功, 耗时{duration_ms:.0f}ms"
+                    f"Apprise推送失败: 0/{len(valid_url_data)}个通道成功, 耗时{duration_ms:.0f}ms"
                 )
                 result["error"] = "Apprise推送执行失败"
 
             return result
 
         except Exception as e:
-            logging.error(f"Apprise推送异常: {e}")
+            # 清理顶层异常消息中的敏感信息
+            sanitized_error = self._sanitize_error_message(str(e), "")
+            logging.error(f"Apprise推送异常: {sanitized_error}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": sanitized_error,
                 "valid_urls": 0,
                 "invalid_urls": len(urls),
                 "url_results": [],
             }
 
-    @staticmethod
-    def _mask_userinfo(userinfo: str) -> str:
-        """
-        遮蔽URL中的userinfo部分（用户名/token）
-
-        Args:
-            userinfo: 原始userinfo字符串
-
-        Returns:
-            遮蔽后的userinfo字符串
-        """
-        if len(userinfo) > 8:
-            return userinfo[:4] + "****"
-        else:
-            return "****"
-
     def _mask_url(self, url: str) -> str:
-        """遮蔽URL中的敏感信息"""
+        """
+        遮蔽URL中的敏感信息
+
+        策略：
+        1. scheme (://之前) 保持完整
+        2. 其余部分用 @ 和 / 分隔，对每个部分：
+           - 长度 >= 3：显示前3字符 + "****"
+           - 长度 < 3：全部显示为 "****"
+
+        Examples:
+            "bark://token@api.day.app/device" -> "bark://tok****@api****/dev****"
+            "smtp://ab@x/y" -> "smtp://****@****/****"
+        """
         try:
-            # 简单的URL遮蔽，隐藏token等敏感信息
+            if not url or not isinstance(url, str):
+                return "****"
+
+            # 提取 scheme
             if "://" in url:
                 scheme, rest = url.split("://", 1)
-                if "/" in rest:
-                    host_part, path_part = rest.split("/", 1)
-
-                    # 遮蔽host_part中的userinfo（如果存在@符号）
-                    if "@" in host_part:
-                        # 使用 rsplit 从右边分割，确保正确处理密码中包含 @ 的情况
-                        # 例如：user:p@ssword@smtp.example.com 应该分成 user:p@ssword 和 smtp.example.com
-                        userinfo, host = host_part.rsplit("@", 1)
-                        masked_userinfo = self._mask_userinfo(userinfo)
-                        masked_host_part = f"{masked_userinfo}@{host}"
-                    else:
-                        masked_host_part = host_part
-
-                    # 只显示前几个字符
-                    if len(path_part) > 8:
-                        masked_path = path_part[:4] + "****" + path_part[-4:]
-                    else:
-                        masked_path = "****"
-                    return f"{scheme}://{masked_host_part}/{masked_path}"
-                else:
-                    # 没有路径时也要遮蔽userinfo
-                    if "@" in rest:
-                        # 使用 rsplit 从右边分割，确保正确处理密码中包含 @ 的情况
-                        userinfo, host = rest.rsplit("@", 1)
-                        masked_userinfo = self._mask_userinfo(userinfo)
-                        return f"{scheme}://{masked_userinfo}@{host}"
-                    return f"{scheme}://****"
+                scheme_part = scheme + "://"
             else:
-                return "****"
+                # 没有 scheme，整个URL遮蔽
+                rest = url
+                scheme_part = ""
+
+            # 使用正则分割 rest，保留分隔符 @ 和 /
+            import re
+
+            # 分割并保留分隔符
+            parts = re.split(r"([@/])", rest)
+
+            # 遮蔽每个非分隔符部分
+            masked_parts = []
+            for part in parts:
+                if part in ["@", "/"]:  # 分隔符保持原样
+                    masked_parts.append(part)
+                elif part:  # 非空部分需要遮蔽
+                    if len(part) >= 3:
+                        masked_parts.append(part[:3] + "****")
+                    else:
+                        masked_parts.append("****")
+
+            return scheme_part + "".join(masked_parts)
         except Exception:
             return "****"
 
