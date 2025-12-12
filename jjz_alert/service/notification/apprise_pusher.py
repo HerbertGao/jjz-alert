@@ -13,6 +13,9 @@ from typing import List, Dict, Any, Tuple, Optional
 
 import apprise
 
+# 预编译正则表达式以提高性能
+_TOKEN_PATTERN = re.compile(r"\b[a-zA-Z0-9_-]{20,}\b")
+
 
 class ApprisePusher:
     """Apprise推送器"""
@@ -226,6 +229,22 @@ class ApprisePusher:
                 "url_results": [],
             }
 
+    @staticmethod
+    def _mask_userinfo(userinfo: str) -> str:
+        """
+        遮蔽URL中的userinfo部分（用户名/token）
+
+        Args:
+            userinfo: 原始userinfo字符串
+
+        Returns:
+            遮蔽后的userinfo字符串
+        """
+        if len(userinfo) > 8:
+            return userinfo[:4] + "****"
+        else:
+            return "****"
+
     def _mask_url(self, url: str) -> str:
         """遮蔽URL中的敏感信息"""
         try:
@@ -238,11 +257,7 @@ class ApprisePusher:
                     # 遮蔽host_part中的userinfo（如果存在@符号）
                     if "@" in host_part:
                         userinfo, host = host_part.split("@", 1)
-                        # 遮蔽userinfo，只保留前后几个字符
-                        if len(userinfo) > 8:
-                            masked_userinfo = userinfo[:4] + "****"
-                        else:
-                            masked_userinfo = "****"
+                        masked_userinfo = self._mask_userinfo(userinfo)
                         masked_host_part = f"{masked_userinfo}@{host}"
                     else:
                         masked_host_part = host_part
@@ -257,10 +272,7 @@ class ApprisePusher:
                     # 没有路径时也要遮蔽userinfo
                     if "@" in rest:
                         userinfo, host = rest.split("@", 1)
-                        if len(userinfo) > 8:
-                            masked_userinfo = userinfo[:4] + "****"
-                        else:
-                            masked_userinfo = "****"
+                        masked_userinfo = self._mask_userinfo(userinfo)
                         return f"{scheme}://{masked_userinfo}@{host}"
                     return f"{scheme}://****"
             else:
@@ -294,9 +306,7 @@ class ApprisePusher:
 
             # 尝试遮蔽可能的token/key（通常是长字符串）
             # 匹配可能是token的长字符串（20+字符的字母数字组合）
-            sanitized = re.sub(
-                r"\b[a-zA-Z0-9_-]{20,}\b", lambda m: m.group(0)[:4] + "****", sanitized
-            )
+            sanitized = _TOKEN_PATTERN.sub(lambda m: m.group(0)[:4] + "****", sanitized)
 
             return sanitized
         except Exception:
