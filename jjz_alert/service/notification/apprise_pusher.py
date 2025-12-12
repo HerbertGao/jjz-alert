@@ -6,8 +6,10 @@ Apprise多通道推送服务
 
 import asyncio
 import logging
+import re
 from datetime import datetime
-from typing import List, Dict, Any
+from functools import partial
+from typing import List, Dict, Any, Tuple, Optional
 
 import apprise
 
@@ -106,12 +108,18 @@ class ApprisePusher:
             # 为每个有效URL创建推送任务
             async def send_single_url(
                 url: str, masked_url: str, msg_body: str, msg_title: str
-            ):
+            ) -> Tuple[bool, Optional[str]]:
                 """
                 发送单个URL的推送
 
+                Args:
+                    url: 原始URL
+                    masked_url: 遮蔽后的URL（用于日志）
+                    msg_body: 推送内容
+                    msg_title: 推送标题
+
                 Returns:
-                    tuple: (success: bool, error_msg: str or None)
+                    Tuple[bool, Optional[str]]: (是否成功, 错误信息)
                 """
                 try:
                     # 为每个URL创建独立的Apprise实例
@@ -119,34 +127,41 @@ class ApprisePusher:
                     single_apobj.add(url)
 
                     # 在线程池中执行推送（notify是同步方法）
-                    # 显式捕获参数避免闭包问题
+                    # 使用 functools.partial 避免lambda闭包问题
                     push_result = await loop.run_in_executor(
                         None,
-                        lambda: single_apobj.notify(msg_body, title=msg_title),
+                        partial(single_apobj.notify, msg_body, title=msg_title),
                     )
                     return (push_result, None)
                 except Exception as exc:
-                    error_msg = f"推送异常: {str(exc)}"
-                    logging.warning(f"URL {masked_url} {error_msg}")
+                    # 记录异常类型和详细信息，包含堆栈跟踪便于调试
+                    error_msg = f"推送异常: {type(exc).__name__}: {str(exc)}"
+                    logging.warning(f"URL {masked_url} {error_msg}", exc_info=True)
                     return (False, error_msg)
 
             # 为每个有效URL创建推送任务，同时传递遮蔽后的URL用于日志
-            push_tasks = [
-                send_single_url(url, self._mask_url(url), body, final_title)
+            # 同时保留原始URL列表用于错误消息清理
+            push_tasks_with_urls = [
+                (url, send_single_url(url, self._mask_url(url), body, final_title))
                 for url in valid_urls
             ]
-            push_results = await asyncio.gather(*push_tasks)
+            push_results = await asyncio.gather(
+                *[task for _, task in push_tasks_with_urls]
+            )
 
             # 更新url_results中有效URL的推送结果
-            # 使用enumerate避免手动索引追踪
+            # 使用迭代器避免手动索引追踪
             success_count = 0
-            valid_results_iter = iter(push_results)
+            valid_results_iter = iter(zip([url for url, _ in push_tasks_with_urls], push_results))
             for url_result in url_results:
                 if url_result["valid"]:
-                    push_success, error_msg = next(valid_results_iter)
+                    orig_url, (push_success, error_msg) = next(valid_results_iter)
                     url_result["success"] = push_success
                     if error_msg:
-                        url_result["error"] = error_msg
+                        # 清理错误消息中的敏感信息
+                        url_result["error"] = self._sanitize_error_message(
+                            error_msg, orig_url
+                        )
                     if push_success:
                         success_count += 1
 
@@ -212,6 +227,35 @@ class ApprisePusher:
                 return "****"
         except Exception:
             return "****"
+
+    def _sanitize_error_message(self, error_msg: str, url: str) -> str:
+        """
+        清理错误消息中可能包含的敏感信息
+
+        Args:
+            error_msg: 原始错误消息
+            url: 相关的URL（用于识别需要遮蔽的部分）
+
+        Returns:
+            清理后的错误消息
+        """
+        try:
+            sanitized = error_msg
+
+            # 遮蔽URL中的敏感部分（如果错误消息包含URL）
+            if url in sanitized:
+                sanitized = sanitized.replace(url, self._mask_url(url))
+
+            # 尝试遮蔽可能的token/key（通常是长字符串）
+            # 匹配可能是token的长字符串（20+字符的字母数字组合）
+            sanitized = re.sub(
+                r"\b[a-zA-Z0-9_-]{20,}\b", lambda m: m.group(0)[:4] + "****", sanitized
+            )
+
+            return sanitized
+        except Exception:
+            # 如果清理失败，返回通用错误消息
+            return "推送异常（错误详情已隐藏）"
 
     def validate_urls(self, urls: List[str]) -> Dict[str, List[str]]:
         """验证URL有效性"""
