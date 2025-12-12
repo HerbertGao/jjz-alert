@@ -49,7 +49,7 @@ class TestApprisePusher:
 
     @pytest.mark.asyncio
     async def test_send_notification_success(self):
-        """测试发送通知成功"""
+        """测试发送通知成功（全部成功）"""
         pusher = ApprisePusher()
         urls = ["bark://test_key@api.day.app"]
         title = "测试标题"
@@ -58,19 +58,23 @@ class TestApprisePusher:
         with patch(
             "jjz_alert.service.notification.apprise_pusher.apprise"
         ) as mock_apprise:
-            mock_instance = Mock()
-            mock_instance.add.return_value = True
-            mock_instance.async_notify.return_value = [True]  # 返回列表
-            mock_apprise.Apprise.return_value = mock_instance
+            # 验证实例和单独发送实例
+            validation_instance = Mock()
+            validation_instance.add.return_value = True
+            single_instance = Mock()
+            single_instance.add.return_value = True
+
+            mock_apprise.Apprise.side_effect = [validation_instance, single_instance]
 
             with patch("asyncio.get_event_loop") as mock_loop:
                 mock_loop_instance = Mock()
-                mock_loop_instance.run_in_executor = AsyncMock(return_value=[True])
+                mock_loop_instance.run_in_executor = AsyncMock(return_value=True)
                 mock_loop.return_value = mock_loop_instance
 
                 result = await pusher.send_notification(urls, title, body)
 
                 assert result["success"] is True
+                assert result["partial_success"] is False  # 全部成功，不是部分成功
                 assert result["title"] == title
                 assert result["body"] == body
                 assert result["valid_urls"] == 1
@@ -109,14 +113,18 @@ class TestApprisePusher:
         with patch(
             "jjz_alert.service.notification.apprise_pusher.apprise"
         ) as mock_apprise:
-            mock_instance = Mock()
-            mock_instance.add.side_effect = [True, False]
-            mock_instance.async_notify.return_value = [True]  # 只有一个有效URL
-            mock_apprise.Apprise.return_value = mock_instance
+            # 验证实例
+            validation_instance = Mock()
+            validation_instance.add.side_effect = [True, False]  # 第1个有效，第2个无效
+            # 只有1个有效URL，所以只需要1个单独发送实例
+            single_instance = Mock()
+            single_instance.add.return_value = True
+
+            mock_apprise.Apprise.side_effect = [validation_instance, single_instance]
 
             with patch("asyncio.get_event_loop") as mock_loop:
                 mock_loop_instance = Mock()
-                mock_loop_instance.run_in_executor = AsyncMock(return_value=[True])
+                mock_loop_instance.run_in_executor = AsyncMock(return_value=True)
                 mock_loop.return_value = mock_loop_instance
 
                 result = await pusher.send_notification(urls, title, body)
@@ -140,16 +148,29 @@ class TestApprisePusher:
         with patch(
             "jjz_alert.service.notification.apprise_pusher.apprise"
         ) as mock_apprise:
-            mock_instance = Mock()
-            mock_instance.add.return_value = True
-            # 模拟2个成功，1个失败
-            mock_instance.async_notify.return_value = [True, True, False]
-            mock_apprise.Apprise.return_value = mock_instance
+            # 第一个实例用于验证URLs
+            validation_instance = Mock()
+            validation_instance.add.return_value = True
+
+            # 为每个URL创建单独的实例
+            single_instances = [Mock(), Mock(), Mock()]
+            single_instances[0].add.return_value = True
+            single_instances[1].add.return_value = True
+            single_instances[2].add.return_value = True
+
+            # 模拟Apprise()被调用4次（1次验证 + 3次单独发送）
+            mock_apprise.Apprise.side_effect = [
+                validation_instance,
+                single_instances[0],
+                single_instances[1],
+                single_instances[2],
+            ]
 
             with patch("asyncio.get_event_loop") as mock_loop:
                 mock_loop_instance = Mock()
+                # 模拟3次run_in_executor调用，返回True, True, False
                 mock_loop_instance.run_in_executor = AsyncMock(
-                    return_value=[True, True, False]
+                    side_effect=[True, True, False]
                 )
                 mock_loop.return_value = mock_loop_instance
 
@@ -157,6 +178,8 @@ class TestApprisePusher:
 
                 # 应该成功，因为至少有一个成功
                 assert result["success"] is True
+                # 应该标记为部分成功（不是全部成功）
+                assert result["partial_success"] is True
                 assert result["valid_urls"] == 3
                 assert result["invalid_urls"] == 0
                 # 检查URL结果
@@ -176,14 +199,17 @@ class TestApprisePusher:
         with patch(
             "jjz_alert.service.notification.apprise_pusher.apprise"
         ) as mock_apprise:
-            mock_instance = Mock()
-            mock_instance.add.return_value = True
-            mock_instance.async_notify.return_value = [False]  # 返回失败列表
-            mock_apprise.Apprise.return_value = mock_instance
+            # 验证实例和单独发送实例
+            validation_instance = Mock()
+            validation_instance.add.return_value = True
+            single_instance = Mock()
+            single_instance.add.return_value = True
+
+            mock_apprise.Apprise.side_effect = [validation_instance, single_instance]
 
             with patch("asyncio.get_event_loop") as mock_loop:
                 mock_loop_instance = Mock()
-                mock_loop_instance.run_in_executor = AsyncMock(return_value=[False])
+                mock_loop_instance.run_in_executor = AsyncMock(return_value=False)  # 推送失败
                 mock_loop.return_value = mock_loop_instance
 
                 result = await pusher.send_notification(urls, title, body)

@@ -98,34 +98,46 @@ class ApprisePusher:
             logging.debug(f"[APPRISE_DEBUG] 推送参数: {kwargs}")
             logging.debug(f"[APPRISE_DEBUG] 有效URL数量: {len(valid_urls)}")
 
-            # 使用async_notify获取每个URL的详细推送结果
+            # 为了获取每个URL的详细推送结果，我们需要单独发送每个URL
+            # Apprise的notify()和async_notify()都只返回全局布尔值，无法区分每个URL的状态
+            # 单独发送虽然牺牲了一些性能，但能保证准确的成功率统计
             loop = asyncio.get_event_loop()
+            success_count = 0
+            result_index = 0
 
-            # async_notify返回一个列表，包含每个通知服务的推送结果
-            results = await loop.run_in_executor(
-                None,
-                lambda: apobj.async_notify(body, title=final_title)
-            )
+            for url_result in url_results:
+                if url_result["valid"]:
+                    try:
+                        # 为每个URL创建独立的Apprise实例
+                        single_apobj = apprise.Apprise()
+                        single_apobj.add(valid_urls[result_index])
+
+                        # 在线程池中执行推送（notify是同步方法）
+                        single_result = await loop.run_in_executor(
+                            None,
+                            lambda ap=single_apobj: ap.notify(body, title=final_title),
+                        )
+
+                        url_result["success"] = single_result
+                        if single_result:
+                            success_count += 1
+                    except Exception as e:
+                        logging.warning(f"单个URL推送异常: {e}")
+                        url_result["success"] = False
+
+                    result_index += 1
 
             end_time = datetime.now()
             duration_ms = (end_time - start_time).total_seconds() * 1000
 
-            # 更新有效URL的推送结果
-            # async_notify返回的结果列表与添加的URL顺序一致
-            success_count = 0
-            for i, url_result in enumerate([r for r in url_results if r["valid"]]):
-                if i < len(results):
-                    url_result["success"] = results[i]
-                    if results[i]:
-                        success_count += 1
-                else:
-                    url_result["success"] = False
-
             # 整体成功标志：至少有一个URL推送成功
             success = success_count > 0
+            # 部分成功标志：有成功但不是全部成功
+            partial_success = 0 < success_count < len(valid_urls)
 
             result = {
                 "success": success,
+                "partial_success": partial_success,
                 "title": final_title,
                 "body": body,
                 "valid_urls": len(valid_urls),
@@ -140,7 +152,9 @@ class ApprisePusher:
                     f"Apprise推送完成: {success_count}/{len(valid_urls)}个通道成功, 耗时{duration_ms:.0f}ms"
                 )
             else:
-                logging.error(f"Apprise推送失败: {len(valid_urls)}个通道")
+                logging.error(
+                    f"Apprise推送失败: 0/{len(valid_urls)}个通道成功, 耗时{duration_ms:.0f}ms"
+                )
                 result["error"] = "Apprise推送执行失败"
 
             return result
