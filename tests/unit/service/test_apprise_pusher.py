@@ -285,6 +285,44 @@ class TestApprisePusher:
 
         assert masked == "****"
 
+    def test_sanitize_error_message_with_url(self):
+        """测试错误消息清理 - 包含URL"""
+        pusher = ApprisePusher()
+        url = "bark://secret_token_12345@api.day.app/path"
+        error_msg = f"Failed to send to {url}"
+        sanitized = pusher._sanitize_error_message(error_msg, url)
+
+        # URL应该被遮蔽
+        assert "secret_token_12345" not in sanitized
+        assert "****" in sanitized
+        assert "Failed to send" in sanitized
+
+    def test_sanitize_error_message_with_long_token(self):
+        """测试错误消息清理 - 包含长token"""
+        pusher = ApprisePusher()
+        # 创建一个包含长token的错误消息（20+字符）
+        error_msg = "Auth failed: token_abcdefghijklmnopqrstuvwxyz123456"
+        sanitized = pusher._sanitize_error_message(error_msg, "bark://test")
+
+        # 长字符串应该被遮蔽
+        assert "abcdefghijklmnopqrstuvwxyz123456" not in sanitized
+        assert "toke****" in sanitized
+        assert "Auth failed" in sanitized
+
+    def test_sanitize_error_message_exception_handling(self):
+        """测试错误消息清理 - 异常处理"""
+        pusher = ApprisePusher()
+        # 测试None输入
+        result = pusher._sanitize_error_message(None, "test")
+        assert "错误详情已隐藏" in result
+
+    def test_sanitize_error_message_empty_string(self):
+        """测试错误消息清理 - 空字符串"""
+        pusher = ApprisePusher()
+        result = pusher._sanitize_error_message("", "bark://test")
+        # 空字符串应该正常返回
+        assert result == ""
+
     def test_validate_urls_success(self):
         """测试URL验证成功"""
         pusher = ApprisePusher()

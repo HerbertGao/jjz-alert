@@ -44,7 +44,17 @@ class ApprisePusher:
             **kwargs: 其他参数
 
         Returns:
-            推送结果
+            推送结果字典，包含以下字段：
+            - success (bool): 整体是否成功（至少一个通道成功则为True）
+            - partial_success (bool): 是否部分成功（有成功但不是全部成功）
+            - title (str): 推送标题
+            - body (str): 推送内容
+            - valid_urls (int): 有效URL数量
+            - invalid_urls (int): 无效URL数量
+            - duration_ms (float): 推送耗时（毫秒）
+            - timestamp (str): 完成时间（ISO格式）
+            - url_results (List[Dict]): 每个URL的推送结果详情
+            - error (str, optional): 错误信息（如果有）
         """
         try:
             # 使用传入的标题
@@ -157,15 +167,21 @@ class ApprisePusher:
             )
             for url_result in url_results:
                 if url_result["valid"]:
-                    orig_url, (push_success, error_msg) = next(valid_results_iter)
-                    url_result["success"] = push_success
-                    if error_msg:
-                        # 清理错误消息中的敏感信息
-                        url_result["error"] = self._sanitize_error_message(
-                            error_msg, orig_url
-                        )
-                    if push_success:
-                        success_count += 1
+                    try:
+                        orig_url, (push_success, error_msg) = next(valid_results_iter)
+                        url_result["success"] = push_success
+                        if error_msg:
+                            # 清理错误消息中的敏感信息
+                            url_result["error"] = self._sanitize_error_message(
+                                error_msg, orig_url
+                            )
+                        if push_success:
+                            success_count += 1
+                    except StopIteration:
+                        # 防御性编程：处理迭代器耗尽的边缘情况
+                        logging.error("迭代器耗尽：valid URL数量与推送结果不匹配")
+                        url_result["success"] = False
+                        url_result["error"] = "内部错误：推送结果处理异常"
 
             end_time = datetime.now()
             duration_ms = (end_time - start_time).total_seconds() * 1000
@@ -217,13 +233,34 @@ class ApprisePusher:
                 scheme, rest = url.split("://", 1)
                 if "/" in rest:
                     host_part, path_part = rest.split("/", 1)
+
+                    # 遮蔽host_part中的userinfo（如果存在@符号）
+                    if "@" in host_part:
+                        userinfo, host = host_part.split("@", 1)
+                        # 遮蔽userinfo，只保留前后几个字符
+                        if len(userinfo) > 8:
+                            masked_userinfo = userinfo[:4] + "****"
+                        else:
+                            masked_userinfo = "****"
+                        masked_host_part = f"{masked_userinfo}@{host}"
+                    else:
+                        masked_host_part = host_part
+
                     # 只显示前几个字符
                     if len(path_part) > 8:
                         masked_path = path_part[:4] + "****" + path_part[-4:]
                     else:
                         masked_path = "****"
-                    return f"{scheme}://{host_part}/{masked_path}"
+                    return f"{scheme}://{masked_host_part}/{masked_path}"
                 else:
+                    # 没有路径时也要遮蔽userinfo
+                    if "@" in rest:
+                        userinfo, host = rest.split("@", 1)
+                        if len(userinfo) > 8:
+                            masked_userinfo = userinfo[:4] + "****"
+                        else:
+                            masked_userinfo = "****"
+                        return f"{scheme}://{masked_userinfo}@{host}"
                     return f"{scheme}://****"
             else:
                 return "****"
@@ -242,6 +279,12 @@ class ApprisePusher:
             清理后的错误消息
         """
         try:
+            # 处理None和空字符串
+            if error_msg is None:
+                return "推送异常（错误详情已隐藏）"
+            if not error_msg:
+                return error_msg  # 返回空字符串
+
             sanitized = error_msg
 
             # 遮蔽URL中的敏感部分（如果错误消息包含URL）
