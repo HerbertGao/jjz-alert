@@ -100,32 +100,55 @@ class ApprisePusher:
 
             # 为了获取每个URL的详细推送结果，我们需要单独发送每个URL
             # Apprise的notify()和async_notify()都只返回全局布尔值，无法区分每个URL的状态
-            # 单独发送虽然牺牲了一些性能，但能保证准确的成功率统计
+            # 使用 asyncio.gather() 并行发送所有URL，保持性能的同时获取准确结果
             loop = asyncio.get_event_loop()
-            success_count = 0
-            result_index = 0
 
+            # 为每个有效URL创建推送任务
+            async def send_single_url(
+                url: str, masked_url: str, msg_body: str, msg_title: str
+            ):
+                """
+                发送单个URL的推送
+
+                Returns:
+                    tuple: (success: bool, error_msg: str or None)
+                """
+                try:
+                    # 为每个URL创建独立的Apprise实例
+                    single_apobj = apprise.Apprise()
+                    single_apobj.add(url)
+
+                    # 在线程池中执行推送（notify是同步方法）
+                    # 显式捕获参数避免闭包问题
+                    push_result = await loop.run_in_executor(
+                        None,
+                        lambda: single_apobj.notify(msg_body, title=msg_title),
+                    )
+                    return (push_result, None)
+                except Exception as exc:
+                    error_msg = f"推送异常: {str(exc)}"
+                    logging.warning(f"URL {masked_url} {error_msg}")
+                    return (False, error_msg)
+
+            # 为每个有效URL创建推送任务，同时传递遮蔽后的URL用于日志
+            push_tasks = [
+                send_single_url(url, self._mask_url(url), body, final_title)
+                for url in valid_urls
+            ]
+            push_results = await asyncio.gather(*push_tasks)
+
+            # 更新url_results中有效URL的推送结果
+            # 使用enumerate避免手动索引追踪
+            success_count = 0
+            valid_results_iter = iter(push_results)
             for url_result in url_results:
                 if url_result["valid"]:
-                    try:
-                        # 为每个URL创建独立的Apprise实例
-                        single_apobj = apprise.Apprise()
-                        single_apobj.add(valid_urls[result_index])
-
-                        # 在线程池中执行推送（notify是同步方法）
-                        single_result = await loop.run_in_executor(
-                            None,
-                            lambda ap=single_apobj: ap.notify(body, title=final_title),
-                        )
-
-                        url_result["success"] = single_result
-                        if single_result:
-                            success_count += 1
-                    except Exception as e:
-                        logging.warning(f"单个URL推送异常: {e}")
-                        url_result["success"] = False
-
-                    result_index += 1
+                    push_success, error_msg = next(valid_results_iter)
+                    url_result["success"] = push_success
+                    if error_msg:
+                        url_result["error"] = error_msg
+                    if push_success:
+                        success_count += 1
 
             end_time = datetime.now()
             duration_ms = (end_time - start_time).total_seconds() * 1000
