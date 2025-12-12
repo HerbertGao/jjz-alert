@@ -152,7 +152,9 @@ class ApprisePusher:
             # 更新url_results中有效URL的推送结果
             # 使用迭代器避免手动索引追踪
             success_count = 0
-            valid_results_iter = iter(zip([url for url, _ in push_tasks_with_urls], push_results))
+            valid_results_iter = iter(
+                zip([url for url, _ in push_tasks_with_urls], push_results)
+            )
             for url_result in url_results:
                 if url_result["valid"]:
                     orig_url, (push_success, error_msg) = next(valid_results_iter)
