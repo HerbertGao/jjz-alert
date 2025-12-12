@@ -209,7 +209,9 @@ class TestApprisePusher:
 
             with patch("asyncio.get_event_loop") as mock_loop:
                 mock_loop_instance = Mock()
-                mock_loop_instance.run_in_executor = AsyncMock(return_value=False)  # 推送失败
+                mock_loop_instance.run_in_executor = AsyncMock(
+                    return_value=False
+                )  # 推送失败
                 mock_loop.return_value = mock_loop_instance
 
                 result = await pusher.send_notification(urls, title, body)
