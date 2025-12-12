@@ -285,6 +285,36 @@ class TestApprisePusher:
 
         assert masked == "****"
 
+    def test_mask_url_with_at_in_password(self):
+        """测试URL遮蔽 - 密码包含@符号"""
+        pusher = ApprisePusher()
+        # 模拟 SMTP URL，密码中包含 @ 符号
+        # 格式: smtp://username:p@ssword@smtp.example.com/
+        url = "smtp://user:p@ssw0rd@smtp.example.com/path"
+        masked = pusher._mask_url(url)
+
+        # 验证 scheme 保留
+        assert "smtp://" in masked
+        # 验证 host 正确识别（不应包含密码的一部分）
+        assert "smtp.example.com" in masked
+        # 验证 userinfo 被遮蔽
+        assert "****" in masked
+        # 验证密码中的 @ 不会导致错误的 host 识别
+        assert "ssw0rd@smtp.example.com" not in masked
+        # 验证整个 userinfo（user:p@ssw0rd）被遮蔽
+        assert "p@ssw0rd" not in masked
+
+    def test_mask_url_with_at_in_password_no_path(self):
+        """测试URL遮蔽 - 密码包含@符号且无路径"""
+        pusher = ApprisePusher()
+        url = "smtp://user:p@ssw0rd@smtp.example.com"
+        masked = pusher._mask_url(url)
+
+        assert "smtp://" in masked
+        assert "smtp.example.com" in masked
+        assert "****" in masked
+        assert "p@ssw0rd" not in masked
+
     def test_sanitize_error_message_with_url(self):
         """测试错误消息清理 - 包含URL"""
         pusher = ApprisePusher()

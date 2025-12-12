@@ -275,7 +275,9 @@ class ApprisePusher:
 
                     # 遮蔽host_part中的userinfo（如果存在@符号）
                     if "@" in host_part:
-                        userinfo, host = host_part.split("@", 1)
+                        # 使用 rsplit 从右边分割，确保正确处理密码中包含 @ 的情况
+                        # 例如：user:p@ssword@smtp.example.com 应该分成 user:p@ssword 和 smtp.example.com
+                        userinfo, host = host_part.rsplit("@", 1)
                         masked_userinfo = self._mask_userinfo(userinfo)
                         masked_host_part = f"{masked_userinfo}@{host}"
                     else:
@@ -290,7 +292,8 @@ class ApprisePusher:
                 else:
                     # 没有路径时也要遮蔽userinfo
                     if "@" in rest:
-                        userinfo, host = rest.split("@", 1)
+                        # 使用 rsplit 从右边分割，确保正确处理密码中包含 @ 的情况
+                        userinfo, host = rest.rsplit("@", 1)
                         masked_userinfo = self._mask_userinfo(userinfo)
                         return f"{scheme}://{masked_userinfo}@{host}"
                     return f"{scheme}://****"
