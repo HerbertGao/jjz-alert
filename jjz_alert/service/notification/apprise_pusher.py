@@ -133,6 +133,9 @@ class ApprisePusher:
                 """
                 try:
                     # 为每个URL创建独立的Apprise实例
+                    # 原因：Apprise的notify()只返回全局布尔值，无法区分每个URL的推送状态
+                    # 通过为每个URL创建独立实例，我们可以获取准确的单个URL推送结果
+                    # 权衡：虽然会有一定资源开销，但换来了准确的错误追踪和部分成功处理能力
                     single_apobj = apprise.Apprise()
                     single_apobj.add(url)
 
@@ -149,39 +152,37 @@ class ApprisePusher:
                     logging.warning(f"URL {masked_url} {error_msg}", exc_info=True)
                     return (False, error_msg)
 
-            # 为每个有效URL创建推送任务，同时传递遮蔽后的URL用于日志
-            # 同时保留原始URL列表用于错误消息清理
-            push_tasks_with_urls = [
-                (url, send_single_url(url, self._mask_url(url), body, final_title))
+            # 为每个有效URL创建推送任务
+            push_tasks = [
+                send_single_url(url, self._mask_url(url), body, final_title)
                 for url in valid_urls
             ]
-            push_results = await asyncio.gather(
-                *[task for _, task in push_tasks_with_urls]
-            )
+            push_results = await asyncio.gather(*push_tasks)
+
+            # 验证结果数量与URL数量匹配（防御性编程）
+            assert len(push_results) == len(
+                valid_urls
+            ), f"推送结果数量({len(push_results)})与有效URL数量({len(valid_urls)})不匹配"
 
             # 更新url_results中有效URL的推送结果
-            # 使用迭代器避免手动索引追踪
+            # 由于url_results和valid_urls都保持了原始URLs的顺序，可以用索引直接对应
             success_count = 0
-            valid_results_iter = iter(
-                zip([url for url, _ in push_tasks_with_urls], push_results)
-            )
+            valid_index = 0
             for url_result in url_results:
                 if url_result["valid"]:
-                    try:
-                        orig_url, (push_success, error_msg) = next(valid_results_iter)
-                        url_result["success"] = push_success
-                        if error_msg:
-                            # 清理错误消息中的敏感信息
-                            url_result["error"] = self._sanitize_error_message(
-                                error_msg, orig_url
-                            )
-                        if push_success:
-                            success_count += 1
-                    except StopIteration:
-                        # 防御性编程：处理迭代器耗尽的边缘情况
-                        logging.error("迭代器耗尽：valid URL数量与推送结果不匹配")
-                        url_result["success"] = False
-                        url_result["error"] = "内部错误：推送结果处理异常"
+                    # 从push_results中获取对应的结果
+                    orig_url = valid_urls[valid_index]
+                    push_success, error_msg = push_results[valid_index]
+                    valid_index += 1
+
+                    url_result["success"] = push_success
+                    if error_msg:
+                        # 清理错误消息中的敏感信息
+                        url_result["error"] = self._sanitize_error_message(
+                            error_msg, orig_url
+                        )
+                    if push_success:
+                        success_count += 1
 
             end_time = datetime.now()
             duration_ms = (end_time - start_time).total_seconds() * 1000
