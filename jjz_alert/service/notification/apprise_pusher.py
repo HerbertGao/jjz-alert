@@ -103,8 +103,7 @@ class ApprisePusher:
 
             # async_notify返回一个列表，包含每个通知服务的推送结果
             results = await loop.run_in_executor(
-                None,
-                lambda: apobj.async_notify(body, title=final_title)
+                None, lambda: apobj.async_notify(body, title=final_title)
             )
 
             end_time = datetime.now()
