@@ -98,17 +98,31 @@ class ApprisePusher:
             logging.debug(f"[APPRISE_DEBUG] 推送参数: {kwargs}")
             logging.debug(f"[APPRISE_DEBUG] 有效URL数量: {len(valid_urls)}")
 
-            # 在线程池中执行同步的Apprise推送
+            # 使用async_notify获取每个URL的详细推送结果
             loop = asyncio.get_event_loop()
-            success = await loop.run_in_executor(None, apobj.notify, body, final_title)
+
+            # async_notify返回一个列表，包含每个通知服务的推送结果
+            results = await loop.run_in_executor(
+                None,
+                lambda: apobj.async_notify(body, title=final_title)
+            )
 
             end_time = datetime.now()
             duration_ms = (end_time - start_time).total_seconds() * 1000
 
             # 更新有效URL的推送结果
-            for url_result in url_results:
-                if url_result["valid"]:
-                    url_result["success"] = success
+            # async_notify返回的结果列表与添加的URL顺序一致
+            success_count = 0
+            for i, url_result in enumerate([r for r in url_results if r["valid"]]):
+                if i < len(results):
+                    url_result["success"] = results[i]
+                    if results[i]:
+                        success_count += 1
+                else:
+                    url_result["success"] = False
+
+            # 整体成功标志：至少有一个URL推送成功
+            success = success_count > 0
 
             result = {
                 "success": success,
@@ -123,7 +137,7 @@ class ApprisePusher:
 
             if success:
                 logging.info(
-                    f"Apprise推送成功: {len(valid_urls)}个通道, 耗时{duration_ms:.0f}ms"
+                    f"Apprise推送完成: {success_count}/{len(valid_urls)}个通道成功, 耗时{duration_ms:.0f}ms"
                 )
             else:
                 logging.error(f"Apprise推送失败: {len(valid_urls)}个通道")

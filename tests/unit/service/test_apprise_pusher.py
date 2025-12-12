@@ -60,12 +60,12 @@ class TestApprisePusher:
         ) as mock_apprise:
             mock_instance = Mock()
             mock_instance.add.return_value = True
-            mock_instance.notify.return_value = True
+            mock_instance.async_notify.return_value = [True]  # 返回列表
             mock_apprise.Apprise.return_value = mock_instance
 
             with patch("asyncio.get_event_loop") as mock_loop:
                 mock_loop_instance = Mock()
-                mock_loop_instance.run_in_executor = AsyncMock(return_value=True)
+                mock_loop_instance.run_in_executor = AsyncMock(return_value=[True])
                 mock_loop.return_value = mock_loop_instance
 
                 result = await pusher.send_notification(urls, title, body)
@@ -111,12 +111,12 @@ class TestApprisePusher:
         ) as mock_apprise:
             mock_instance = Mock()
             mock_instance.add.side_effect = [True, False]
-            mock_instance.notify.return_value = True
+            mock_instance.async_notify.return_value = [True]  # 只有一个有效URL
             mock_apprise.Apprise.return_value = mock_instance
 
             with patch("asyncio.get_event_loop") as mock_loop:
                 mock_loop_instance = Mock()
-                mock_loop_instance.run_in_executor = AsyncMock(return_value=True)
+                mock_loop_instance.run_in_executor = AsyncMock(return_value=[True])
                 mock_loop.return_value = mock_loop_instance
 
                 result = await pusher.send_notification(urls, title, body)
@@ -124,6 +124,46 @@ class TestApprisePusher:
                 assert result["success"] is True
                 assert result["valid_urls"] == 1
                 assert result["invalid_urls"] == 1
+
+    @pytest.mark.asyncio
+    async def test_send_notification_partial_success(self):
+        """测试发送通知部分成功（2/3成功）"""
+        pusher = ApprisePusher()
+        urls = [
+            "bark://test_key1@api.day.app",
+            "bark://test_key2@api.day.app",
+            "dotpush://test_key3",
+        ]
+        title = "测试标题"
+        body = "测试内容"
+
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
+            mock_instance = Mock()
+            mock_instance.add.return_value = True
+            # 模拟2个成功，1个失败
+            mock_instance.async_notify.return_value = [True, True, False]
+            mock_apprise.Apprise.return_value = mock_instance
+
+            with patch("asyncio.get_event_loop") as mock_loop:
+                mock_loop_instance = Mock()
+                mock_loop_instance.run_in_executor = AsyncMock(
+                    return_value=[True, True, False]
+                )
+                mock_loop.return_value = mock_loop_instance
+
+                result = await pusher.send_notification(urls, title, body)
+
+                # 应该成功，因为至少有一个成功
+                assert result["success"] is True
+                assert result["valid_urls"] == 3
+                assert result["invalid_urls"] == 0
+                # 检查URL结果
+                assert len(result["url_results"]) == 3
+                assert result["url_results"][0]["success"] is True
+                assert result["url_results"][1]["success"] is True
+                assert result["url_results"][2]["success"] is False
 
     @pytest.mark.asyncio
     async def test_send_notification_failure(self):
@@ -138,12 +178,12 @@ class TestApprisePusher:
         ) as mock_apprise:
             mock_instance = Mock()
             mock_instance.add.return_value = True
-            mock_instance.notify.return_value = False
+            mock_instance.async_notify.return_value = [False]  # 返回失败列表
             mock_apprise.Apprise.return_value = mock_instance
 
             with patch("asyncio.get_event_loop") as mock_loop:
                 mock_loop_instance = Mock()
-                mock_loop_instance.run_in_executor = AsyncMock(return_value=False)
+                mock_loop_instance.run_in_executor = AsyncMock(return_value=[False])
                 mock_loop.return_value = mock_loop_instance
 
                 result = await pusher.send_notification(urls, title, body)
