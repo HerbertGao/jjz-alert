@@ -14,7 +14,9 @@ from typing import List, Dict, Any, Tuple, Optional
 import apprise
 
 # 预编译正则表达式以提高性能
-_TOKEN_PATTERN = re.compile(r"\b[a-zA-Z0-9_-]{20,}\b")
+# 用于识别可能是token/key的长字符串的最小长度阈值
+TOKEN_MIN_LENGTH = 20
+_TOKEN_PATTERN = re.compile(rf"\b[a-zA-Z0-9_-]{{{TOKEN_MIN_LENGTH},}}\b")
 
 
 class ApprisePusher:
@@ -72,11 +74,13 @@ class ApprisePusher:
             url_results = []
 
             for url in urls:
+                # 预计算遮蔽后的URL，避免多次调用 _mask_url()
+                masked_url = self._mask_url(url)
                 if apobj.add(url):
                     valid_urls.append(url)
                     url_results.append(
                         {
-                            "url": self._mask_url(url),
+                            "url": masked_url,
                             "valid": True,
                             "success": None,  # 将在推送后更新
                         }
@@ -85,13 +89,13 @@ class ApprisePusher:
                     invalid_urls.append(url)
                     url_results.append(
                         {
-                            "url": self._mask_url(url),
+                            "url": masked_url,
                             "valid": False,
                             "success": False,
                             "error": "URL格式无效",
                         }
                     )
-                    logging.warning(f"Apprise URL无效: {self._mask_url(url)}")
+                    logging.warning(f"Apprise URL无效: {masked_url}")
 
             if not valid_urls:
                 return {
@@ -160,12 +164,15 @@ class ApprisePusher:
                 send_single_url(url, self._mask_url(url), body, final_title)
                 for url in valid_urls
             ]
-            push_results = await asyncio.gather(*push_tasks)
+            # 使用 return_exceptions=True 确保一个URL失败不会影响其他URL
+            push_results = await asyncio.gather(*push_tasks, return_exceptions=True)
 
             # 验证结果数量与URL数量匹配（防御性编程）
-            assert len(push_results) == len(
-                valid_urls
-            ), f"推送结果数量({len(push_results)})与有效URL数量({len(valid_urls)})不匹配"
+            # 使用 RuntimeError 而不是 assert，确保在 Python -O 模式下也能捕获错误
+            if len(push_results) != len(valid_urls):
+                raise RuntimeError(
+                    f"推送结果数量({len(push_results)})与有效URL数量({len(valid_urls)})不匹配"
+                )
 
             # 更新url_results中有效URL的推送结果
             # 由于url_results和valid_urls都保持了原始URLs的顺序，可以用索引直接对应
@@ -175,17 +182,29 @@ class ApprisePusher:
                 if url_result["valid"]:
                     # 从push_results中获取对应的结果
                     orig_url = valid_urls[valid_index]
-                    push_success, error_msg = push_results[valid_index]
+                    result = push_results[valid_index]
                     valid_index += 1
 
-                    url_result["success"] = push_success
-                    if error_msg:
-                        # 清理错误消息中的敏感信息
+                    # 处理 gather() 的 return_exceptions=True 可能返回的 Exception 实例
+                    if isinstance(result, Exception):
+                        url_result["success"] = False
+                        error_msg = f"推送异常: {type(result).__name__}: {str(result)}"
                         url_result["error"] = self._sanitize_error_message(
                             error_msg, orig_url
                         )
-                    if push_success:
-                        success_count += 1
+                        logging.error(
+                            f"URL {self._mask_url(orig_url)} 推送失败: {error_msg}"
+                        )
+                    else:
+                        push_success, error_msg = result
+                        url_result["success"] = push_success
+                        if error_msg:
+                            # 清理错误消息中的敏感信息
+                            url_result["error"] = self._sanitize_error_message(
+                                error_msg, orig_url
+                            )
+                        if push_success:
+                            success_count += 1
 
             end_time = datetime.now()
             duration_ms = (end_time - start_time).total_seconds() * 1000
