@@ -66,7 +66,7 @@ class TestApprisePusher:
 
             mock_apprise.Apprise.side_effect = [validation_instance, single_instance]
 
-            with patch("asyncio.get_event_loop") as mock_loop:
+            with patch("asyncio.get_running_loop") as mock_loop:
                 mock_loop_instance = Mock()
                 mock_loop_instance.run_in_executor = AsyncMock(return_value=True)
                 mock_loop.return_value = mock_loop_instance
@@ -122,7 +122,7 @@ class TestApprisePusher:
 
             mock_apprise.Apprise.side_effect = [validation_instance, single_instance]
 
-            with patch("asyncio.get_event_loop") as mock_loop:
+            with patch("asyncio.get_running_loop") as mock_loop:
                 mock_loop_instance = Mock()
                 mock_loop_instance.run_in_executor = AsyncMock(return_value=True)
                 mock_loop.return_value = mock_loop_instance
@@ -166,7 +166,7 @@ class TestApprisePusher:
                 single_instances[2],
             ]
 
-            with patch("asyncio.get_event_loop") as mock_loop:
+            with patch("asyncio.get_running_loop") as mock_loop:
                 mock_loop_instance = Mock()
                 # 模拟3次run_in_executor调用，返回True, True, False
                 mock_loop_instance.run_in_executor = AsyncMock(
@@ -207,7 +207,7 @@ class TestApprisePusher:
 
             mock_apprise.Apprise.side_effect = [validation_instance, single_instance]
 
-            with patch("asyncio.get_event_loop") as mock_loop:
+            with patch("asyncio.get_running_loop") as mock_loop:
                 mock_loop_instance = Mock()
                 mock_loop_instance.run_in_executor = AsyncMock(
                     return_value=False

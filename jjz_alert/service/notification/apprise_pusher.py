@@ -115,6 +115,7 @@ class ApprisePusher:
             if not valid_url_data:
                 return {
                     "success": False,
+                    "partial_success": False,
                     "error": "没有有效的推送URL",
                     "valid_urls": 0,
                     "invalid_urls": len(invalid_urls),
@@ -135,7 +136,7 @@ class ApprisePusher:
             # 为了获取每个URL的详细推送结果，我们需要单独发送每个URL
             # Apprise的notify()和async_notify()都只返回全局布尔值，无法区分每个URL的状态
             # 使用 asyncio.gather() 并行发送所有URL，保持性能的同时获取准确结果
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             # 为每个有效URL创建推送任务
             async def send_single_url(
@@ -158,6 +159,7 @@ class ApprisePusher:
                     # 原因：Apprise的notify()只返回全局布尔值，无法区分每个URL的推送状态
                     # 通过为每个URL创建独立实例，我们可以获取准确的单个URL推送结果
                     # 权衡：虽然会有一定资源开销，但换来了准确的错误追踪和部分成功处理能力
+                    # 注：目前功能并发量不会超过10，未来遇到性能瓶颈再优化
                     single_apobj = apprise.Apprise()
                     single_apobj.add(url)
 
@@ -265,6 +267,7 @@ class ApprisePusher:
             logging.error(f"Apprise推送异常: {sanitized_error}")
             return {
                 "success": False,
+                "partial_success": False,
                 "error": sanitized_error,
                 "valid_urls": 0,
                 "invalid_urls": len(urls),
@@ -299,8 +302,6 @@ class ApprisePusher:
                 scheme_part = ""
 
             # 使用正则分割 rest，保留分隔符 @ 和 /
-            import re
-
             # 分割并保留分隔符
             parts = re.split(r"([@/])", rest)
 
@@ -340,7 +341,8 @@ class ApprisePusher:
             sanitized = error_msg
 
             # 遮蔽URL中的敏感部分（如果错误消息包含URL）
-            if url in sanitized:
+            # 注意：必须检查url非空，否则空字符串会匹配所有字符导致消息损坏
+            if url and url in sanitized:
                 sanitized = sanitized.replace(url, self._mask_url(url))
 
             # 尝试遮蔽可能的token/key（通常是长字符串）
