@@ -49,7 +49,7 @@ class TestApprisePusher:
 
     @pytest.mark.asyncio
     async def test_send_notification_success(self):
-        """测试发送通知成功"""
+        """测试发送通知成功（全部成功）"""
         pusher = ApprisePusher()
         urls = ["bark://test_key@api.day.app"]
         title = "测试标题"
@@ -58,12 +58,15 @@ class TestApprisePusher:
         with patch(
             "jjz_alert.service.notification.apprise_pusher.apprise"
         ) as mock_apprise:
-            mock_instance = Mock()
-            mock_instance.add.return_value = True
-            mock_instance.notify.return_value = True
-            mock_apprise.Apprise.return_value = mock_instance
+            # 验证实例和单独发送实例
+            validation_instance = Mock()
+            validation_instance.add.return_value = True
+            single_instance = Mock()
+            single_instance.add.return_value = True
 
-            with patch("asyncio.get_event_loop") as mock_loop:
+            mock_apprise.Apprise.side_effect = [validation_instance, single_instance]
+
+            with patch("asyncio.get_running_loop") as mock_loop:
                 mock_loop_instance = Mock()
                 mock_loop_instance.run_in_executor = AsyncMock(return_value=True)
                 mock_loop.return_value = mock_loop_instance
@@ -71,6 +74,7 @@ class TestApprisePusher:
                 result = await pusher.send_notification(urls, title, body)
 
                 assert result["success"] is True
+                assert result["partial_success"] is False  # 全部成功，不是部分成功
                 assert result["title"] == title
                 assert result["body"] == body
                 assert result["valid_urls"] == 1
@@ -109,12 +113,16 @@ class TestApprisePusher:
         with patch(
             "jjz_alert.service.notification.apprise_pusher.apprise"
         ) as mock_apprise:
-            mock_instance = Mock()
-            mock_instance.add.side_effect = [True, False]
-            mock_instance.notify.return_value = True
-            mock_apprise.Apprise.return_value = mock_instance
+            # 验证实例
+            validation_instance = Mock()
+            validation_instance.add.side_effect = [True, False]  # 第1个有效，第2个无效
+            # 只有1个有效URL，所以只需要1个单独发送实例
+            single_instance = Mock()
+            single_instance.add.return_value = True
 
-            with patch("asyncio.get_event_loop") as mock_loop:
+            mock_apprise.Apprise.side_effect = [validation_instance, single_instance]
+
+            with patch("asyncio.get_running_loop") as mock_loop:
                 mock_loop_instance = Mock()
                 mock_loop_instance.run_in_executor = AsyncMock(return_value=True)
                 mock_loop.return_value = mock_loop_instance
@@ -124,6 +132,61 @@ class TestApprisePusher:
                 assert result["success"] is True
                 assert result["valid_urls"] == 1
                 assert result["invalid_urls"] == 1
+
+    @pytest.mark.asyncio
+    async def test_send_notification_partial_success(self):
+        """测试发送通知部分成功（2/3成功）"""
+        pusher = ApprisePusher()
+        urls = [
+            "bark://test_key1@api.day.app",
+            "bark://test_key2@api.day.app",
+            "dotpush://test_key3",
+        ]
+        title = "测试标题"
+        body = "测试内容"
+
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
+            # 第一个实例用于验证URLs
+            validation_instance = Mock()
+            validation_instance.add.return_value = True
+
+            # 为每个URL创建单独的实例
+            single_instances = [Mock(), Mock(), Mock()]
+            single_instances[0].add.return_value = True
+            single_instances[1].add.return_value = True
+            single_instances[2].add.return_value = True
+
+            # 模拟Apprise()被调用4次（1次验证 + 3次单独发送）
+            mock_apprise.Apprise.side_effect = [
+                validation_instance,
+                single_instances[0],
+                single_instances[1],
+                single_instances[2],
+            ]
+
+            with patch("asyncio.get_running_loop") as mock_loop:
+                mock_loop_instance = Mock()
+                # 模拟3次run_in_executor调用，返回True, True, False
+                mock_loop_instance.run_in_executor = AsyncMock(
+                    side_effect=[True, True, False]
+                )
+                mock_loop.return_value = mock_loop_instance
+
+                result = await pusher.send_notification(urls, title, body)
+
+                # 应该成功，因为至少有一个成功
+                assert result["success"] is True
+                # 应该标记为部分成功（不是全部成功）
+                assert result["partial_success"] is True
+                assert result["valid_urls"] == 3
+                assert result["invalid_urls"] == 0
+                # 检查URL结果
+                assert len(result["url_results"]) == 3
+                assert result["url_results"][0]["success"] is True
+                assert result["url_results"][1]["success"] is True
+                assert result["url_results"][2]["success"] is False
 
     @pytest.mark.asyncio
     async def test_send_notification_failure(self):
@@ -136,14 +199,19 @@ class TestApprisePusher:
         with patch(
             "jjz_alert.service.notification.apprise_pusher.apprise"
         ) as mock_apprise:
-            mock_instance = Mock()
-            mock_instance.add.return_value = True
-            mock_instance.notify.return_value = False
-            mock_apprise.Apprise.return_value = mock_instance
+            # 验证实例和单独发送实例
+            validation_instance = Mock()
+            validation_instance.add.return_value = True
+            single_instance = Mock()
+            single_instance.add.return_value = True
 
-            with patch("asyncio.get_event_loop") as mock_loop:
+            mock_apprise.Apprise.side_effect = [validation_instance, single_instance]
+
+            with patch("asyncio.get_running_loop") as mock_loop:
                 mock_loop_instance = Mock()
-                mock_loop_instance.run_in_executor = AsyncMock(return_value=False)
+                mock_loop_instance.run_in_executor = AsyncMock(
+                    return_value=False
+                )  # 推送失败
                 mock_loop.return_value = mock_loop_instance
 
                 result = await pusher.send_notification(urls, title, body)
@@ -176,11 +244,16 @@ class TestApprisePusher:
         url = "bark://test_key@api.day.app/test_path"
         masked = pusher._mask_url(url)
 
+        # 验证 scheme 保留
         assert "bark://" in masked
-        # URL遮蔽只遮蔽路径部分，host部分（包括test_key）仍然可见
-        assert "api.day.app" in masked
-        assert "****" in masked
-        # 路径部分被遮蔽
+        # 验证所有部分被遮蔽（显示前3字符 + ****）
+        assert "tes****" in masked  # test_key -> tes****
+        assert "api****" in masked  # api.day.app -> api****
+        # 验证分隔符保留
+        assert "@" in masked
+        assert "/" in masked
+        # 验证敏感信息被遮蔽
+        assert "test_key" not in masked
         assert "test_path" not in masked
 
     def test_mask_url_short_path(self):
@@ -207,7 +280,9 @@ class TestApprisePusher:
         url = "invalid_url"
         masked = pusher._mask_url(url)
 
-        assert masked == "****"
+        # 无 scheme 的 URL，整个作为一个部分遮蔽
+        # "invalid_url" 长度 >= 3，显示前3字符 + ****
+        assert masked == "inv****"
 
     def test_mask_url_exception(self):
         """测试URL遮蔽 - 异常情况"""
@@ -216,6 +291,81 @@ class TestApprisePusher:
         masked = pusher._mask_url(url)
 
         assert masked == "****"
+
+    def test_mask_url_with_at_in_password(self):
+        """测试URL遮蔽 - 密码包含@符号"""
+        pusher = ApprisePusher()
+        # 模拟 SMTP URL，密码中包含 @ 符号
+        # 格式: smtp://username:p@ssword@smtp.example.com/
+        url = "smtp://user:p@ssw0rd@smtp.example.com/path"
+        masked = pusher._mask_url(url)
+
+        # 验证 scheme 保留
+        assert "smtp://" in masked
+        # 验证所有部分被遮蔽（新的简化逻辑按 @ 和 / 分隔，每部分都遮蔽）
+        assert "****" in masked
+        # 验证 @ 分隔符保留
+        assert masked.count("@") == 2  # 保留2个@符号
+        # 验证密码不泄露
+        assert "p@ssw0rd" not in masked
+        assert "ssw0rd" not in masked
+        # 预期结果类似: smtp://use****@ssw****@smt****/pat****
+        assert "use****" in masked  # user:p -> use****（前3字符+****）
+        assert "ssw****" in masked  # ssw0rd -> ssw****
+
+    def test_mask_url_with_at_in_password_no_path(self):
+        """测试URL遮蔽 - 密码包含@符号且无路径"""
+        pusher = ApprisePusher()
+        url = "smtp://user:p@ssw0rd@smtp.example.com"
+        masked = pusher._mask_url(url)
+
+        # 验证 scheme 保留
+        assert "smtp://" in masked
+        # 验证所有部分被遮蔽
+        assert "****" in masked
+        # 验证 @ 分隔符保留
+        assert masked.count("@") == 2
+        # 验证密码不泄露
+        assert "p@ssw0rd" not in masked
+        assert "ssw0rd" not in masked
+
+    def test_sanitize_error_message_with_url(self):
+        """测试错误消息清理 - 包含URL"""
+        pusher = ApprisePusher()
+        url = "bark://secret_token_12345@api.day.app/path"
+        error_msg = f"Failed to send to {url}"
+        sanitized = pusher._sanitize_error_message(error_msg, url)
+
+        # URL应该被遮蔽
+        assert "secret_token_12345" not in sanitized
+        assert "****" in sanitized
+        assert "Failed to send" in sanitized
+
+    def test_sanitize_error_message_with_long_token(self):
+        """测试错误消息清理 - 包含长token"""
+        pusher = ApprisePusher()
+        # 创建一个包含长token的错误消息（20+字符）
+        error_msg = "Auth failed: token_abcdefghijklmnopqrstuvwxyz123456"
+        sanitized = pusher._sanitize_error_message(error_msg, "bark://test")
+
+        # 长字符串应该被遮蔽
+        assert "abcdefghijklmnopqrstuvwxyz123456" not in sanitized
+        assert "toke****" in sanitized
+        assert "Auth failed" in sanitized
+
+    def test_sanitize_error_message_exception_handling(self):
+        """测试错误消息清理 - 异常处理"""
+        pusher = ApprisePusher()
+        # 测试None输入
+        result = pusher._sanitize_error_message(None, "test")
+        assert "错误详情已隐藏" in result
+
+    def test_sanitize_error_message_empty_string(self):
+        """测试错误消息清理 - 空字符串"""
+        pusher = ApprisePusher()
+        result = pusher._sanitize_error_message("", "bark://test")
+        # 空字符串应该正常返回
+        assert result == ""
 
     def test_validate_urls_success(self):
         """测试URL验证成功"""
