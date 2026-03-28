@@ -162,16 +162,66 @@ def schedule_jobs():
             finally:
                 loop.close()
 
-    for time_str in remind_times:
-        hour, minute = map(int, time_str.split(":"))
-        trigger = CronTrigger(hour=hour, minute=minute)
+    # 仅在提醒功能启用时注册提醒定时任务
+    remind_enabled = (
+        app_config.global_config.remind.enable
+        if app_config.global_config.remind
+        else False
+    )
+    if remind_enabled:
+        for time_str in remind_times:
+            hour, minute = map(int, time_str.split(":"))
+            trigger = CronTrigger(hour=hour, minute=minute)
+            scheduler.add_job(
+                async_main_wrapper,
+                trigger,
+                misfire_grace_time=None,
+                max_instances=2,
+            )
+            logging.info(f"已添加定时任务: 每天 {hour:02d}:{minute:02d}")
+
+    # 注册自动续办定时任务（每天 00:00 触发）
+    renew_plates = [
+        p for p in app_config.plates if p.auto_renew and p.auto_renew.enabled
+    ]
+    if renew_plates:
+
+        def async_renew_wrapper():
+            """Wrapper to run auto renew check in sync scheduler"""
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                from jjz_alert.service.jjz.auto_renew_service import (
+                    run_auto_renew_check,
+                )
+
+                loop.run_until_complete(run_auto_renew_check())
+            except Exception as e:
+                logging.error(f"自动续办任务执行失败: {e}")
+            finally:
+                try:
+                    pending = asyncio.all_tasks(loop)
+                    if pending:
+                        loop.run_until_complete(
+                            asyncio.gather(*pending, return_exceptions=True)
+                        )
+                except Exception as e:
+                    logging.warning(f"清理自动续办待处理任务时出错: {e}")
+                finally:
+                    loop.close()
+
         scheduler.add_job(
-            async_main_wrapper,
-            trigger,
-            misfire_grace_time=None,
-            max_instances=2,
+            async_renew_wrapper,
+            CronTrigger(hour=0, minute=0),
+            misfire_grace_time=3600,  # 最多延迟1小时执行，避免深夜误触发
+            max_instances=1,
         )
-        logging.info(f"已添加定时任务: 每天 {hour:02d}:{minute:02d}")
+        logging.info(
+            f"已添加自动续办定时任务: 每天 00:00 "
+            f"(随机窗口 {app_config.global_config.auto_renew.time_window_start}"
+            f"-{app_config.global_config.auto_renew.time_window_end})"
+        )
+
     logging.info("定时任务调度器启动")
     scheduler.start()
 
@@ -205,8 +255,13 @@ if __name__ == "__main__":
         except ImportError:
             logging.warning("REST API 模块不可用，跳过API服务启动")
 
-    if remind_enabled:
-        # 启动定时任务（阻塞）
+    # 检查是否有启用自动续办的车牌
+    has_auto_renew = any(
+        p.auto_renew and p.auto_renew.enabled for p in app_config.plates
+    )
+
+    if remind_enabled or has_auto_renew:
+        # 启动定时任务（阻塞）— 包含提醒和/或自动续办
         schedule_jobs()
     else:
         # 仅执行一次查询

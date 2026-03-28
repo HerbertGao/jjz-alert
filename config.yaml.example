@@ -63,6 +63,12 @@ global:
     # 注意：进京证数据每次运行主流程时都重新查询，缓存数据仅供推送和后续操作使用
     # 限行规则默认缓存到当天24:00
 
+  # 自动续办全局配置（可选）
+  # 控制自动续办的随机执行时间窗口，避免固定时间请求
+  auto_renew:
+    time_window_start: "00:00"  # 随机窗口起始时间
+    time_window_end: "06:00"    # 随机窗口结束时间
+
   # Home Assistant集成配置（可选）
   homeassistant:
     enabled: false
@@ -120,7 +126,33 @@ plates:
           - "dingding://token/secret"             # 钉钉
           - "json://your-webhook-url.com/notify"  # 自定义Webhook
 
-  # 示例2：Apprise多通道推送 - 完整配置
+  # 示例2：启用六环外自动续办
+  - plate: "冀A12345"
+    display_name: "外地车辆"
+    auto_renew:
+      enabled: true
+      purpose: "03"            # 进京目的代码（01自驾旅游 02看病就医 03探亲访友 04学习培训 05公务差旅 06其它）
+      purpose_name: "探亲访友"
+      destination:
+        area: "朝阳区"
+        area_code: "010"
+        address: "朝阳路xx号xx小区"
+        lng: "116.480881"
+        lat: "39.921469"
+      accommodation:
+        enabled: true          # 是否住宿
+        address: "xx小区"
+        lng: "116.480881"
+        lat: "39.921469"
+      # apply_location:        # 申请地坐标（可选，默认北京市中心）
+      #   lng: "116.4"
+      #   lat: "39.9"
+    notifications:
+      - type: apprise
+        urls:
+          - "barks://api.day.app/your_device_key"
+
+  # 示例3：Apprise多通道推送 - 完整配置
   - plate: "京D22222"
     display_name: "公司车辆"
     icon: "https://example.com/company_car_icon.png"

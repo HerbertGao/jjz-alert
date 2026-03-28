@@ -22,6 +22,13 @@ class JJZStatus:
     error_message: Optional[str] = None
     data_source: str = "api"
     cached_at: Optional[str] = None
+    # 续办所需的车辆级字段
+    vId: Optional[str] = None
+    hpzl: Optional[str] = None
+    elzsfkb: Optional[bool] = None
+    ylzsfkb: Optional[bool] = None
+    cllx: Optional[str] = None
+    sfyecbzxx: Optional[bool] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""

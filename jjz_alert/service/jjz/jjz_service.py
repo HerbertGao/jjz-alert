@@ -37,8 +37,8 @@ class JJZService:
         self._last_config_load = None
         self.structured_logger = get_structured_logger("jjz_service")
 
-    def _check_jjz_status(self, url: str, token: str) -> Dict[str, Any]:
-        """查询进京证状态（原jjz_checker功能）"""
+    def check_jjz_status(self, url: str, token: str) -> Dict[str, Any]:
+        """查询进京证状态"""
         headers = {"Authorization": token, "Content-Type": "application/json"}
         try:
             resp = http_post(url, headers=headers, json_data={})
@@ -79,7 +79,7 @@ class JJZService:
                 logging.error(f"进京证查询失败: {error_msg}")
                 return {"error": error_msg}
 
-    def _load_accounts(self) -> List[JJZAccount]:
+    def load_accounts(self) -> List[JJZAccount]:
         """加载进京证账户配置"""
         try:
             current_time = datetime.now()
@@ -228,7 +228,7 @@ class JJZService:
     ) -> Dict[str, JJZStatus]:
         """优化的批量获取多个车牌的进京证状态 - 减少API调用次数"""
         results = {plate: None for plate in plates}
-        accounts = self._load_accounts()
+        accounts = self.load_accounts()
 
         if not accounts:
             for plate in plates:
@@ -248,7 +248,7 @@ class JJZService:
             try:
                 logging.debug(f"使用账户 {account.name} 查询所有进京证数据")
 
-                response_data = self._check_jjz_status(
+                response_data = self.check_jjz_status(
                     account.jjz.url, account.jjz.token
                 )
                 if "error" in response_data:
@@ -296,7 +296,7 @@ class JJZService:
     @with_retry(max_attempts=3, delay=1.0)
     async def _fetch_from_api(self, plate: str) -> JJZStatus:
         """从API获取进京证状态"""
-        accounts = self._load_accounts()
+        accounts = self.load_accounts()
 
         if not accounts:
             error = APIError("未配置进京证账户", details={"plate": plate})
@@ -317,7 +317,7 @@ class JJZService:
             try:
                 logging.debug(f"使用账户 {account.name} 查询所有进京证数据")
 
-                response_data = self._check_jjz_status(
+                response_data = self.check_jjz_status(
                     account.jjz.url, account.jjz.token
                 )
                 if "error" in response_data:
@@ -453,7 +453,7 @@ class JJZService:
     async def get_service_status(self) -> Dict[str, Any]:
         """获取JJZ服务状态"""
         try:
-            accounts = self._load_accounts()
+            accounts = self.load_accounts()
             cached_plates = await self.get_cached_plates()
 
             # 检查缓存统计
