@@ -298,13 +298,19 @@ class ConfigManager:
         accom_data = ar_data.get("accommodation") or {}
         loc_data = ar_data.get("apply_location") or {}
 
+        # 防御 YAML 八进制解析：010 → 8, 03 → 3，需要零填充回原始格式
+        raw_purpose = ar_data.get("purpose", "")
+        purpose = str(raw_purpose).zfill(2) if raw_purpose != "" else ""
+        raw_area_code = dest_data.get("area_code", "")
+        area_code = str(raw_area_code).zfill(3) if raw_area_code != "" else ""
+
         return AutoRenewConfig(
             enabled=ar_data.get("enabled", False),
-            purpose=str(ar_data.get("purpose", "")),
+            purpose=purpose,
             purpose_name=ar_data.get("purpose_name", ""),
             destination=AutoRenewDestinationConfig(
                 area=dest_data.get("area", ""),
-                area_code=str(dest_data.get("area_code", "")),
+                area_code=area_code,
                 address=dest_data.get("address", ""),
                 lng=str(dest_data.get("lng", "")),
                 lat=str(dest_data.get("lat", "")),
