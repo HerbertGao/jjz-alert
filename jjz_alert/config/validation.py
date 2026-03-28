@@ -216,9 +216,7 @@ class ConfigValidator:
 
             # 验证自动续办配置
             if plate.auto_renew and plate.auto_renew.enabled:
-                self._validate_auto_renew_config(
-                    plate.auto_renew, f"车牌{plate.plate}"
-                )
+                self._validate_auto_renew_config(plate.auto_renew, f"车牌{plate.plate}")
 
     def _validate_auto_renew_config(self, ar: AutoRenewConfig, context: str):
         """验证车牌级自动续办配置"""
@@ -233,9 +231,7 @@ class ConfigValidator:
         }
         for field_name, value in required_fields.items():
             if not value:
-                self.errors.append(
-                    f"{context}自动续办配置缺少必需字段: {field_name}"
-                )
+                self.errors.append(f"{context}自动续办配置缺少必需字段: {field_name}")
 
         # 住宿配置校验
         if ar.accommodation.enabled:
@@ -256,14 +252,10 @@ class ConfigValidator:
         end = ar_global.time_window_end
 
         if not self._validate_time_format(start):
-            self.errors.append(
-                f"自动续办时间窗口起始时间格式无效: {start}"
-            )
+            self.errors.append(f"自动续办时间窗口起始时间格式无效: {start}")
             return
         if not self._validate_time_format(end):
-            self.errors.append(
-                f"自动续办时间窗口结束时间格式无效: {end}"
-            )
+            self.errors.append(f"自动续办时间窗口结束时间格式无效: {end}")
             return
 
         # 起始时间必须早于结束时间
@@ -272,9 +264,7 @@ class ConfigValidator:
         start_minutes = start_parts[0] * 60 + start_parts[1]
         end_minutes = end_parts[0] * 60 + end_parts[1]
         if start_minutes >= end_minutes:
-            self.errors.append(
-                "续办时间窗口起始时间必须早于结束时间"
-            )
+            self.errors.append("续办时间窗口起始时间必须早于结束时间")
 
     def _validate_admin_notifications(self, notifications: List[NotificationConfig]):
         """验证管理员推送配置"""

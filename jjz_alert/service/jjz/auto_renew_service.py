@@ -99,7 +99,10 @@ class AutoRenewService:
             )
             if not result:
                 return RenewResult(
-                    plate=plate, success=False, message="车辆校验失败", step="vehicle_check"
+                    plate=plate,
+                    success=False,
+                    message="车辆校验失败",
+                    step="vehicle_check",
                 )
 
             # ② 获取驾驶人信息
@@ -273,9 +276,7 @@ class AutoRenewService:
             logger.error(f"API {path} 调用失败: {e}")
             return None
 
-    def _vehicle_check(
-        self, base_url: str, token: str, hphm: str, hpzl: str
-    ) -> bool:
+    def _vehicle_check(self, base_url: str, token: str, hphm: str, hpzl: str) -> bool:
         result = self._api_call(
             base_url,
             token,
@@ -284,12 +285,8 @@ class AutoRenewService:
         )
         return result is not None
 
-    def _get_driver_info(
-        self, base_url: str, token: str
-    ) -> Optional[Dict[str, str]]:
-        result = self._api_call(
-            base_url, token, "/pro/applyRecordController/getJsrxx"
-        )
+    def _get_driver_info(self, base_url: str, token: str) -> Optional[Dict[str, str]]:
+        result = self._api_call(base_url, token, "/pro/applyRecordController/getJsrxx")
         if result and result.get("data"):
             return result["data"]
         return None
@@ -398,9 +395,7 @@ class AutoRenewService:
             "jjlkgdwd": "",
         }
 
-    def _submit_apply(
-        self, base_url: str, token: str, request_body: Dict
-    ) -> bool:
+    def _submit_apply(self, base_url: str, token: str, request_body: Dict) -> bool:
         result = self._api_call(
             base_url,
             token,
@@ -436,9 +431,7 @@ class AutoRenewService:
     # 通知
     # ------------------------------------------------------------------
 
-    async def push_renew_result(
-        self, plate_config: PlateConfig, result: RenewResult
-    ):
+    async def push_renew_result(self, plate_config: PlateConfig, result: RenewResult):
         """推送续办结果通知"""
         from jjz_alert.base.message_templates import template_manager
         from jjz_alert.service.notification.push_priority import PushPriority
@@ -582,9 +575,9 @@ async def run_auto_renew_check():
             for record in all_records:
                 if record.plate.upper() == plate.upper():
                     if record.jjzzlmc and "六环外" in record.jjzzlmc:
-                        if target_record is None or (
-                            record.apply_time or ""
-                        ) > (target_record.apply_time or ""):
+                        if target_record is None or (record.apply_time or "") > (
+                            target_record.apply_time or ""
+                        ):
                             target_record = record
 
             if not target_record:

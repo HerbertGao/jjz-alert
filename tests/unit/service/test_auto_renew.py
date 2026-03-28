@@ -25,8 +25,11 @@ def _make_ar_config(**overrides):
         purpose="03",
         purpose_name="探亲访友",
         destination=AutoRenewDestinationConfig(
-            area="朝阳区", area_code="010", address="测试地址",
-            lng="116.4", lat="39.9",
+            area="朝阳区",
+            area_code="010",
+            address="测试地址",
+            lng="116.4",
+            lat="39.9",
         ),
         accommodation=AutoRenewAccommodationConfig(enabled=False),
         apply_location=AutoRenewApplyLocationConfig(),
@@ -124,9 +127,7 @@ class TestShouldRenew:
         """六环内进京证 → 不续办"""
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
         pc = _make_plate_config()
-        status = _make_jjz_status(
-            valid_end=tomorrow, jjzzlmc="进京证（六环内）"
-        )
+        status = _make_jjz_status(valid_end=tomorrow, jjzzlmc="进京证（六环内）")
         assert self.service.should_renew(pc, status) is False
 
 
@@ -150,7 +151,9 @@ class TestBuildApplyRequest:
             "ylzmc": "进京证(六环内)",
         }
 
-        body = service._build_apply_request(status, ar, driver_info, "2026-04-01", metadata)
+        body = service._build_apply_request(
+            status, ar, driver_info, "2026-04-01", metadata
+        )
 
         # stateList 字段
         assert body["vId"] == "V001"
@@ -187,7 +190,9 @@ class TestBuildApplyRequest:
         driver_info = {"jsrxm": "张三", "jszh": "110101199001011234", "dabh": ""}
         metadata = {"elzqyms": "", "ylzqyms": "", "elzmc": "", "ylzmc": ""}
 
-        body = service._build_apply_request(status, ar, driver_info, "2026-04-01", metadata)
+        body = service._build_apply_request(
+            status, ar, driver_info, "2026-04-01", metadata
+        )
         assert body["sfzj"] == "0"
         assert body["zjxxdz"] == ""
 
@@ -225,7 +230,10 @@ class TestApiCallChain:
         mock_resp.raise_for_status = MagicMock()
         mock_post.return_value = mock_resp
 
-        assert self.service._vehicle_check("http://test", "token", "京A12345", "02") is True
+        assert (
+            self.service._vehicle_check("http://test", "token", "京A12345", "02")
+            is True
+        )
 
     @patch("jjz_alert.service.jjz.auto_renew_service.http_post")
     def test_vehicle_check_failure(self, mock_post):
@@ -234,7 +242,10 @@ class TestApiCallChain:
         mock_resp.raise_for_status = MagicMock()
         mock_post.return_value = mock_resp
 
-        assert self.service._vehicle_check("http://test", "token", "京A12345", "02") is False
+        assert (
+            self.service._vehicle_check("http://test", "token", "京A12345", "02")
+            is False
+        )
 
     @patch("jjz_alert.service.jjz.auto_renew_service.http_post")
     def test_get_driver_info_success(self, mock_post):
@@ -283,9 +294,14 @@ class TestApiCallChain:
         mock_resp.raise_for_status = MagicMock()
         mock_post.return_value = mock_resp
 
-        assert self.service._submit_apply("http://test", "token", {"key": "val"}) is True
+        assert (
+            self.service._submit_apply("http://test", "token", {"key": "val"}) is True
+        )
 
     @patch("jjz_alert.service.jjz.auto_renew_service.http_post")
     def test_api_call_network_error(self, mock_post):
         mock_post.side_effect = Exception("Connection refused")
-        assert self.service._vehicle_check("http://test", "token", "京A12345", "02") is False
+        assert (
+            self.service._vehicle_check("http://test", "token", "京A12345", "02")
+            is False
+        )
