@@ -294,9 +294,9 @@ class ConfigManager:
 
     def _parse_auto_renew_config(self, ar_data: Dict) -> AutoRenewConfig:
         """解析车牌级自动续办配置"""
-        dest_data = ar_data.get("destination", {})
-        accom_data = ar_data.get("accommodation", {})
-        loc_data = ar_data.get("apply_location", {})
+        dest_data = ar_data.get("destination") or {}
+        accom_data = ar_data.get("accommodation") or {}
+        loc_data = ar_data.get("apply_location") or {}
 
         return AutoRenewConfig(
             enabled=ar_data.get("enabled", False),

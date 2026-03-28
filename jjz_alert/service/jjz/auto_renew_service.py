@@ -537,7 +537,7 @@ class AutoRenewService:
         effective_start = max(start_seconds, now_seconds)
 
         # 从当前时刻到随机目标时刻的延迟
-        random_target = random.randint(effective_start, end_seconds)
+        random_target = random.randint(effective_start, end_seconds - 1)
         return random_target - now_seconds
 
 

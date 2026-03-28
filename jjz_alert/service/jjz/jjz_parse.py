@@ -228,6 +228,12 @@ def parse_jjz_response(
         jjzzlmc=jjzzlmc,
         blztmc=blztmc,
         data_source="api",
+        vId=str(target_vehicle.get("vId", "")),
+        hpzl=str(target_vehicle.get("hpzl", "")),
+        elzsfkb=target_vehicle.get("elzsfkb"),
+        ylzsfkb=target_vehicle.get("ylzsfkb"),
+        cllx=str(target_vehicle.get("cllx", "")),
+        sfyecbzxx=target_vehicle.get("sfyecbzxx"),
     )
 
 
