@@ -3,7 +3,7 @@
 """
 
 from datetime import date, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 import pytest
 
@@ -201,33 +201,28 @@ class TestBuildApplyRequest:
 class TestCalculateRandomDelay:
     """随机延迟计算测试"""
 
-    def test_default_window(self):
+    @patch("jjz_alert.service.jjz.auto_renew_service.datetime")
+    def test_default_window(self, mock_dt):
+        """mock 到 00:30，窗口 00:00-06:00 → 延迟在 0~19800 之间"""
+        mock_dt.now.return_value = datetime(2026, 3, 29, 0, 30, 0)
         delay = AutoRenewService.calculate_random_delay("00:00", "06:00")
-        # 延迟 = 从当前时刻到窗口内随机时刻，不超过 6 小时
-        assert 0 <= delay <= 6 * 3600
+        # 00:30 到 06:00 = 5.5h = 19800s
+        assert 0 <= delay <= 19800
 
-    def test_custom_window(self):
+    @patch("jjz_alert.service.jjz.auto_renew_service.datetime")
+    def test_custom_window(self, mock_dt):
+        """mock 到 00:00，窗口 01:00-02:00 → 延迟含到窗口起始的偏移"""
+        mock_dt.now.return_value = datetime(2026, 3, 29, 0, 0, 0)
         delay = AutoRenewService.calculate_random_delay("01:00", "02:00")
-        # 延迟包含从 now 到窗口内随机时刻的间隔
-        # 最大延迟 = 02:00 对应的秒数 - 当前秒数
-        now = datetime.now()
-        now_seconds = now.hour * 3600 + now.minute * 60 + now.second
-        max_delay = 2 * 3600 - now_seconds
-        if max_delay <= 0:
-            assert delay == 0
-        else:
-            assert 0 <= delay <= max_delay
+        # 从 00:00 到 01:00-02:00 之间的随机时刻，延迟在 3600~7200 之间
+        assert 3600 <= delay <= 7200
 
-    def test_negative_delay_when_past_window(self):
+    @patch("jjz_alert.service.jjz.auto_renew_service.datetime")
+    def test_negative_delay_when_past_window(self, mock_dt):
         """窗口已过 → 返回 -1 表示不应执行"""
-        delay = AutoRenewService.calculate_random_delay("00:00", "00:01")
-        # 除非恰好在 00:00-00:01 之间运行，否则应为 -1
-        now = datetime.now()
-        now_seconds = now.hour * 3600 + now.minute * 60 + now.second
-        if now_seconds >= 60:  # 00:01 = 60 seconds
-            assert delay == -1
-        else:
-            assert delay >= 0
+        mock_dt.now.return_value = datetime(2026, 3, 29, 7, 0, 0)
+        delay = AutoRenewService.calculate_random_delay("00:00", "06:00")
+        assert delay == -1
 
 
 @pytest.mark.unit
