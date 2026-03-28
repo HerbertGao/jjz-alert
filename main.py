@@ -162,16 +162,23 @@ def schedule_jobs():
             finally:
                 loop.close()
 
-    for time_str in remind_times:
-        hour, minute = map(int, time_str.split(":"))
-        trigger = CronTrigger(hour=hour, minute=minute)
-        scheduler.add_job(
-            async_main_wrapper,
-            trigger,
-            misfire_grace_time=None,
-            max_instances=2,
-        )
-        logging.info(f"已添加定时任务: 每天 {hour:02d}:{minute:02d}")
+    # 仅在提醒功能启用时注册提醒定时任务
+    remind_enabled = (
+        app_config.global_config.remind.enable
+        if app_config.global_config.remind
+        else False
+    )
+    if remind_enabled:
+        for time_str in remind_times:
+            hour, minute = map(int, time_str.split(":"))
+            trigger = CronTrigger(hour=hour, minute=minute)
+            scheduler.add_job(
+                async_main_wrapper,
+                trigger,
+                misfire_grace_time=None,
+                max_instances=2,
+            )
+            logging.info(f"已添加定时任务: 每天 {hour:02d}:{minute:02d}")
 
     # 注册自动续办定时任务（每天 00:00 触发）
     renew_plates = [
