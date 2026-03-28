@@ -99,6 +99,12 @@ def parse_single_jjz_record(
             jjzzlmc=jjzzlmc,
             blztmc=blztmc,
             data_source="api",
+            vId=str(vehicle.get("vId", "")),
+            hpzl=str(vehicle.get("hpzl", "")),
+            elzsfkb=vehicle.get("elzsfkb"),
+            ylzsfkb=vehicle.get("ylzsfkb"),
+            cllx=vehicle.get("cllx", ""),
+            sfyecbzxx=vehicle.get("sfyecbzxx"),
         )
     except Exception as exc:
         logger.error(
@@ -225,9 +231,23 @@ def parse_jjz_response(
     )
 
 
+def extract_renew_metadata(response_data: Dict[str, Any]) -> Dict[str, str]:
+    """
+    从 stateList 响应的 data 顶层提取续办所需的元数据
+    """
+    data = response_data.get("data", {})
+    return {
+        "elzqyms": data.get("elzqyms", ""),
+        "ylzqyms": data.get("ylzqyms", ""),
+        "elzmc": data.get("elzmc", ""),
+        "ylzmc": data.get("ylzmc", ""),
+    }
+
+
 __all__ = [
     "parse_status",
     "parse_single_jjz_record",
     "parse_all_jjz_records",
     "parse_jjz_response",
+    "extract_renew_metadata",
 ]

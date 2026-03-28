@@ -20,11 +20,16 @@ from jjz_alert.config.config_models import (
     AdminConfig,
     HomeAssistantConfig,
     MessageTemplateConfig,
+    GlobalAutoRenewConfig,
     GlobalConfig,
     JJZConfig,
     JJZAccount,
     AppriseUrlConfig,
     NotificationConfig,
+    AutoRenewDestinationConfig,
+    AutoRenewAccommodationConfig,
+    AutoRenewApplyLocationConfig,
+    AutoRenewConfig,
     PlateConfig,
     AppConfig,
 )
@@ -222,6 +227,17 @@ class ConfigManager:
                         "traffic_reminder_prefix"
                     ),
                     sycs_part=template_data.get("sycs_part"),
+                    renew_success=template_data.get("renew_success"),
+                    renew_failure=template_data.get("renew_failure"),
+                    renew_token_expired=template_data.get("renew_token_expired"),
+                )
+
+            # 自动续办全局配置
+            if "auto_renew" in global_data:
+                ar_data = global_data["auto_renew"]
+                config.global_config.auto_renew = GlobalAutoRenewConfig(
+                    time_window_start=ar_data.get("time_window_start", "00:00"),
+                    time_window_end=ar_data.get("time_window_end", "06:00"),
                 )
 
             # 管理员配置
@@ -263,12 +279,47 @@ class ConfigManager:
                         notification = self._parse_notification_config(notif_data)
                         plate_config.notifications.append(notification)
 
+                # 解析自动续办配置
+                if "auto_renew" in plate_data:
+                    plate_config.auto_renew = self._parse_auto_renew_config(
+                        plate_data["auto_renew"]
+                    )
+
                 config.plates.append(plate_config)
 
         # 应用环境变量覆盖
         self._apply_env_overrides(config)
 
         return config
+
+    def _parse_auto_renew_config(self, ar_data: Dict) -> AutoRenewConfig:
+        """解析车牌级自动续办配置"""
+        dest_data = ar_data.get("destination", {})
+        accom_data = ar_data.get("accommodation", {})
+        loc_data = ar_data.get("apply_location", {})
+
+        return AutoRenewConfig(
+            enabled=ar_data.get("enabled", False),
+            purpose=str(ar_data.get("purpose", "")),
+            purpose_name=ar_data.get("purpose_name", ""),
+            destination=AutoRenewDestinationConfig(
+                area=dest_data.get("area", ""),
+                area_code=str(dest_data.get("area_code", "")),
+                address=dest_data.get("address", ""),
+                lng=str(dest_data.get("lng", "")),
+                lat=str(dest_data.get("lat", "")),
+            ),
+            accommodation=AutoRenewAccommodationConfig(
+                enabled=accom_data.get("enabled", False),
+                address=accom_data.get("address", ""),
+                lng=str(accom_data.get("lng", "")),
+                lat=str(accom_data.get("lat", "")),
+            ),
+            apply_location=AutoRenewApplyLocationConfig(
+                lng=str(loc_data.get("lng", "116.4")),
+                lat=str(loc_data.get("lat", "39.9")),
+            ),
+        )
 
     def _parse_notification_config(self, notif_data: Dict) -> NotificationConfig:
         """解析推送配置"""

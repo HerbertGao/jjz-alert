@@ -15,7 +15,7 @@ from jjz_alert.config.config import (
     JJZAccount,
     PlateConfig,
 )
-from jjz_alert.config.config_models import AppriseUrlConfig
+from jjz_alert.config.config_models import AppriseUrlConfig, AutoRenewConfig
 
 
 class ConfigValidator:
@@ -79,6 +79,11 @@ class ConfigValidator:
         for time_str in remind_config.times:
             if not self._validate_time_format(time_str):
                 self.errors.append(f"时间格式无效: {time_str}")
+
+        # 验证自动续办全局配置
+        ar_global = config.global_config.auto_renew
+        if ar_global:
+            self._validate_auto_renew_time_window(ar_global)
 
         # 验证Home Assistant配置
         ha_config = config.global_config.homeassistant
@@ -208,6 +213,68 @@ class ConfigValidator:
                     self._validate_notification_config(
                         notification, f"车牌{plate.plate}推送配置[{j}]"
                     )
+
+            # 验证自动续办配置
+            if plate.auto_renew and plate.auto_renew.enabled:
+                self._validate_auto_renew_config(
+                    plate.auto_renew, f"车牌{plate.plate}"
+                )
+
+    def _validate_auto_renew_config(self, ar: AutoRenewConfig, context: str):
+        """验证车牌级自动续办配置"""
+        required_fields = {
+            "purpose": ar.purpose,
+            "purpose_name": ar.purpose_name,
+            "destination.area": ar.destination.area,
+            "destination.area_code": ar.destination.area_code,
+            "destination.address": ar.destination.address,
+            "destination.lng": ar.destination.lng,
+            "destination.lat": ar.destination.lat,
+        }
+        for field_name, value in required_fields.items():
+            if not value:
+                self.errors.append(
+                    f"{context}自动续办配置缺少必需字段: {field_name}"
+                )
+
+        # 住宿配置校验
+        if ar.accommodation.enabled:
+            accom_fields = {
+                "accommodation.address": ar.accommodation.address,
+                "accommodation.lng": ar.accommodation.lng,
+                "accommodation.lat": ar.accommodation.lat,
+            }
+            for field_name, value in accom_fields.items():
+                if not value:
+                    self.errors.append(
+                        f"{context}自动续办住宿配置缺少必需字段: {field_name}"
+                    )
+
+    def _validate_auto_renew_time_window(self, ar_global):
+        """验证自动续办全局时间窗口配置"""
+        start = ar_global.time_window_start
+        end = ar_global.time_window_end
+
+        if not self._validate_time_format(start):
+            self.errors.append(
+                f"自动续办时间窗口起始时间格式无效: {start}"
+            )
+            return
+        if not self._validate_time_format(end):
+            self.errors.append(
+                f"自动续办时间窗口结束时间格式无效: {end}"
+            )
+            return
+
+        # 起始时间必须早于结束时间
+        start_parts = list(map(int, start.split(":")))
+        end_parts = list(map(int, end.split(":")))
+        start_minutes = start_parts[0] * 60 + start_parts[1]
+        end_minutes = end_parts[0] * 60 + end_parts[1]
+        if start_minutes >= end_minutes:
+            self.errors.append(
+                "续办时间窗口起始时间必须早于结束时间"
+            )
 
     def _validate_admin_notifications(self, notifications: List[NotificationConfig]):
         """验证管理员推送配置"""

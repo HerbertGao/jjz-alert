@@ -172,6 +172,49 @@ def schedule_jobs():
             max_instances=2,
         )
         logging.info(f"已添加定时任务: 每天 {hour:02d}:{minute:02d}")
+
+    # 注册自动续办定时任务（每天 00:00 触发）
+    renew_plates = [
+        p for p in app_config.plates if p.auto_renew and p.auto_renew.enabled
+    ]
+    if renew_plates:
+
+        def async_renew_wrapper():
+            """Wrapper to run auto renew check in sync scheduler"""
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                from jjz_alert.service.jjz.auto_renew_service import (
+                    run_auto_renew_check,
+                )
+
+                loop.run_until_complete(run_auto_renew_check())
+            except Exception as e:
+                logging.error(f"自动续办任务执行失败: {e}")
+            finally:
+                try:
+                    pending = asyncio.all_tasks(loop)
+                    if pending:
+                        loop.run_until_complete(
+                            asyncio.gather(*pending, return_exceptions=True)
+                        )
+                except Exception as e:
+                    logging.warning(f"清理自动续办待处理任务时出错: {e}")
+                finally:
+                    loop.close()
+
+        scheduler.add_job(
+            async_renew_wrapper,
+            CronTrigger(hour=0, minute=0),
+            misfire_grace_time=None,
+            max_instances=1,
+        )
+        logging.info(
+            f"已添加自动续办定时任务: 每天 00:00 "
+            f"(随机窗口 {app_config.global_config.auto_renew.time_window_start}"
+            f"-{app_config.global_config.auto_renew.time_window_end})"
+        )
+
     logging.info("定时任务调度器启动")
     scheduler.start()
 

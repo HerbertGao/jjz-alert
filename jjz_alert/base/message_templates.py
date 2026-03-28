@@ -49,6 +49,19 @@ class MessageTemplateManager:
             # 六环内剩余次数部分模板
             "sycs_part": "六环内进京证剩余 ${sycs} 次。",
             "sycs_part_empty": "",
+            # 自动续办相关模板
+            "renew_success": (
+                "车牌 ${display_name} 的六环外进京证已自动续办，"
+                "进京日期 ${jjrq}，已提交等待审核。"
+            ),
+            "renew_failure": (
+                "车牌 ${display_name} 的六环外进京证自动续办失败。"
+                "失败步骤：${step}，原因：${reason}"
+            ),
+            "renew_token_expired": (
+                "车牌 ${display_name} 的六环外进京证自动续办失败："
+                "Token 已失效，请手动更新配置中的 token。"
+            ),
         }
 
     def format_valid_status(
@@ -203,6 +216,27 @@ class MessageTemplateManager:
             # 返回备用格式
             return f"【⚠️{reminder_text}】"
 
+    def format_message(self, template_name: str, **kwargs) -> str:
+        """
+        使用指定模板名格式化消息
+
+        Args:
+            template_name: 模板名称
+            **kwargs: 模板变量
+
+        Returns:
+            格式化后的消息
+        """
+        tmpl = self.templates.get(template_name)
+        if not tmpl:
+            self.logger.warning(f"模板 {template_name} 不存在")
+            return str(kwargs)
+        try:
+            return Template(tmpl).safe_substitute(**kwargs)
+        except Exception as e:
+            self.logger.error(f"格式化模板 {template_name} 失败: {e}")
+            return str(kwargs)
+
     def update_templates(self, new_templates: Dict[str, str]) -> None:
         """
         更新模板配置
@@ -264,6 +298,9 @@ def initialize_templates_from_config(config_manager=None):
             "error_status",
             "traffic_reminder_prefix",
             "sycs_part",
+            "renew_success",
+            "renew_failure",
+            "renew_token_expired",
         ]:
             value = getattr(template_config, field_name, None)
             if value is not None:

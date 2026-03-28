@@ -100,6 +100,17 @@ class MessageTemplateConfig:
     error_status: Optional[str] = None
     traffic_reminder_prefix: Optional[str] = None
     sycs_part: Optional[str] = None
+    renew_success: Optional[str] = None
+    renew_failure: Optional[str] = None
+    renew_token_expired: Optional[str] = None
+
+
+@dataclass
+class GlobalAutoRenewConfig:
+    """全局自动续办配置"""
+
+    time_window_start: str = "00:00"
+    time_window_end: str = "06:00"
 
 
 @dataclass
@@ -115,6 +126,7 @@ class GlobalConfig:
     message_templates: MessageTemplateConfig = field(
         default_factory=MessageTemplateConfig
     )
+    auto_renew: GlobalAutoRenewConfig = field(default_factory=GlobalAutoRenewConfig)
 
 
 @dataclass
@@ -152,6 +164,53 @@ class NotificationConfig:
 
 
 @dataclass
+class AutoRenewDestinationConfig:
+    """续办目的地配置"""
+
+    area: str = ""
+    area_code: str = ""
+    address: str = ""
+    lng: str = ""
+    lat: str = ""
+
+
+@dataclass
+class AutoRenewAccommodationConfig:
+    """续办住宿配置"""
+
+    enabled: bool = False
+    address: str = ""
+    lng: str = ""
+    lat: str = ""
+
+
+@dataclass
+class AutoRenewApplyLocationConfig:
+    """续办申请地坐标配置"""
+
+    lng: str = "116.4"
+    lat: str = "39.9"
+
+
+@dataclass
+class AutoRenewConfig:
+    """车牌级自动续办配置"""
+
+    enabled: bool = False
+    purpose: str = ""
+    purpose_name: str = ""
+    destination: AutoRenewDestinationConfig = field(
+        default_factory=AutoRenewDestinationConfig
+    )
+    accommodation: AutoRenewAccommodationConfig = field(
+        default_factory=AutoRenewAccommodationConfig
+    )
+    apply_location: AutoRenewApplyLocationConfig = field(
+        default_factory=AutoRenewApplyLocationConfig
+    )
+
+
+@dataclass
 class PlateConfig:
     """车牌配置"""
 
@@ -159,6 +218,7 @@ class PlateConfig:
     display_name: Optional[str] = None
     icon: Optional[str] = None
     notifications: List[NotificationConfig] = field(default_factory=list)
+    auto_renew: Optional[AutoRenewConfig] = None
 
 
 @dataclass
