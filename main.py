@@ -248,8 +248,13 @@ if __name__ == "__main__":
         except ImportError:
             logging.warning("REST API 模块不可用，跳过API服务启动")
 
-    if remind_enabled:
-        # 启动定时任务（阻塞）
+    # 检查是否有启用自动续办的车牌
+    has_auto_renew = any(
+        p.auto_renew and p.auto_renew.enabled for p in app_config.plates
+    )
+
+    if remind_enabled or has_auto_renew:
+        # 启动定时任务（阻塞）— 包含提醒和/或自动续办
         schedule_jobs()
     else:
         # 仅执行一次查询

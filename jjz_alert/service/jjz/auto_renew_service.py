@@ -88,9 +88,18 @@ class AutoRenewService:
             if await self._has_renewed_today(plate):
                 return RenewResult(
                     plate=plate,
+                    success=True,
+                    message="当日已提交续办，自动跳过",
+                    step="dedup_skip",
+                )
+
+            # 校验必需的车辆字段
+            if not jjz_status.vId:
+                return RenewResult(
+                    plate=plate,
                     success=False,
-                    message="当日已提交续办，跳过",
-                    step="dedup_check",
+                    message="缺少车辆标识(vId)，无法续办",
+                    step="validate_fields",
                 )
 
             # ① 车辆校验
@@ -101,7 +110,7 @@ class AutoRenewService:
                 return RenewResult(
                     plate=plate,
                     success=False,
-                    message="车辆校验失败",
+                    message=f"车辆校验失败: {self._last_api_error}",
                     step="vehicle_check",
                 )
 
@@ -111,7 +120,7 @@ class AutoRenewService:
                 return RenewResult(
                     plate=plate,
                     success=False,
-                    message="获取驾驶人信息失败",
+                    message=f"获取驾驶人信息失败: {self._last_api_error}",
                     step="get_driver_info",
                 )
 
@@ -121,7 +130,7 @@ class AutoRenewService:
                 return RenewResult(
                     plate=plate,
                     success=False,
-                    message="驾驶人校验失败",
+                    message=f"驾驶人校验失败: {self._last_api_error}",
                     step="driver_check",
                 )
 
@@ -133,12 +142,19 @@ class AutoRenewService:
                 return RenewResult(
                     plate=plate,
                     success=False,
-                    message="当前无可选进京日期",
+                    message=f"当前无可选进京日期: {self._last_api_error}",
                     step="check_handle",
                 )
 
             # ⑤ 检查是否需填行驶路线
-            self._check_road_info(base_url, token, jjz_status.vId)
+            road_ok = self._check_road_info(base_url, token, jjz_status.vId)
+            if not road_ok:
+                return RenewResult(
+                    plate=plate,
+                    success=False,
+                    message=f"行驶路线校验失败: {self._last_api_error}",
+                    step="check_road_info",
+                )
 
             # ⑥ 组装并提交申请
             jjrq = handle_data["jjrqs"][0]
@@ -152,7 +168,7 @@ class AutoRenewService:
                 return RenewResult(
                     plate=plate,
                     success=False,
-                    message="提交续办申请失败",
+                    message=f"提交续办申请失败: {self._last_api_error}",
                     step="submit_apply",
                 )
 
@@ -211,10 +227,7 @@ class AutoRenewService:
             logger.info(f"车牌 {plate_config.plate} 已有待审记录，跳过续办")
             return False
 
-        # 六环外不可办理
-        if jjz_status.elzsfkb is False:
-            logger.warning(f"车牌 {plate_config.plate} 六环外当前不可办理")
-            return False
+        # 注意：elzsfkb 的检查由调用方处理，以便在不可办理时推送通知
 
         # 判断有效期：明天到期或已过期
         if jjz_status.valid_end:
@@ -261,18 +274,22 @@ class AutoRenewService:
     def _api_call(
         self, base_url: str, token: str, path: str, json_data: Dict = None
     ) -> Optional[Dict]:
-        """通用 API 调用，返回 code==200 时的完整响应"""
+        """通用 API 调用，返回 code==200 时的完整响应，失败时将错误信息存入 _last_api_error"""
         url = f"{base_url}{path}"
         headers = {"Authorization": token, "Content-Type": "application/json"}
+        self._last_api_error = ""
         try:
             resp = http_post(url, headers=headers, json_data=json_data or {})
             resp.raise_for_status()
             data = resp.json()
             if data.get("code") != 200:
+                msg = data.get("msg", "")
+                self._last_api_error = f"code={data.get('code')}, msg={msg}"
                 logger.warning(f"API {path} 返回非200: {data}")
                 return None
             return data
         except Exception as e:
+            self._last_api_error = str(e)
             logger.error(f"API {path} 调用失败: {e}")
             return None
 
@@ -492,7 +509,7 @@ class AutoRenewService:
     def calculate_random_delay(
         time_window_start: str = "00:00", time_window_end: str = "06:00"
     ) -> int:
-        """计算在时间窗口内的随机等待秒数"""
+        """计算从当前时刻到时间窗口内随机时刻的等待秒数"""
         start_parts = list(map(int, time_window_start.split(":")))
         end_parts = list(map(int, time_window_end.split(":")))
         start_seconds = start_parts[0] * 3600 + start_parts[1] * 60
@@ -501,13 +518,16 @@ class AutoRenewService:
         now = datetime.now()
         now_seconds = now.hour * 3600 + now.minute * 60 + now.second
 
-        # 如果当前时间已超过窗口起始，从现在开始算
-        effective_start = max(start_seconds, now_seconds)
-
-        if effective_start >= end_seconds:
+        if now_seconds >= end_seconds:
+            # 已超过窗口结束时间
             return 0
 
-        return random.randint(0, end_seconds - effective_start)
+        # 有效随机范围的起点：窗口起始或当前时间（取较晚者）
+        effective_start = max(start_seconds, now_seconds)
+
+        # 从当前时刻到随机目标时刻的延迟
+        random_target = random.randint(effective_start, end_seconds)
+        return random_target - now_seconds
 
 
 # 全局实例
@@ -550,27 +570,27 @@ async def run_auto_renew_check():
 
     jjz_service = JJZService()
 
+    # 一次性查询所有车辆状态（stateList 返回所有车辆数据）
+    accounts = jjz_service._load_accounts()
+    if not accounts:
+        logger.error("无可用进京证账户")
+        return
+
+    response_data = jjz_service._check_jjz_status(
+        accounts[0].jjz.url, accounts[0].jjz.token
+    )
+    if not response_data or "error" in response_data:
+        logger.warning("查询进京证状态失败，跳过自动续办")
+        return
+
+    all_records = parse_all_jjz_records(
+        response_data, jjz_service._determine_status, JJZStatus
+    )
+
     for plate_config in renew_plates:
         plate = plate_config.plate
         try:
-            # 查询状态 — 需要拿到原始响应数据
-            accounts = jjz_service._load_accounts()
-            if not accounts:
-                logger.error("无可用进京证账户")
-                continue
-
-            # 调用 stateList 获取原始响应
-            response_data = jjz_service._check_jjz_status(
-                accounts[0].jjz.url, accounts[0].jjz.token
-            )
-            if not response_data or "error" in response_data:
-                logger.warning(f"车牌 {plate} 查询状态失败")
-                continue
-
-            # 解析所有记录，找到匹配车牌的六环外最新记录
-            all_records = parse_all_jjz_records(
-                response_data, jjz_service._determine_status, JJZStatus
-            )
+            # 从已解析的记录中找到匹配车牌的六环外最新记录
             target_record = None
             for record in all_records:
                 if record.plate.upper() == plate.upper():
@@ -584,12 +604,7 @@ async def run_auto_renew_check():
                 logger.info(f"车牌 {plate} 未找到六环外进京证记录")
                 continue
 
-            # 判断是否需要续办
-            if not auto_renew_service.should_renew(plate_config, target_record):
-                logger.info(f"车牌 {plate} 不满足续办条件，跳过")
-                continue
-
-            # 六环外不可办理时发通知
+            # 六环外不可办理时发通知（在 should_renew 之前检查，避免不可达）
             if target_record.elzsfkb is False:
                 await auto_renew_service.push_renew_result(
                     plate_config,
@@ -600,6 +615,11 @@ async def run_auto_renew_check():
                         step="eligibility_check",
                     ),
                 )
+                continue
+
+            # 判断是否需要续办
+            if not auto_renew_service.should_renew(plate_config, target_record):
+                logger.info(f"车牌 {plate} 不满足续办条件，跳过")
                 continue
 
             # 执行续办

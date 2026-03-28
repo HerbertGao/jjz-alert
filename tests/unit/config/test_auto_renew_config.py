@@ -108,7 +108,7 @@ class TestAutoRenewConfigParsing:
         assert config.global_config.auto_renew.time_window_end == "06:00"
 
     def test_default_apply_location(self, tmp_path):
-        """未配置 apply_location 时使用默认坐标"""
+        """未配置 apply_location 时使用默认坐标（非 destination 坐标）"""
         config_data = {
             "plates": [
                 {
@@ -121,8 +121,8 @@ class TestAutoRenewConfigParsing:
                             "area": "朝阳区",
                             "area_code": "010",
                             "address": "测试",
-                            "lng": "116.4",
-                            "lat": "39.9",
+                            "lng": "116.5",
+                            "lat": "40.0",
                         },
                     },
                     "notifications": [],

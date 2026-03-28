@@ -2,7 +2,7 @@
 自动续办服务单元测试
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -96,12 +96,12 @@ class TestShouldRenew:
         status = _make_jjz_status(valid_end=tomorrow, sfyecbzxx=True)
         assert self.service.should_renew(pc, status) is False
 
-    def test_outer_not_available(self):
-        """六环外不可办理 → 不续办"""
+    def test_outer_not_available_still_returns_true(self):
+        """六环外不可办理 → should_renew 仍返回 True（由调用方处理通知）"""
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
         pc = _make_plate_config()
         status = _make_jjz_status(valid_end=tomorrow, elzsfkb=False)
-        assert self.service.should_renew(pc, status) is False
+        assert self.service.should_renew(pc, status) is True
 
     def test_permit_still_valid(self):
         """有效期充足（>1天）→ 不续办"""
@@ -203,11 +203,20 @@ class TestCalculateRandomDelay:
 
     def test_default_window(self):
         delay = AutoRenewService.calculate_random_delay("00:00", "06:00")
+        # 延迟 = 从当前时刻到窗口内随机时刻，不超过 6 小时
         assert 0 <= delay <= 6 * 3600
 
     def test_custom_window(self):
         delay = AutoRenewService.calculate_random_delay("01:00", "02:00")
-        assert 0 <= delay <= 3600
+        # 延迟包含从 now 到窗口内随机时刻的间隔
+        # 最大延迟 = 02:00 对应的秒数 - 当前秒数
+        now = datetime.now()
+        now_seconds = now.hour * 3600 + now.minute * 60 + now.second
+        max_delay = 2 * 3600 - now_seconds
+        if max_delay <= 0:
+            assert delay == 0
+        else:
+            assert 0 <= delay <= max_delay
 
     def test_zero_delay_when_past_window(self):
         """窗口已过 → 延迟为0"""
