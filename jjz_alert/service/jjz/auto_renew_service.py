@@ -261,7 +261,14 @@ class AutoRenewService:
         account = accounts[0]
         url = account.jjz.url
         idx = url.find("/pro")
-        base_url = url[:idx] if idx != -1 else url.rsplit("/", 2)[0]
+        if idx != -1:
+            base_url = url[:idx]
+        else:
+            # fallback: 提取 scheme://host:port
+            from urllib.parse import urlparse
+
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
         return account.jjz.token, base_url
 
     def _api_call(
@@ -511,6 +518,10 @@ class AutoRenewService:
         start_seconds = start_parts[0] * 3600 + start_parts[1] * 60
         end_seconds = end_parts[0] * 3600 + end_parts[1] * 60
 
+        if start_seconds >= end_seconds:
+            logger.warning("续办时间窗口配置无效(start >= end)，跳过")
+            return -1
+
         now = datetime.now()
         now_seconds = now.hour * 3600 + now.minute * 60 + now.second
 
@@ -564,6 +575,15 @@ async def run_auto_renew_check():
             f"(延迟 {delay // 60} 分钟)"
         )
         await asyncio.sleep(delay)
+
+    # 延迟后重新加载配置，确保使用最新的车牌和续办设置
+    app_config = config_manager.reload_config()
+    renew_plates = [
+        p for p in app_config.plates if p.auto_renew and p.auto_renew.enabled
+    ]
+    if not renew_plates:
+        logger.debug("延迟后重新检查：无启用自动续办的车牌，跳过")
+        return
 
     logger.info(f"开始自动续办检查，共 {len(renew_plates)} 个车牌")
 
