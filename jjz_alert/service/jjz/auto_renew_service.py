@@ -41,6 +41,7 @@ class AutoRenewService:
 
     def __init__(self):
         self.structured_logger = get_structured_logger("auto_renew")
+        self._last_api_error = ""
 
     # ------------------------------------------------------------------
     # 公共入口
@@ -509,8 +510,8 @@ class AutoRenewService:
         now_seconds = now.hour * 3600 + now.minute * 60 + now.second
 
         if now_seconds >= end_seconds:
-            # 已超过窗口结束时间
-            return 0
+            # 已超过窗口结束时间，返回 -1 表示不应执行
+            return -1
 
         # 有效随机范围的起点：窗口起始或当前时间（取较晚者）
         effective_start = max(start_seconds, now_seconds)
@@ -548,6 +549,9 @@ async def run_auto_renew_check():
     delay = AutoRenewService.calculate_random_delay(
         ar_global.time_window_start, ar_global.time_window_end
     )
+    if delay < 0:
+        logger.info(f"当前时间已超过续办窗口 {ar_global.time_window_end}，跳过本次执行")
+        return
     if delay > 0:
         target_time = datetime.now() + timedelta(seconds=delay)
         logger.info(

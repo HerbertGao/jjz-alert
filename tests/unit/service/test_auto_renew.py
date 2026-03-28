@@ -218,11 +218,16 @@ class TestCalculateRandomDelay:
         else:
             assert 0 <= delay <= max_delay
 
-    def test_zero_delay_when_past_window(self):
-        """窗口已过 → 延迟为0"""
+    def test_negative_delay_when_past_window(self):
+        """窗口已过 → 返回 -1 表示不应执行"""
         delay = AutoRenewService.calculate_random_delay("00:00", "00:01")
-        # 除非恰好在 00:00-00:01 之间运行，否则应为 0
-        assert delay >= 0
+        # 除非恰好在 00:00-00:01 之间运行，否则应为 -1
+        now = datetime.now()
+        now_seconds = now.hour * 3600 + now.minute * 60 + now.second
+        if now_seconds >= 60:  # 00:01 = 60 seconds
+            assert delay == -1
+        else:
+            assert delay >= 0
 
 
 @pytest.mark.unit
