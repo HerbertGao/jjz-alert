@@ -627,7 +627,12 @@ async def run_auto_renew_check():
                 logger.info(f"车牌 {plate} 未找到六环外进京证记录")
                 continue
 
-            # 六环外不可办理时发通知（在 should_renew 之前检查，避免不可达）
+            # 判断是否需要续办（有效期、待审记录等）
+            if not auto_renew_service.should_renew(plate_config, target_record):
+                logger.info(f"车牌 {plate} 不满足续办条件，跳过")
+                continue
+
+            # 需要续办但六环外不可办理时发通知
             if target_record.elzsfkb is False:
                 await auto_renew_service.push_renew_result(
                     plate_config,
@@ -638,11 +643,6 @@ async def run_auto_renew_check():
                         step="eligibility_check",
                     ),
                 )
-                continue
-
-            # 判断是否需要续办
-            if not auto_renew_service.should_renew(plate_config, target_record):
-                logger.info(f"车牌 {plate} 不满足续办条件，跳过")
                 continue
 
             # 执行续办
