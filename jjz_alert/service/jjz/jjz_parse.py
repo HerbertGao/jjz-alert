@@ -103,7 +103,7 @@ def parse_single_jjz_record(
             hpzl=str(vehicle.get("hpzl", "")),
             elzsfkb=vehicle.get("elzsfkb"),
             ylzsfkb=vehicle.get("ylzsfkb"),
-            cllx=vehicle.get("cllx", ""),
+            cllx=str(vehicle.get("cllx", "")),
             sfyecbzxx=vehicle.get("sfyecbzxx"),
         )
     except Exception as exc:

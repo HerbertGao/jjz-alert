@@ -299,6 +299,8 @@ class AutoRenewService:
         result = self._api_call(base_url, token, "/pro/applyRecordController/getJsrxx")
         if result and result.get("data"):
             return result["data"]
+        if not self._last_api_error:
+            self._last_api_error = "API返回200但data为空"
         return None
 
     def _driver_check(
@@ -329,7 +331,10 @@ class AutoRenewService:
             {"vId": vId, "jjzzl": "02", "hphm": hphm},
         )
         if result:
-            return result.get("data")
+            data = result.get("data")
+            if not data:
+                self._last_api_error = "API返回200但data为空"
+            return data
         return None
 
     def _check_road_info(self, base_url: str, token: str, vId: str) -> bool:
