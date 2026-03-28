@@ -454,7 +454,11 @@ class AutoRenewService:
     # ------------------------------------------------------------------
 
     async def push_renew_result(self, plate_config: PlateConfig, result: RenewResult):
-        """推送续办结果通知"""
+        """推送续办结果通知（dedup 跳过时不推送）"""
+        if result.step == "dedup_skip":
+            logger.debug(f"车牌 {result.plate} 当日已续办，不推送通知")
+            return
+
         from jjz_alert.base.message_templates import template_manager
         from jjz_alert.service.notification.push_priority import PushPriority
         from jjz_alert.service.notification.unified_pusher import unified_pusher
