@@ -1,4 +1,4 @@
-curl-cffi==0.14.0
+curl-cffi==0.13.0
 apscheduler==3.11.2
 PyYAML==6.0.3
 urllib3
