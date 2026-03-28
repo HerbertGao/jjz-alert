@@ -206,7 +206,7 @@ def schedule_jobs():
         scheduler.add_job(
             async_renew_wrapper,
             CronTrigger(hour=0, minute=0),
-            misfire_grace_time=None,
+            misfire_grace_time=3600,  # 最多延迟1小时执行，避免深夜误触发
             max_instances=1,
         )
         logging.info(

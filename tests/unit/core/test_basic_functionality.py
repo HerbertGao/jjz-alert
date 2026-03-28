@@ -151,7 +151,7 @@ class TestBasicFunctionality:
             jjz_service = JJZService(cache_service)
 
             # Mock账户加载
-            with patch.object(jjz_service, "_load_accounts") as mock_load:
+            with patch.object(jjz_service, "load_accounts") as mock_load:
                 mock_load.return_value = []  # 无账户
 
                 status = await jjz_service.get_jjz_status("京A12345")

@@ -175,11 +175,11 @@ class TestJJZService:
         plate = "京A12345"
 
         # Mock配置加载
-        with patch.object(jjz_service, "_load_accounts") as mock_load:
+        with patch.object(jjz_service, "load_accounts") as mock_load:
             mock_load.return_value = [sample_jjz_account]
 
             # Mock API调用
-            with patch.object(jjz_service, "_check_jjz_status") as mock_check:
+            with patch.object(jjz_service, "check_jjz_status") as mock_check:
                 mock_check.return_value = {
                     "data": {
                         "bzclxx": [
@@ -225,11 +225,11 @@ class TestJJZService:
         plate = "京A12345"
 
         # Mock配置加载
-        with patch.object(jjz_service, "_load_accounts") as mock_load:
+        with patch.object(jjz_service, "load_accounts") as mock_load:
             mock_load.return_value = [sample_jjz_account]
 
             # Mock API调用返回错误
-            with patch.object(jjz_service, "_check_jjz_status") as mock_check:
+            with patch.object(jjz_service, "check_jjz_status") as mock_check:
                 mock_check.return_value = {"error": "API连接失败"}
 
                 status = await jjz_service.get_jjz_status(plate)
@@ -246,7 +246,7 @@ class TestJJZService:
 
         jjz_service.cache_service.get_jjz_data.return_value = None
 
-        with patch.object(jjz_service, "_load_accounts") as mock_load:
+        with patch.object(jjz_service, "load_accounts") as mock_load:
             mock_load.return_value = []
 
             status = await jjz_service.get_jjz_status(plate)
@@ -346,7 +346,7 @@ class TestJJZService:
     async def test_get_service_status(self, jjz_service):
         """测试获取服务状态"""
         # Mock依赖方法
-        with patch.object(jjz_service, "_load_accounts") as mock_load:
+        with patch.object(jjz_service, "load_accounts") as mock_load:
             mock_load.return_value = [Mock(), Mock()]  # 2个账户
 
             jjz_service.cache_service.get_all_jjz_plates.return_value = ["京A12345"]
@@ -371,7 +371,7 @@ class TestJJZService:
         with patch("jjz_alert.service.jjz.jjz_service.http_post") as mock_post:
             mock_post.return_value = mock_http_response
 
-            result = jjz_service._check_jjz_status(url, token)
+            result = jjz_service.check_jjz_status(url, token)
 
             assert result == mock_http_response.json.return_value
             mock_post.assert_called_once_with(
@@ -388,7 +388,7 @@ class TestJJZService:
         with patch("jjz_alert.service.jjz.jjz_service.http_post") as mock_post:
             mock_post.side_effect = Exception("网络连接失败")
 
-            result = jjz_service._check_jjz_status(url, token)
+            result = jjz_service.check_jjz_status(url, token)
 
             assert "error" in result
             assert result["error"] == "网络连接失败"
@@ -396,7 +396,7 @@ class TestJJZService:
     @pytest.mark.asyncio
     async def test_fetch_from_api_without_accounts(self, jjz_service):
         """测试 _fetch_from_api 在无账户配置时的行为"""
-        with patch.object(jjz_service, "_load_accounts", return_value=[]):
+        with patch.object(jjz_service, "load_accounts", return_value=[]):
             with patch(
                 "jjz_alert.service.jjz.jjz_service.handle_critical_error",
                 new_callable=AsyncMock,
@@ -425,12 +425,12 @@ class TestJJZService:
 
         with patch.object(
             jjz_service,
-            "_load_accounts",
+            "load_accounts",
             return_value=[token_error_account, valid_account],
         ):
             with patch.object(
                 jjz_service,
-                "_check_jjz_status",
+                "check_jjz_status",
                 side_effect=[{"error": "Token可能已失效"}, {"data": {"bzclxx": []}}],
             ) as mock_check, patch(
                 "jjz_alert.service.jjz.jjz_service.parse_all_jjz_records",
@@ -470,9 +470,9 @@ class TestJJZService:
         account.name = "account_a"
         account.jjz = Mock(url="https://api.example.com", token="bad_token")
 
-        with patch.object(jjz_service, "_load_accounts", return_value=[account]):
+        with patch.object(jjz_service, "load_accounts", return_value=[account]):
             with patch.object(
-                jjz_service, "_check_jjz_status", return_value={"error": "网络错误"}
+                jjz_service, "check_jjz_status", return_value={"error": "网络错误"}
             ), patch(
                 "jjz_alert.service.jjz.jjz_service.handle_critical_error",
                 new_callable=AsyncMock,
@@ -491,9 +491,9 @@ class TestJJZService:
         account.name = "account_b"
         account.jjz = Mock(url="https://api.example.com", token="valid_token")
 
-        with patch.object(jjz_service, "_load_accounts", return_value=[account]):
+        with patch.object(jjz_service, "load_accounts", return_value=[account]):
             with patch.object(
-                jjz_service, "_check_jjz_status", return_value={"data": {"bzclxx": []}}
+                jjz_service, "check_jjz_status", return_value={"data": {"bzclxx": []}}
             ), patch(
                 "jjz_alert.service.jjz.jjz_service.parse_all_jjz_records",
                 return_value=[
@@ -519,7 +519,7 @@ class TestJJZService:
             with patch(
                 "jjz_alert.service.jjz.jjz_service.asyncio.create_task"
             ) as mock_task:
-                result = jjz_service._check_jjz_status(url, token)
+                result = jjz_service.check_jjz_status(url, token)
 
                 assert "error" in result
                 assert "TLS/SSL连接错误" in result["error"]
@@ -536,7 +536,7 @@ class TestJJZService:
             with patch(
                 "jjz_alert.service.jjz.jjz_service.asyncio.create_task"
             ) as mock_task:
-                result = jjz_service._check_jjz_status(url, token)
+                result = jjz_service.check_jjz_status(url, token)
 
                 assert "error" in result
                 assert "网络连接错误" in result["error"]
@@ -552,7 +552,7 @@ class TestJJZService:
             with patch(
                 "jjz_alert.service.jjz.jjz_service.asyncio.create_task"
             ) as mock_task:
-                result = jjz_service._check_jjz_status(url, token)
+                result = jjz_service.check_jjz_status(url, token)
 
                 assert "error" in result
                 assert "HTTP请求失败" in result["error"]
@@ -570,7 +570,7 @@ class TestJJZService:
             with patch(
                 "jjz_alert.service.jjz.jjz_service.asyncio.create_task"
             ) as mock_task:
-                result = jjz_service._check_jjz_status(url, token)
+                result = jjz_service.check_jjz_status(url, token)
 
                 assert "error" in result
                 assert "HTTP请求参数错误" in result["error"]
@@ -592,7 +592,7 @@ class TestJJZService:
             ]
             mock_load.return_value = mock_config
 
-            accounts = jjz_service._load_accounts()
+            accounts = jjz_service.load_accounts()
 
             assert len(accounts) == 1
             assert accounts[0].name == "测试账户"
@@ -614,9 +614,9 @@ class TestJJZService:
             mock_load.return_value = mock_config
 
             # 第一次加载
-            accounts1 = jjz_service._load_accounts()
+            accounts1 = jjz_service.load_accounts()
             # 第二次加载（应该使用缓存）
-            accounts2 = jjz_service._load_accounts()
+            accounts2 = jjz_service.load_accounts()
 
             assert len(accounts1) == 1
             assert len(accounts2) == 1
@@ -630,7 +630,7 @@ class TestJJZService:
         with patch.object(config_manager, "load_config") as mock_load:
             mock_load.side_effect = Exception("配置加载失败")
 
-            accounts = jjz_service._load_accounts()
+            accounts = jjz_service.load_accounts()
 
             assert accounts == []
 
@@ -721,10 +721,10 @@ class TestJJZService:
         """测试优化的批量获取状态"""
         plates = ["京A12345", "京B67890"]
 
-        with patch.object(jjz_service, "_load_accounts") as mock_load:
+        with patch.object(jjz_service, "load_accounts") as mock_load:
             mock_load.return_value = [sample_jjz_account]
 
-            with patch.object(jjz_service, "_check_jjz_status") as mock_check:
+            with patch.object(jjz_service, "check_jjz_status") as mock_check:
                 mock_check.return_value = {
                     "data": {
                         "bzclxx": [
@@ -776,7 +776,7 @@ class TestJJZService:
         """测试优化的批量获取状态 - 无账户"""
         plates = ["京A12345", "京B67890"]
 
-        with patch.object(jjz_service, "_load_accounts", return_value=[]):
+        with patch.object(jjz_service, "load_accounts", return_value=[]):
             results = await jjz_service.get_multiple_status_optimized(plates)
 
             assert len(results) == 2
@@ -790,10 +790,10 @@ class TestJJZService:
         """测试优化的批量获取状态 - 无匹配记录"""
         plates = ["京C99999"]
 
-        with patch.object(jjz_service, "_load_accounts") as mock_load:
+        with patch.object(jjz_service, "load_accounts") as mock_load:
             mock_load.return_value = [sample_jjz_account]
 
-            with patch.object(jjz_service, "_check_jjz_status") as mock_check:
+            with patch.object(jjz_service, "check_jjz_status") as mock_check:
                 mock_check.return_value = {
                     "data": {
                         "bzclxx": [
@@ -835,10 +835,10 @@ class TestJJZService:
         account2.name = "账户2"
         account2.jjz = Mock(url="https://account2.example.com", token="token2")
 
-        with patch.object(jjz_service, "_load_accounts") as mock_load:
+        with patch.object(jjz_service, "load_accounts") as mock_load:
             mock_load.return_value = [account1, account2]
 
-            with patch.object(jjz_service, "_check_jjz_status") as mock_check:
+            with patch.object(jjz_service, "check_jjz_status") as mock_check:
                 # 第一个账户返回错误，第二个账户成功
                 mock_check.side_effect = [
                     {"error": "账户1查询失败"},
@@ -884,10 +884,10 @@ class TestJJZService:
         account2.name = "账户2"
         account2.jjz = Mock(url="https://account2.example.com", token="token2")
 
-        with patch.object(jjz_service, "_load_accounts") as mock_load:
+        with patch.object(jjz_service, "load_accounts") as mock_load:
             mock_load.return_value = [account1, account2]
 
-            with patch.object(jjz_service, "_check_jjz_status") as mock_check:
+            with patch.object(jjz_service, "check_jjz_status") as mock_check:
                 # 第一个账户抛出异常，第二个账户成功
                 mock_check.side_effect = [
                     Exception("账户1异常"),
@@ -926,10 +926,10 @@ class TestJJZService:
         """测试 _fetch_from_api - 异常处理"""
         plate = "京A12345"
 
-        with patch.object(jjz_service, "_load_accounts") as mock_load:
+        with patch.object(jjz_service, "load_accounts") as mock_load:
             mock_load.return_value = [sample_jjz_account]
 
-            with patch.object(jjz_service, "_check_jjz_status") as mock_check:
+            with patch.object(jjz_service, "check_jjz_status") as mock_check:
                 mock_check.side_effect = Exception("网络异常")
 
                 status = await jjz_service._fetch_from_api(plate)

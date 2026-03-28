@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional
 
-from jjz_alert.base.error_handler import is_token_error
 from jjz_alert.base.http import http_post
 from jjz_alert.base.logger import get_structured_logger, LogCategory
 from jjz_alert.config.config_models import AutoRenewConfig, PlateConfig
@@ -52,6 +51,7 @@ class AutoRenewService:
         plate_config: PlateConfig,
         jjz_status: JJZStatus,
         response_data: Dict[str, Any],
+        accounts=None,
     ) -> RenewResult:
         """
         对单个车牌执行续办流程
@@ -60,6 +60,7 @@ class AutoRenewService:
             plate_config: 车牌配置（含 auto_renew 配置）
             jjz_status: 当前进京证状态（含 vId 等车辆字段）
             response_data: stateList 原始响应（用于提取元数据）
+            accounts: 进京证账户列表（避免重复加载配置）
         """
         plate = plate_config.plate
         ar_config = plate_config.auto_renew
@@ -75,7 +76,7 @@ class AutoRenewService:
 
         try:
             # 获取账户 token 和 base_url
-            token, base_url = self._get_account_info()
+            token, base_url = self.extract_account_info(accounts)
             if not token:
                 return RenewResult(
                     plate=plate,
@@ -218,8 +219,8 @@ class AutoRenewService:
         if not ar or not ar.enabled:
             return False
 
-        # 仅六环外
-        if jjz_status.jjzzlmc and "六环外" not in jjz_status.jjzzlmc:
+        # 仅六环外（jjzzlmc 为 None 或空时也不续办）
+        if not jjz_status.jjzzlmc or "六环外" not in jjz_status.jjzzlmc:
             return False
 
         # 已有待审记录
@@ -251,25 +252,16 @@ class AutoRenewService:
     # API 调用链
     # ------------------------------------------------------------------
 
-    def _get_account_info(self):
-        """获取第一个可用账户的 token 和 base_url"""
-        try:
-            from jjz_alert.config.config import config_manager
-
-            app_config = config_manager.load_config()
-            if not app_config.jjz_accounts:
-                return None, None
-            account = app_config.jjz_accounts[0]
-            # 从 stateList URL 中提取 base_url
-            url = account.jjz.url
-            # url 形如 https://jjz.jtgl.beijing.gov.cn:2443/pro/applyRecordController/stateList
-            # 提取到 /pro 之前的部分
-            idx = url.find("/pro")
-            base_url = url[:idx] if idx != -1 else url.rsplit("/", 2)[0]
-            return account.jjz.token, base_url
-        except Exception as e:
-            logger.error(f"获取账户信息失败: {e}")
+    @staticmethod
+    def extract_account_info(accounts) -> tuple:
+        """从账户列表中提取第一个可用账户的 token 和 base_url"""
+        if not accounts:
             return None, None
+        account = accounts[0]
+        url = account.jjz.url
+        idx = url.find("/pro")
+        base_url = url[:idx] if idx != -1 else url.rsplit("/", 2)[0]
+        return account.jjz.token, base_url
 
     def _api_call(
         self, base_url: str, token: str, path: str, json_data: Dict = None
@@ -465,12 +457,10 @@ class AutoRenewService:
             )
             priority = PushPriority.NORMAL
         else:
-            # 判断是否为 Token 失效
-            is_token_err = False
-            try:
-                is_token_err = is_token_error(Exception(result.message))
-            except Exception:
-                pass
+            # 判断是否为 Token 失效（直接检查错误消息中的关键词）
+            token_keywords = ["token", "unauthorized", "403", "401", "认证失败", "令牌"]
+            msg_lower = (result.message or "").lower()
+            is_token_err = any(kw in msg_lower for kw in token_keywords)
 
             if is_token_err:
                 title = "进京证续办失败 - Token已失效"
@@ -571,12 +561,12 @@ async def run_auto_renew_check():
     jjz_service = JJZService()
 
     # 一次性查询所有车辆状态（stateList 返回所有车辆数据）
-    accounts = jjz_service._load_accounts()
+    accounts = jjz_service.load_accounts()
     if not accounts:
         logger.error("无可用进京证账户")
         return
 
-    response_data = jjz_service._check_jjz_status(
+    response_data = jjz_service.check_jjz_status(
         accounts[0].jjz.url, accounts[0].jjz.token
     )
     if not response_data or "error" in response_data:
@@ -624,7 +614,7 @@ async def run_auto_renew_check():
 
             # 执行续办
             renew_result = await auto_renew_service.execute_renew(
-                plate_config, target_record, response_data
+                plate_config, target_record, response_data, accounts
             )
 
             # 推送结果
