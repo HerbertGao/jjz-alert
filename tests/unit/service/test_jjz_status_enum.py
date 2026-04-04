@@ -33,7 +33,10 @@ class TestJJZStatusEnum:
         assert JJZStatusEnum.from_string("  valid  ") == JJZStatusEnum.VALID
         assert JJZStatusEnum.from_string("expired") == JJZStatusEnum.EXPIRED
         assert JJZStatusEnum.from_string("pending") == JJZStatusEnum.PENDING
-        assert JJZStatusEnum.from_string("approved_pending") == JJZStatusEnum.APPROVED_PENDING
+        assert (
+            JJZStatusEnum.from_string("approved_pending")
+            == JJZStatusEnum.APPROVED_PENDING
+        )
         assert JJZStatusEnum.from_string("invalid") == JJZStatusEnum.INVALID
         assert JJZStatusEnum.from_string("error") == JJZStatusEnum.ERROR
         assert JJZStatusEnum.from_string("unknown") == JJZStatusEnum.UNKNOWN

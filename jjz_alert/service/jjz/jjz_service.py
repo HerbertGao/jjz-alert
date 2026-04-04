@@ -141,7 +141,9 @@ class JJZService:
                                 JJZStatusEnum.VALID.value
                             )  # 待生效但在有效期内，视为有效
                         else:
-                            return JJZStatusEnum.APPROVED_PENDING.value  # 待生效但还未到生效时间
+                            return (
+                                JJZStatusEnum.APPROVED_PENDING.value
+                            )  # 待生效但还未到生效时间
                     except Exception:
                         return JJZStatusEnum.APPROVED_PENDING.value
                 else:
