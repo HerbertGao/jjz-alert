@@ -116,6 +116,32 @@ class TestPushJJZStatus:
             assert call_args.kwargs["priority"] == PushPriority.HIGH
 
     @pytest.mark.asyncio
+    async def test_push_jjz_status_approved_pending(self, plate_config):
+        """测试推送进京证状态 - 审核通过(待生效)状态"""
+        jjz_data = {
+            "status": JJZStatusEnum.APPROVED_PENDING.value,
+            "jjzzlmc": "进京证（六环外）",
+            "valid_start": "2026-04-05",
+            "valid_end": "2026-04-11",
+        }
+
+        with patch(
+            "jjz_alert.service.notification.push_helpers.unified_pusher.push"
+        ) as mock_push:
+            mock_push.return_value = {
+                "plate": "京A12345",
+                "success_count": 1,
+                "total_count": 1,
+            }
+
+            result = await push_jjz_status(plate_config, jjz_data)
+
+            assert result["success_count"] == 1
+            mock_push.assert_called_once()
+            call_args = mock_push.call_args
+            assert call_args.kwargs["priority"] == PushPriority.NORMAL
+
+    @pytest.mark.asyncio
     async def test_push_jjz_status_system_error(self, plate_config):
         """测试推送进京证状态 - 系统级错误"""
         jjz_data = {
