@@ -222,6 +222,9 @@ class ConfigManager:
                     valid_status=template_data.get("valid_status"),
                     expired_status=template_data.get("expired_status"),
                     pending_status=template_data.get("pending_status"),
+                    approved_pending_status=template_data.get(
+                        "approved_pending_status"
+                    ),
                     error_status=template_data.get("error_status"),
                     traffic_reminder_prefix=template_data.get(
                         "traffic_reminder_prefix"

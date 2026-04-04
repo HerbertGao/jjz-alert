@@ -167,6 +167,38 @@ class TestMessageTemplateManager:
             assert "京I77777" in result
             assert "审核中" in result
 
+    def test_format_approved_pending_status(self):
+        """测试格式化审核通过(待生效)状态"""
+        manager = mt.MessageTemplateManager()
+
+        result = manager.format_approved_pending_status(
+            display_name="京H66666",
+            jjz_type="六环外",
+            valid_start="04-05",
+            valid_end="04-11",
+        )
+
+        assert "京H66666" in result
+        assert "审核通过(待生效)" in result
+        assert "04-05" in result
+        assert "04-11" in result
+
+    def test_format_approved_pending_status_exception_handling(self):
+        """测试格式化审核通过(待生效)状态时的异常处理"""
+        manager = mt.MessageTemplateManager()
+        with patch("jjz_alert.base.message_templates.Template") as mock_template:
+            mock_template.side_effect = Exception("模板错误")
+
+            result = manager.format_approved_pending_status(
+                display_name="京I77777",
+                jjz_type="六环外",
+                valid_start="04-05",
+                valid_end="04-11",
+            )
+
+            assert "京I77777" in result
+            assert "审核通过(待生效)" in result
+
     def test_format_error_status(self):
         """测试格式化错误状态"""
         manager = mt.MessageTemplateManager()

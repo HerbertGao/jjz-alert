@@ -40,6 +40,11 @@ class MessageTemplateManager:
                 "车牌${display_name}的进京证(${jjz_type})状态：审核中，"
                 "申请时间 ${apply_time}。请关注审核进度。"
             ),
+            # 审核通过(待生效)状态模板
+            "approved_pending_status": (
+                "车牌${display_name}的进京证(${jjz_type})状态：审核通过(待生效)，"
+                "有效期 ${valid_start} 至 ${valid_end}。将在生效日期自动生效，无需操作。"
+            ),
             # 错误状态模板
             "error_status": (
                 "车牌${display_name}的进京证(${jjz_type})状态：${status}。${error_msg}"
@@ -170,6 +175,33 @@ class MessageTemplateManager:
             # 返回备用格式
             return f"车牌{display_name}的进京证({jjz_type})状态：审核中，申请时间 {apply_time}。请关注审核进度。"
 
+    def format_approved_pending_status(
+        self, display_name: str, jjz_type: str, valid_start: str, valid_end: str
+    ) -> str:
+        """
+        格式化审核通过(待生效)状态消息
+
+        Args:
+            display_name: 显示名称
+            jjz_type: 进京证类型
+            valid_start: 有效期开始
+            valid_end: 有效期结束
+
+        Returns:
+            格式化的消息内容
+        """
+        try:
+            template = Template(self.templates["approved_pending_status"])
+            return template.safe_substitute(
+                display_name=display_name,
+                jjz_type=jjz_type,
+                valid_start=valid_start,
+                valid_end=valid_end,
+            )
+        except Exception as e:
+            self.logger.error(f"格式化审核通过(待生效)状态消息失败: {e}")
+            return f"车牌{display_name}的进京证({jjz_type})状态：审核通过(待生效)，有效期 {valid_start} 至 {valid_end}。"
+
     def format_error_status(
         self, display_name: str, jjz_type: str, status: str, error_msg: str
     ) -> str:
@@ -295,6 +327,7 @@ def initialize_templates_from_config(config_manager=None):
             "valid_status",
             "expired_status",
             "pending_status",
+            "approved_pending_status",
             "error_status",
             "traffic_reminder_prefix",
             "sycs_part",

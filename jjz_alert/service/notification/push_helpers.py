@@ -51,6 +51,7 @@ async def push_jjz_status(
             format_jjz_push_content,
             format_jjz_expired_content,
             format_jjz_pending_content,
+            format_jjz_approved_pending_content,
             format_jjz_error_content,
         )
 
@@ -92,6 +93,18 @@ async def push_jjz_status(
                 display_name=display_name,
                 jjzzlmc=jjz_data.get("jjzzlmc", ""),
                 apply_time=apply_time,
+            )
+
+        elif status == JJZStatusEnum.APPROVED_PENDING.value:
+            priority = PushPriority.NORMAL
+            logging.debug(
+                f"[STATUS_DEBUG] 车牌 {plate} - 状态为APPROVED_PENDING，设置优先级为NORMAL"
+            )
+            body = format_jjz_approved_pending_content(
+                display_name=display_name,
+                jjzzlmc=jjz_data.get("jjzzlmc", ""),
+                valid_start=jjz_data.get("valid_start", "未知"),
+                valid_end=jjz_data.get("valid_end", "未知"),
             )
 
         else:

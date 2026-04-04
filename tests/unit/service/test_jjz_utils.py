@@ -318,6 +318,26 @@ class TestFormatJJZBodyAndPriority:
         mock_template_manager.format_pending_status.assert_called_once()
 
     @patch("jjz_alert.base.message_templates.template_manager")
+    def test_format_approved_pending_status(self, mock_template_manager):
+        """测试审核通过(待生效)状态格式化"""
+        mock_template_manager.format_approved_pending_status.return_value = (
+            "审核通过待生效内容"
+        )
+
+        jjz_data = {
+            "status": "approved_pending",
+            "jjzzlmc": "进京证（六环外）",
+            "valid_start": "2026-04-05",
+            "valid_end": "2026-04-11",
+        }
+
+        body, priority = jjz_utils.format_jjz_body_and_priority("京A12345", jjz_data)
+
+        assert body == "审核通过待生效内容"
+        assert priority == "normal"
+        mock_template_manager.format_approved_pending_status.assert_called_once()
+
+    @patch("jjz_alert.base.message_templates.template_manager")
     def test_format_error_status(self, mock_template_manager):
         """测试错误状态格式化"""
         mock_template_manager.format_error_status.return_value = "错误内容"
