@@ -173,6 +173,31 @@ def format_jjz_pending_content(display_name: str, jjzzlmc: str, apply_time: str)
     return template_manager.format_pending_status(display_name, jjz_type, apply_time)
 
 
+def format_jjz_approved_pending_content(
+    display_name: str, jjzzlmc: str, valid_start: str, valid_end: str
+) -> str:
+    """
+    格式化进京证审核通过(待生效)推送内容
+
+    Args:
+        display_name: 显示名称
+        jjzzlmc: 进京证类型名称
+        valid_start: 有效期开始
+        valid_end: 有效期结束
+
+    Returns:
+        格式化的推送内容
+    """
+    from jjz_alert.base.message_templates import template_manager
+
+    jjz_type = extract_jjz_type_from_jjzzlmc(jjzzlmc)
+    disp_start, disp_end = format_valid_dates(valid_start, valid_end)
+
+    return template_manager.format_approved_pending_status(
+        display_name, jjz_type, disp_start, disp_end
+    )
+
+
 def format_jjz_error_content(
     display_name: str, jjzzlmc: str, status: str, error_msg: str
 ) -> str:
@@ -239,6 +264,14 @@ def format_jjz_body_and_priority(
             display_name=display_name,
             jjzzlmc=jjz_data.get("jjzzlmc", ""),
             apply_time=jjz_data.get("apply_time", "未知"),
+        )
+    elif status == JJZStatusEnum.APPROVED_PENDING.value:
+        priority = "normal"
+        body = format_jjz_approved_pending_content(
+            display_name=display_name,
+            jjzzlmc=jjz_data.get("jjzzlmc", ""),
+            valid_start=jjz_data.get("valid_start", "未知"),
+            valid_end=jjz_data.get("valid_end", "未知"),
         )
     else:
         priority = "normal"

@@ -97,6 +97,7 @@ class MessageTemplateConfig:
     valid_status: Optional[str] = None
     expired_status: Optional[str] = None
     pending_status: Optional[str] = None
+    approved_pending_status: Optional[str] = None
     error_status: Optional[str] = None
     traffic_reminder_prefix: Optional[str] = None
     sycs_part: Optional[str] = None

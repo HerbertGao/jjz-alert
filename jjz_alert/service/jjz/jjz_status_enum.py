@@ -11,6 +11,7 @@ class JJZStatusEnum(str, Enum):
     VALID = "valid"
     EXPIRED = "expired"
     PENDING = "pending"
+    APPROVED_PENDING = "approved_pending"
     INVALID = "invalid"
     ERROR = "error"
     UNKNOWN = "unknown"
@@ -56,6 +57,10 @@ class JJZStatusEnum(str, Enum):
         return self == self.PENDING
 
     @property
+    def is_approved_pending(self) -> bool:
+        return self == self.APPROVED_PENDING
+
+    @property
     def is_invalid(self) -> bool:
         return self == self.INVALID
 
@@ -65,7 +70,7 @@ class JJZStatusEnum(str, Enum):
 
     @property
     def is_actionable(self) -> bool:
-        return self in (self.VALID, self.EXPIRED)
+        return self in (self.VALID, self.EXPIRED, self.APPROVED_PENDING)
 
     @property
     def needs_attention(self) -> bool:
@@ -77,6 +82,7 @@ class JJZStatusEnum(str, Enum):
             self.VALID: "有效",
             self.EXPIRED: "已过期",
             self.PENDING: "审核中",
+            self.APPROVED_PENDING: "审核通过(待生效)",
             self.INVALID: "无效",
             self.ERROR: "错误",
             self.UNKNOWN: "未知",

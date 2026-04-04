@@ -141,11 +141,11 @@ class JJZService:
                                 JJZStatusEnum.VALID.value
                             )  # 待生效但在有效期内，视为有效
                         else:
-                            return JJZStatusEnum.PENDING.value  # 待生效但还未到生效时间
+                            return JJZStatusEnum.APPROVED_PENDING.value  # 待生效但还未到生效时间
                     except Exception:
-                        return JJZStatusEnum.PENDING.value
+                        return JJZStatusEnum.APPROVED_PENDING.value
                 else:
-                    return JJZStatusEnum.PENDING.value
+                    return JJZStatusEnum.APPROVED_PENDING.value
             elif (blzt == "0" or blzt == 0) or "审核中" in blztmc:
                 return JJZStatusEnum.PENDING.value
             else:

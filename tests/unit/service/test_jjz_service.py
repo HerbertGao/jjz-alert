@@ -48,7 +48,7 @@ class TestJJZService:
             status = jjz_service._determine_status(
                 "6", "审核通过(待生效)", "2025-08-20", "2025-08-15"
             )
-            assert status == JJZStatusEnum.PENDING.value
+            assert status == JJZStatusEnum.APPROVED_PENDING.value
 
     def test_determine_status_expired(self, jjz_service):
         """测试新版状态判断 - 已过期"""
@@ -165,7 +165,7 @@ class TestJJZService:
 
         assert len(records) == 2
         assert records[0].status == JJZStatusEnum.VALID.value
-        assert records[1].status == JJZStatusEnum.PENDING.value
+        assert records[1].status == JJZStatusEnum.APPROVED_PENDING.value
 
     @pytest.mark.asyncio
     async def test_get_jjz_status_always_fetch_from_api(
@@ -655,7 +655,7 @@ class TestJJZService:
             status = jjz_service._determine_status(
                 "6", "审核通过(待生效)", "2025-08-20", "2025-08-15"
             )
-            assert status == JJZStatusEnum.PENDING.value
+            assert status == JJZStatusEnum.APPROVED_PENDING.value
 
     def test_determine_status_pending_no_yxqs(self, jjz_service):
         """测试状态判断 - 待生效但无开始日期"""
@@ -664,7 +664,7 @@ class TestJJZService:
             status = jjz_service._determine_status(
                 "6", "审核通过(待生效)", "2025-08-20", None
             )
-            assert status == JJZStatusEnum.PENDING.value
+            assert status == JJZStatusEnum.APPROVED_PENDING.value
 
     def test_determine_status_auditing(self, jjz_service):
         """测试状态判断 - 审核中"""
@@ -690,7 +690,7 @@ class TestJJZService:
             status = jjz_service._determine_status(
                 "6", "审核通过(待生效)", "2025-08-20", "invalid-date"
             )
-            assert status == JJZStatusEnum.PENDING.value
+            assert status == JJZStatusEnum.APPROVED_PENDING.value
 
     def test_determine_status_unknown_blzt(self, jjz_service):
         """测试状态判断 - 未知的blzt值"""

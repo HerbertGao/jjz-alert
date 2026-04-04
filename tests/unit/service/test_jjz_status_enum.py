@@ -16,6 +16,7 @@ class TestJJZStatusEnum:
         assert str(JJZStatusEnum.VALID) == "valid"
         assert str(JJZStatusEnum.EXPIRED) == "expired"
         assert str(JJZStatusEnum.PENDING) == "pending"
+        assert str(JJZStatusEnum.APPROVED_PENDING) == "approved_pending"
         assert str(JJZStatusEnum.INVALID) == "invalid"
         assert str(JJZStatusEnum.ERROR) == "error"
         assert str(JJZStatusEnum.UNKNOWN) == "unknown"
@@ -32,6 +33,7 @@ class TestJJZStatusEnum:
         assert JJZStatusEnum.from_string("  valid  ") == JJZStatusEnum.VALID
         assert JJZStatusEnum.from_string("expired") == JJZStatusEnum.EXPIRED
         assert JJZStatusEnum.from_string("pending") == JJZStatusEnum.PENDING
+        assert JJZStatusEnum.from_string("approved_pending") == JJZStatusEnum.APPROVED_PENDING
         assert JJZStatusEnum.from_string("invalid") == JJZStatusEnum.INVALID
         assert JJZStatusEnum.from_string("error") == JJZStatusEnum.ERROR
         assert JJZStatusEnum.from_string("unknown") == JJZStatusEnum.UNKNOWN
@@ -92,11 +94,18 @@ class TestJJZStatusEnum:
     def test_is_pending_property(self):
         """测试 is_pending 属性"""
         assert JJZStatusEnum.PENDING.is_pending is True
+        assert JJZStatusEnum.APPROVED_PENDING.is_pending is False
         assert JJZStatusEnum.VALID.is_pending is False
         assert JJZStatusEnum.EXPIRED.is_pending is False
         assert JJZStatusEnum.INVALID.is_pending is False
         assert JJZStatusEnum.ERROR.is_pending is False
         assert JJZStatusEnum.UNKNOWN.is_pending is False
+
+    def test_is_approved_pending_property(self):
+        """测试 is_approved_pending 属性"""
+        assert JJZStatusEnum.APPROVED_PENDING.is_approved_pending is True
+        assert JJZStatusEnum.PENDING.is_approved_pending is False
+        assert JJZStatusEnum.VALID.is_approved_pending is False
 
     def test_is_invalid_property(self):
         """测试 is_invalid 属性"""
@@ -120,6 +129,7 @@ class TestJJZStatusEnum:
         """测试 is_actionable 属性"""
         assert JJZStatusEnum.VALID.is_actionable is True
         assert JJZStatusEnum.EXPIRED.is_actionable is True
+        assert JJZStatusEnum.APPROVED_PENDING.is_actionable is True
         assert JJZStatusEnum.PENDING.is_actionable is False
         assert JJZStatusEnum.INVALID.is_actionable is False
         assert JJZStatusEnum.ERROR.is_actionable is False
@@ -132,6 +142,7 @@ class TestJJZStatusEnum:
         assert JJZStatusEnum.INVALID.needs_attention is True
         assert JJZStatusEnum.VALID.needs_attention is False
         assert JJZStatusEnum.PENDING.needs_attention is False
+        assert JJZStatusEnum.APPROVED_PENDING.needs_attention is False
         assert JJZStatusEnum.UNKNOWN.needs_attention is False
 
     def test_description_property(self):
@@ -139,6 +150,7 @@ class TestJJZStatusEnum:
         assert JJZStatusEnum.VALID.description == "有效"
         assert JJZStatusEnum.EXPIRED.description == "已过期"
         assert JJZStatusEnum.PENDING.description == "审核中"
+        assert JJZStatusEnum.APPROVED_PENDING.description == "审核通过(待生效)"
         assert JJZStatusEnum.INVALID.description == "无效"
         assert JJZStatusEnum.ERROR.description == "错误"
         assert JJZStatusEnum.UNKNOWN.description == "未知"
