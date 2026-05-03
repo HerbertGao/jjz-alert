@@ -33,10 +33,10 @@ RENEW_GLOBAL_LOCK = threading.Lock()
 
 async def _has_renewed_today(plate: str) -> bool:
     try:
-        from jjz_alert.config.redis.operations import redis_get
+        from jjz_alert.config.redis.operations import redis_ops
 
         key = f"auto_renew:{plate}:{date.today().isoformat()}"
-        return (await redis_get(key)) is not None
+        return (await redis_ops.get(key)) is not None
     except Exception:
         return False
 
