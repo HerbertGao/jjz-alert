@@ -388,20 +388,23 @@ class AutoRenewService:
 
     async def _has_renewed_today(self, plate: str) -> bool:
         try:
-            from jjz_alert.config.redis.operations import redis_get
+            from jjz_alert.config.redis.operations import redis_ops
 
             key = f"auto_renew:{plate}:{date.today().isoformat()}"
-            val = await redis_get(key)
+            val = await redis_ops.get(key)
             return val is not None
-        except Exception:
+        except Exception as e:
+            # 不让异常阻断续办流程，但要可见——历史上 ImportError
+            # 静默吞掉造成防重失效长期未被发现
+            logger.warning(f"读取续办防重复记录失败 plate={plate}: {e}")
             return False
 
     async def _mark_renewed_today(self, plate: str):
         try:
-            from jjz_alert.config.redis.operations import redis_set
+            from jjz_alert.config.redis.operations import redis_ops
 
             key = f"auto_renew:{plate}:{date.today().isoformat()}"
-            await redis_set(key, "1", ttl=86400)
+            await redis_ops.set(key, "1", ttl=86400)
         except Exception as e:
             logger.warning(f"写入续办防重复记录失败: {e}")
 

@@ -33,11 +33,14 @@ RENEW_GLOBAL_LOCK = threading.Lock()
 
 async def _has_renewed_today(plate: str) -> bool:
     try:
-        from jjz_alert.config.redis.operations import redis_get
+        from jjz_alert.config.redis.operations import redis_ops
 
         key = f"auto_renew:{plate}:{date.today().isoformat()}"
-        return (await redis_get(key)) is not None
-    except Exception:
+        return (await redis_ops.get(key)) is not None
+    except Exception as e:
+        # 不让异常阻断派发流程，但要可见——历史上 ImportError
+        # 静默吞掉造成防重失效长期未被发现
+        logger.warning("[renew] 读取防重复记录失败 plate=%s: %s", plate, e)
         return False
 
 
