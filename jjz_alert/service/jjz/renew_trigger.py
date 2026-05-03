@@ -37,7 +37,10 @@ async def _has_renewed_today(plate: str) -> bool:
 
         key = f"auto_renew:{plate}:{date.today().isoformat()}"
         return (await redis_ops.get(key)) is not None
-    except Exception:
+    except Exception as e:
+        # 不让异常阻断派发流程，但要可见——历史上 ImportError
+        # 静默吞掉造成防重失效长期未被发现
+        logger.warning("[renew] 读取防重复记录失败 plate=%s: %s", plate, e)
         return False
 
 

@@ -357,40 +357,35 @@ class TestRenewDedupRedisOps:
         from jjz_alert.config.redis import operations as ops_module
 
         service = AutoRenewService()
+        expected_key = f"auto_renew:京A12345:{date.today().isoformat()}"
         with patch.object(
             ops_module.redis_ops, "get", new=AsyncMock(return_value="1")
         ) as mock_get:
             result = await service._has_renewed_today("京A12345")
         assert result is True
-        mock_get.assert_awaited_once()
-        called_key = mock_get.await_args.args[0]
-        assert called_key.startswith("auto_renew:京A12345:")
+        mock_get.assert_awaited_once_with(expected_key)
 
     @pytest.mark.asyncio
     async def test_auto_renew_service_mark_renewed_today_uses_redis_ops_set(self):
         from jjz_alert.config.redis import operations as ops_module
 
         service = AutoRenewService()
+        expected_key = f"auto_renew:京A12345:{date.today().isoformat()}"
         with patch.object(
             ops_module.redis_ops, "set", new=AsyncMock(return_value=True)
         ) as mock_set:
             await service._mark_renewed_today("京A12345")
-        mock_set.assert_awaited_once()
-        called_key = mock_set.await_args.args[0]
-        assert called_key.startswith("auto_renew:京A12345:")
-        assert mock_set.await_args.args[1] == "1"
-        assert mock_set.await_args.kwargs.get("ttl") == 86400
+        mock_set.assert_awaited_once_with(expected_key, "1", ttl=86400)
 
     @pytest.mark.asyncio
     async def test_renew_trigger_has_renewed_today_uses_redis_ops_get(self):
         from jjz_alert.config.redis import operations as ops_module
         from jjz_alert.service.jjz import renew_trigger
 
+        expected_key = f"auto_renew:京A12345:{date.today().isoformat()}"
         with patch.object(
             ops_module.redis_ops, "get", new=AsyncMock(return_value=None)
         ) as mock_get:
             result = await renew_trigger._has_renewed_today("京A12345")
         assert result is False
-        mock_get.assert_awaited_once()
-        called_key = mock_get.await_args.args[0]
-        assert called_key.startswith("auto_renew:京A12345:")
+        mock_get.assert_awaited_once_with(expected_key)

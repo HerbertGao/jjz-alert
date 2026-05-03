@@ -393,7 +393,10 @@ class AutoRenewService:
             key = f"auto_renew:{plate}:{date.today().isoformat()}"
             val = await redis_ops.get(key)
             return val is not None
-        except Exception:
+        except Exception as e:
+            # 不让异常阻断续办流程，但要可见——历史上 ImportError
+            # 静默吞掉造成防重失效长期未被发现
+            logger.warning(f"读取续办防重复记录失败 plate={plate}: {e}")
             return False
 
     async def _mark_renewed_today(self, plate: str):
