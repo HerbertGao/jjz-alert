@@ -20,6 +20,7 @@ from jjz_alert.service.cache.cache_service import CacheService
 from jjz_alert.service.homeassistant.ha_mqtt import ha_mqtt_publisher
 from jjz_alert.service.jjz.jjz_service import JJZService
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
+from jjz_alert.service.jjz.renew_decider import RenewDecision, decide as renew_decide
 from jjz_alert.service.notification.batch_pusher import (
     batch_pusher,
     BatchPushItem,
@@ -170,8 +171,11 @@ class JJZPushService:
                     for plate in configured_plates:
                         await self.cache_service.delete_jjz_data(plate)
 
-                # 使用优化的批量查询
-                all_jjz_results = await self.jjz_service.get_multiple_status_optimized(
+                # 使用带上下文的批量查询，复用 raw response_data 给自动续办派发器
+                (
+                    all_jjz_results,
+                    plate_renew_contexts,
+                ) = await self.jjz_service.get_multiple_status_with_context(
                     configured_plates
                 )
 
@@ -381,6 +385,70 @@ class JJZPushService:
 
                     plate_result["jjz_status"] = jjz_status.to_dict()
 
+                    # 自动续办决策：命中 RENEW_* 时异步派发续办协程，并抑制冲突的"催办"提醒
+                    # 决策必须基于 ctx.renew_status（仅六环外）以避免被同车牌的六环内最新记录干扰
+                    renew_dispatched = False
+                    decision = None
+                    ctx = plate_renew_contexts.get(plate)
+                    if ctx is None:
+                        # 没有六环外续办上下文 → 跳过派发（车牌可能仅有六环内或完全无记录）
+                        ctx_response_data = None
+                        ctx_account = None
+                        ctx_renew_status = None
+                    else:
+                        ctx_response_data, ctx_account, ctx_renew_status = ctx
+                        try:
+                            decision = renew_decide(plate_config, ctx_renew_status)
+                        except Exception as e:
+                            logging.warning(f"车牌 {plate} 续办决策异常: {e}")
+                            decision = None
+
+                    if ctx is not None and decision in (
+                        RenewDecision.RENEW_TODAY,
+                        RenewDecision.RENEW_TOMORROW,
+                    ):
+                        try:
+                            from jjz_alert.service.jjz.renew_trigger import (
+                                schedule_renew,
+                            )
+
+                            ar_global = app_config.global_config.auto_renew
+                            asyncio.create_task(
+                                schedule_renew(
+                                    plate_config,
+                                    ctx_renew_status,
+                                    ctx_response_data,
+                                    [ctx_account],
+                                    decision,
+                                    min_delay=ar_global.min_delay_seconds,
+                                    max_delay=ar_global.max_delay_seconds,
+                                )
+                            )
+                            renew_dispatched = True
+                            logging.info(
+                                f"[renew] decision plate={plate} -> {decision.value} 已派发"
+                            )
+                        except Exception as e:
+                            logging.error(f"车牌 {plate} 续办派发失败: {e}")
+                    elif ctx is not None and decision == RenewDecision.NOT_AVAILABLE:
+                        try:
+                            from jjz_alert.service.jjz.auto_renew_service import (
+                                auto_renew_service,
+                                RenewResult,
+                            )
+
+                            await auto_renew_service.push_renew_result(
+                                plate_config,
+                                RenewResult(
+                                    plate=plate,
+                                    success=False,
+                                    message="六环外进京证当前不可办理",
+                                    step="eligibility_check",
+                                ),
+                            )
+                        except Exception as e:
+                            logging.error(f"车牌 {plate} NOT_AVAILABLE 通知失败: {e}")
+
                     # 获取限行状态
                     traffic_result = all_traffic_results.get(plate)
                     if traffic_result:
@@ -458,10 +526,19 @@ class JJZPushService:
                                 jjz_status.valid_end
                                 and jjz_status.valid_end <= today_str
                             ):
-                                warn_msg = f"车牌 {plate} 明日尚未查询到进京证信息，请注意及时办理进京证。"
-                                push_result = await push_jjz_reminder(
-                                    plate_config, warn_msg, priority=PushPriority.HIGH
-                                )
+                                if renew_dispatched:
+                                    # 已派发自动续办，抑制冲突提醒
+                                    push_result = {
+                                        "success": True,
+                                        "skipped": "renew_dispatched",
+                                    }
+                                else:
+                                    warn_msg = f"车牌 {plate} 明日尚未查询到进京证信息，请注意及时办理进京证。"
+                                    push_result = await push_jjz_reminder(
+                                        plate_config,
+                                        warn_msg,
+                                        priority=PushPriority.HIGH,
+                                    )
                             else:
                                 push_result = {
                                     "success": True,

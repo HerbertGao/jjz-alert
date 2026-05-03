@@ -238,9 +238,26 @@ class ConfigManager:
             # 自动续办全局配置
             if "auto_renew" in global_data:
                 ar_data = global_data["auto_renew"]
+                if "time_window_start" in ar_data or "time_window_end" in ar_data:
+                    logging.warning(
+                        "global.auto_renew.time_window_start / time_window_end 已废弃，"
+                        "将被忽略；请改用 min_delay_seconds / max_delay_seconds"
+                    )
+
+                def _coerce_delay(key: str, default: int) -> int:
+                    raw = ar_data.get(key, default)
+                    try:
+                        return int(raw)
+                    except (TypeError, ValueError):
+                        logging.warning(
+                            f"global.auto_renew.{key} 无法解析为整数 (got {raw!r})，"
+                            f"已退回默认值 {default}；如需自定义请在配置中给出非负整数"
+                        )
+                        return default
+
                 config.global_config.auto_renew = GlobalAutoRenewConfig(
-                    time_window_start=ar_data.get("time_window_start", "00:00"),
-                    time_window_end=ar_data.get("time_window_end", "06:00"),
+                    min_delay_seconds=_coerce_delay("min_delay_seconds", 30),
+                    max_delay_seconds=_coerce_delay("max_delay_seconds", 180),
                 )
 
             # 管理员配置
