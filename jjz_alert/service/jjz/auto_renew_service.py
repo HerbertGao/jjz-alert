@@ -454,18 +454,18 @@ class AutoRenewService:
                 )
             priority = PushPriority.HIGH
 
-        for notification in plate_config.notifications:
-            try:
-                await unified_pusher.push(
-                    notification_config=notification,
-                    title=title,
-                    body=body,
-                    priority=priority,
-                    plate=plate_config.plate,
-                    icon=plate_config.icon,
-                )
-            except Exception as e:
-                logger.error(f"续办结果推送失败: {e}")
+        # unified_pusher.push 内部会自动遍历 plate_config.notifications，
+        # 不要在外层再循环（历史代码用错了 kwarg 名 + 循环重复推送）
+        try:
+            await unified_pusher.push(
+                plate_config=plate_config,
+                title=title,
+                body=body,
+                priority=priority,
+                icon=plate_config.icon,
+            )
+        except Exception as e:
+            logger.error("续办结果推送失败 plate=%s: %s", plate_config.plate, e)
 
 
 # 全局实例
