@@ -91,9 +91,7 @@ async def run_renew_only_workflow() -> None:
                     ),
                 )
             except Exception as exc:
-                logger.error(
-                    f"[renew_only] 车牌 {plate} NOT_AVAILABLE 通知失败: {exc}"
-                )
+                logger.error(f"[renew_only] 车牌 {plate} NOT_AVAILABLE 通知失败: {exc}")
 
     # 等待派发协程完成（asyncio.create_task 已注册到当前 loop）
     pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]

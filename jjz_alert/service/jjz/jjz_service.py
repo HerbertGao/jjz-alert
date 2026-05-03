@@ -219,9 +219,7 @@ class JJZService:
                 plate=plate, status="error", error_message=str(e), data_source="api"
             )
 
-    async def _query_multiple_status(
-        self, plates: List[str]
-    ) -> Tuple[
+    async def _query_multiple_status(self, plates: List[str]) -> Tuple[
         Dict[str, JJZStatus],
         Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus]],
     ]:
@@ -233,9 +231,7 @@ class JJZService:
         """
         results = {plate: None for plate in plates}
         accounts = self.load_accounts()
-        plate_contexts: Dict[
-            str, Tuple[Dict[str, Any], JJZAccount, JJZStatus]
-        ] = {}
+        plate_contexts: Dict[str, Tuple[Dict[str, Any], JJZAccount, JJZStatus]] = {}
 
         if not accounts:
             for plate in plates:
@@ -248,9 +244,9 @@ class JJZService:
             return results, plate_contexts
 
         # 同车牌可能出现在多账户里，记录三元组以便后续按 latest 同步选择正确账户
-        plate_statuses: Dict[str, List[Tuple[JJZStatus, Dict[str, Any], JJZAccount]]] = {
-            plate: [] for plate in plates
-        }
+        plate_statuses: Dict[
+            str, List[Tuple[JJZStatus, Dict[str, Any], JJZAccount]]
+        ] = {plate: [] for plate in plates}
 
         for account in accounts:
             try:
@@ -294,8 +290,7 @@ class JJZService:
 
                 # 续办用：仅从六环外记录中选最新一条；无六环外则不写入 plate_contexts
                 outer_triples = [
-                    t for t in triples
-                    if t[0].jjzzlmc and "六环外" in t[0].jjzzlmc
+                    t for t in triples if t[0].jjzzlmc and "六环外" in t[0].jjzzlmc
                 ]
                 if outer_triples:
                     renew_record, renew_response, renew_account = max(
@@ -335,9 +330,7 @@ class JJZService:
         default_return=({}, {}),
         recovery_config={"max_attempts": 2, "delay": 1.0},
     )
-    async def get_multiple_status_with_context(
-        self, plates: List[str]
-    ) -> Tuple[
+    async def get_multiple_status_with_context(self, plates: List[str]) -> Tuple[
         Dict[str, JJZStatus],
         Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus]],
     ]:

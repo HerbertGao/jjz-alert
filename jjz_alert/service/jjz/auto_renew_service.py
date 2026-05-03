@@ -464,5 +464,6 @@ class AutoRenewService:
             except Exception as e:
                 logger.error(f"续办结果推送失败: {e}")
 
+
 # 全局实例
 auto_renew_service = AutoRenewService()

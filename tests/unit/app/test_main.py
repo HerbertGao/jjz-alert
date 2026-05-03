@@ -100,9 +100,7 @@ def _build_app_config(remind_enable, remind_times, auto_renew_enabled):
     remind = RemindConfig(enable=remind_enable, times=list(remind_times))
     global_config = GlobalConfig(remind=remind)
     auto_renew = (
-        AutoRenewConfig(enabled=True, purpose="test")
-        if auto_renew_enabled
-        else None
+        AutoRenewConfig(enabled=True, purpose="test") if auto_renew_enabled else None
     )
     plate = PlateConfig(plate="京A12345", auto_renew=auto_renew)
     return AppConfig(global_config=global_config, plates=[plate])

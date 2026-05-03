@@ -983,7 +983,9 @@ class TestJJZService:
                     # plate_contexts 续办上下文必须仅取六环外
                     assert "京A12345" in plate_contexts
                     ctx = plate_contexts["京A12345"]
-                    assert len(ctx) == 3, "plate_contexts 必须为 (response, account, renew_status) 三元组"
+                    assert (
+                        len(ctx) == 3
+                    ), "plate_contexts 必须为 (response, account, renew_status) 三元组"
                     ctx_response, ctx_account, ctx_renew_status = ctx
                     assert ctx_account is sample_jjz_account
                     assert ctx_renew_status.jjzzlmc == "进京证(六环外)"
