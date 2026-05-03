@@ -42,6 +42,7 @@ async def run_renew_only_workflow() -> None:
         return
 
     ar_global = app_config.global_config.auto_renew
+    dispatched_tasks: list = []
 
     for plate_config in renew_plates:
         plate = plate_config.plate
@@ -60,7 +61,7 @@ async def run_renew_only_workflow() -> None:
         if decision in (RenewDecision.RENEW_TODAY, RenewDecision.RENEW_TOMORROW):
             from jjz_alert.service.jjz.renew_trigger import schedule_renew
 
-            asyncio.create_task(
+            task = asyncio.create_task(
                 schedule_renew(
                     plate_config,
                     ctx_renew_status,
@@ -71,6 +72,7 @@ async def run_renew_only_workflow() -> None:
                     max_delay=ar_global.max_delay_seconds,
                 )
             )
+            dispatched_tasks.append(task)
             logger.info(
                 f"[renew_only] decision plate={plate} -> {decision.value} 已派发"
             )
@@ -93,10 +95,9 @@ async def run_renew_only_workflow() -> None:
             except Exception as exc:
                 logger.error(f"[renew_only] 车牌 {plate} NOT_AVAILABLE 通知失败: {exc}")
 
-    # 等待派发协程完成（asyncio.create_task 已注册到当前 loop）
-    pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-    if pending:
-        await asyncio.gather(*pending, return_exceptions=True)
+    # 仅等待本工作流派发的任务，避免在共享 loop 场景下误等其他任务
+    if dispatched_tasks:
+        await asyncio.gather(*dispatched_tasks, return_exceptions=True)
 
 
 __all__ = ["run_renew_only_workflow"]

@@ -20,6 +20,7 @@ from jjz_alert.service.cache.cache_service import CacheService
 from jjz_alert.service.homeassistant.ha_mqtt import ha_mqtt_publisher
 from jjz_alert.service.jjz.jjz_service import JJZService
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
+from jjz_alert.service.jjz.renew_decider import RenewDecision, decide as renew_decide
 from jjz_alert.service.notification.batch_pusher import (
     batch_pusher,
     BatchPushItem,
@@ -397,12 +398,7 @@ class JJZPushService:
                     else:
                         ctx_response_data, ctx_account, ctx_renew_status = ctx
                         try:
-                            from jjz_alert.service.jjz.renew_decider import (
-                                RenewDecision,
-                                decide,
-                            )
-
-                            decision = decide(plate_config, ctx_renew_status)
+                            decision = renew_decide(plate_config, ctx_renew_status)
                         except Exception as e:
                             logging.warning(f"车牌 {plate} 续办决策异常: {e}")
                             decision = None
