@@ -110,8 +110,8 @@ class MessageTemplateConfig:
 class GlobalAutoRenewConfig:
     """全局自动续办配置"""
 
-    time_window_start: str = "00:00"
-    time_window_end: str = "06:00"
+    min_delay_seconds: int = 30
+    max_delay_seconds: int = 180
 
 
 @dataclass

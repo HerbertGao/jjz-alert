@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Claude Code IDE 本地状态（plugin 缓存、loop lock、本地命令覆盖等，机器特定）
+.claude/
+
 # C extensions
 *.so
 

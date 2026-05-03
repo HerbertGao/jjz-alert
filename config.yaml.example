@@ -64,10 +64,10 @@ global:
     # 限行规则默认缓存到当天24:00
 
   # 自动续办全局配置（可选）
-  # 控制自动续办的随机执行时间窗口，避免固定时间请求
+  # 续办触发由 remind cron 驱动；以下控制每条续办协程派发后的拟人化随机延迟（秒）
   auto_renew:
-    time_window_start: "00:00"  # 随机窗口起始时间
-    time_window_end: "06:00"    # 随机窗口结束时间
+    min_delay_seconds: 30   # 派发后最小延迟，默认 30
+    max_delay_seconds: 180  # 派发后最大延迟，默认 180
 
   # Home Assistant集成配置（可选）
   homeassistant:

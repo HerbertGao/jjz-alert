@@ -922,6 +922,118 @@ class TestJJZService:
                     assert results["京A12345"].status == JJZStatusEnum.VALID.value
 
     @pytest.mark.asyncio
+    async def test_get_multiple_status_with_context_outer_only_for_renew(
+        self, jjz_service, sample_jjz_account
+    ):
+        """同车牌同时存在六环外（旧）与六环内（新）记录时，
+        plate_contexts 中的 renew_status 必须仅取六环外那条；
+        results[plate] 仍取所有记录中 apply_time 最新（六环内）的一条。
+        """
+        plates = ["京A12345"]
+
+        with patch.object(jjz_service, "load_accounts") as mock_load:
+            mock_load.return_value = [sample_jjz_account]
+
+            with patch.object(jjz_service, "check_jjz_status") as mock_check:
+                mock_check.return_value = {
+                    "data": {
+                        "bzclxx": [
+                            {
+                                "hphm": "京A12345",
+                                "sycs": "8",
+                                "bzxx": [
+                                    # 六环外，apply_time 较旧，valid_end 今日
+                                    {
+                                        "jjzzlmc": "进京证(六环外)",
+                                        "blztmc": "审核通过(生效中)",
+                                        "blzt": "1",
+                                        "sqsj": "2025-08-10 09:00:00",
+                                        "yxqs": "2025-08-10",
+                                        "yxqz": "2025-08-15",
+                                        "sxsyts": "0",
+                                    },
+                                    # 六环内，apply_time 较新，valid_end 远期
+                                    {
+                                        "jjzzlmc": "进京证(六环内)",
+                                        "blztmc": "审核通过(生效中)",
+                                        "blzt": "1",
+                                        "sqsj": "2025-08-15 09:00:00",
+                                        "yxqs": "2025-08-15",
+                                        "yxqz": "2025-08-20",
+                                        "sxsyts": "5",
+                                    },
+                                ],
+                            }
+                        ]
+                    }
+                }
+
+                with patch("jjz_alert.service.jjz.jjz_service.date") as mock_date:
+                    mock_date.today.return_value = date(2025, 8, 15)
+
+                    (
+                        results,
+                        plate_contexts,
+                    ) = await jjz_service.get_multiple_status_with_context(plates)
+
+                    # results 取最新的六环内记录用于推送/显示
+                    assert "京A12345" in results
+                    assert results["京A12345"].jjzzlmc == "进京证(六环内)"
+
+                    # plate_contexts 续办上下文必须仅取六环外
+                    assert "京A12345" in plate_contexts
+                    ctx = plate_contexts["京A12345"]
+                    assert len(ctx) == 3, "plate_contexts 必须为 (response, account, renew_status) 三元组"
+                    ctx_response, ctx_account, ctx_renew_status = ctx
+                    assert ctx_account is sample_jjz_account
+                    assert ctx_renew_status.jjzzlmc == "进京证(六环外)"
+                    assert ctx_renew_status.valid_end == "2025-08-15"
+
+    @pytest.mark.asyncio
+    async def test_get_multiple_status_with_context_no_outer(
+        self, jjz_service, sample_jjz_account
+    ):
+        """车牌仅有六环内记录时，plate_contexts 中不应写入该车牌。"""
+        plates = ["京A12345"]
+
+        with patch.object(jjz_service, "load_accounts") as mock_load:
+            mock_load.return_value = [sample_jjz_account]
+
+            with patch.object(jjz_service, "check_jjz_status") as mock_check:
+                mock_check.return_value = {
+                    "data": {
+                        "bzclxx": [
+                            {
+                                "hphm": "京A12345",
+                                "sycs": "8",
+                                "bzxx": [
+                                    {
+                                        "jjzzlmc": "进京证(六环内)",
+                                        "blztmc": "审核通过(生效中)",
+                                        "blzt": "1",
+                                        "sqsj": "2025-08-15 09:00:00",
+                                        "yxqs": "2025-08-15",
+                                        "yxqz": "2025-08-20",
+                                        "sxsyts": "5",
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                }
+
+                with patch("jjz_alert.service.jjz.jjz_service.date") as mock_date:
+                    mock_date.today.return_value = date(2025, 8, 15)
+
+                    (
+                        results,
+                        plate_contexts,
+                    ) = await jjz_service.get_multiple_status_with_context(plates)
+
+                    assert results["京A12345"].jjzzlmc == "进京证(六环内)"
+                    assert "京A12345" not in plate_contexts
+
+    @pytest.mark.asyncio
     async def test_fetch_from_api_exception(self, jjz_service, sample_jjz_account):
         """测试 _fetch_from_api - 异常处理"""
         plate = "京A12345"

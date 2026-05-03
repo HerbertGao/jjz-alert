@@ -2,8 +2,9 @@
 自动续办服务单元测试
 """
 
-from datetime import date, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+import asyncio
+from datetime import date, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -17,6 +18,7 @@ from jjz_alert.config.config_models import (
 from jjz_alert.service.jjz.auto_renew_service import AutoRenewService, RenewResult
 from jjz_alert.service.jjz.jjz_status import JJZStatus
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
+from jjz_alert.service.jjz.renew_decider import RenewDecision
 
 
 def _make_ar_config(**overrides):
@@ -67,71 +69,6 @@ def _make_jjz_status(plate="京A12345", **overrides):
 
 
 @pytest.mark.unit
-class TestShouldRenew:
-    """续办触发判断测试"""
-
-    def setup_method(self):
-        self.service = AutoRenewService()
-
-    def test_permit_expires_tomorrow(self):
-        """证件明天到期 → 应触发续办"""
-        tomorrow = (date.today() + timedelta(days=1)).isoformat()
-        pc = _make_plate_config()
-        status = _make_jjz_status(valid_end=tomorrow)
-        assert self.service.should_renew(pc, status) is True
-
-    def test_permit_already_expired(self):
-        """证件已过期 → 应触发续办"""
-        yesterday = (date.today() - timedelta(days=1)).isoformat()
-        pc = _make_plate_config()
-        status = _make_jjz_status(
-            valid_end=yesterday, status=JJZStatusEnum.EXPIRED.value
-        )
-        assert self.service.should_renew(pc, status) is True
-
-    def test_permit_has_pending_record(self):
-        """已有待审记录 → 不续办"""
-        tomorrow = (date.today() + timedelta(days=1)).isoformat()
-        pc = _make_plate_config()
-        status = _make_jjz_status(valid_end=tomorrow, sfyecbzxx=True)
-        assert self.service.should_renew(pc, status) is False
-
-    def test_outer_not_available_still_returns_true(self):
-        """六环外不可办理 → should_renew 仍返回 True（由调用方处理通知）"""
-        tomorrow = (date.today() + timedelta(days=1)).isoformat()
-        pc = _make_plate_config()
-        status = _make_jjz_status(valid_end=tomorrow, elzsfkb=False)
-        assert self.service.should_renew(pc, status) is True
-
-    def test_permit_still_valid(self):
-        """有效期充足（>1天）→ 不续办"""
-        future = (date.today() + timedelta(days=5)).isoformat()
-        pc = _make_plate_config()
-        status = _make_jjz_status(valid_end=future, days_remaining=5)
-        assert self.service.should_renew(pc, status) is False
-
-    def test_auto_renew_disabled(self):
-        """续办未启用 → 不续办"""
-        ar = _make_ar_config(enabled=False)
-        pc = _make_plate_config(ar_config=ar)
-        status = _make_jjz_status()
-        assert self.service.should_renew(pc, status) is False
-
-    def test_no_auto_renew_config(self):
-        """无续办配置 → 不续办"""
-        pc = PlateConfig(plate="京A12345")
-        status = _make_jjz_status()
-        assert self.service.should_renew(pc, status) is False
-
-    def test_inner_ring_permit_skipped(self):
-        """六环内进京证 → 不续办"""
-        tomorrow = (date.today() + timedelta(days=1)).isoformat()
-        pc = _make_plate_config()
-        status = _make_jjz_status(valid_end=tomorrow, jjzzlmc="进京证（六环内）")
-        assert self.service.should_renew(pc, status) is False
-
-
-@pytest.mark.unit
 class TestBuildApplyRequest:
     """请求体组装测试"""
 
@@ -155,31 +92,20 @@ class TestBuildApplyRequest:
             status, ar, driver_info, "2026-04-01", metadata
         )
 
-        # stateList 字段
         assert body["vId"] == "V001"
         assert body["hphm"] == "京A12345"
         assert body["hpzl"] == "02"
         assert body["cllx"] == "01"
         assert body["elzqyms"] == "六环外规则"
-
-        # 驾驶人信息
         assert body["jsrxm"] == "张三"
         assert body["jszh"] == "110101199001011234"
-
-        # 进京日期
         assert body["jjrq"] == "2026-04-01"
-
-        # 固定值
         assert body["jjzzl"] == "02"
         assert body["txrxx"] == []
         assert body["jingState"] == ""
-
-        # 用户配置
         assert body["area"] == "朝阳区"
         assert body["jjmd"] == "03"
         assert body["jjmdmc"] == "探亲访友"
-
-        # 住宿
         assert body["sfzj"] == "1"
         assert body["zjxxdz"] == "住宿地址"
 
@@ -195,34 +121,6 @@ class TestBuildApplyRequest:
         )
         assert body["sfzj"] == "0"
         assert body["zjxxdz"] == ""
-
-
-@pytest.mark.unit
-class TestCalculateRandomDelay:
-    """随机延迟计算测试"""
-
-    @patch("jjz_alert.service.jjz.auto_renew_service.datetime")
-    def test_default_window(self, mock_dt):
-        """mock 到 00:30，窗口 00:00-06:00 → 延迟在 0~19800 之间"""
-        mock_dt.now.return_value = datetime(2026, 3, 29, 0, 30, 0)
-        delay = AutoRenewService.calculate_random_delay("00:00", "06:00")
-        # 00:30 到 06:00 = 5.5h = 19800s
-        assert 0 <= delay <= 19800
-
-    @patch("jjz_alert.service.jjz.auto_renew_service.datetime")
-    def test_custom_window(self, mock_dt):
-        """mock 到 00:00，窗口 01:00-02:00 → 延迟含到窗口起始的偏移"""
-        mock_dt.now.return_value = datetime(2026, 3, 29, 0, 0, 0)
-        delay = AutoRenewService.calculate_random_delay("01:00", "02:00")
-        # 从 00:00 到 01:00-02:00 之间的随机时刻，延迟在 3600~7200 之间
-        assert 3600 <= delay <= 7200
-
-    @patch("jjz_alert.service.jjz.auto_renew_service.datetime")
-    def test_negative_delay_when_past_window(self, mock_dt):
-        """窗口已过 → 返回 -1 表示不应执行"""
-        mock_dt.now.return_value = datetime(2026, 3, 29, 7, 0, 0)
-        delay = AutoRenewService.calculate_random_delay("00:00", "06:00")
-        assert delay == -1
 
 
 @pytest.mark.unit
@@ -314,3 +212,133 @@ class TestApiCallChain:
             self.service._vehicle_check("http://test", "token", "京A12345", "02")
             is False
         )
+
+
+@pytest.mark.unit
+class TestScheduleRenew:
+    """续办派发器集成测试（mock sleep + execute_renew）"""
+
+    @pytest.mark.asyncio
+    async def test_dispatch_runs_execute_and_push(self):
+        from jjz_alert.service.jjz import renew_trigger
+
+        plate_config = _make_plate_config()
+        jjz_status = _make_jjz_status()
+        response_data = {"data": {}}
+
+        with patch(
+            "jjz_alert.service.jjz.renew_trigger._has_renewed_today",
+            new=AsyncMock(return_value=False),
+        ), patch(
+            "jjz_alert.service.jjz.renew_trigger.asyncio.sleep",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "jjz_alert.service.jjz.renew_trigger.auto_renew_service"
+        ) as mock_service:
+            mock_service.execute_renew = AsyncMock(
+                return_value=RenewResult(
+                    plate=plate_config.plate,
+                    success=True,
+                    message="ok",
+                    step="done",
+                    jjrq="2026-04-01",
+                )
+            )
+            mock_service.push_renew_result = AsyncMock(return_value=None)
+
+            await renew_trigger.schedule_renew(
+                plate_config,
+                jjz_status,
+                response_data,
+                accounts=None,
+                decision=RenewDecision.RENEW_TOMORROW,
+                min_delay=0,
+                max_delay=0,
+            )
+
+            mock_service.execute_renew.assert_awaited_once()
+            mock_service.push_renew_result.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_dedup_skips_execute(self):
+        from jjz_alert.service.jjz import renew_trigger
+
+        plate_config = _make_plate_config()
+        jjz_status = _make_jjz_status()
+
+        with patch(
+            "jjz_alert.service.jjz.renew_trigger._has_renewed_today",
+            new=AsyncMock(return_value=True),
+        ), patch(
+            "jjz_alert.service.jjz.renew_trigger.asyncio.sleep",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "jjz_alert.service.jjz.renew_trigger.auto_renew_service"
+        ) as mock_service:
+            mock_service.execute_renew = AsyncMock()
+            mock_service.push_renew_result = AsyncMock()
+
+            await renew_trigger.schedule_renew(
+                plate_config,
+                jjz_status,
+                {"data": {}},
+                accounts=None,
+                decision=RenewDecision.RENEW_TODAY,
+                min_delay=0,
+                max_delay=0,
+            )
+
+            mock_service.execute_renew.assert_not_called()
+            mock_service.push_renew_result.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_global_lock_serializes_concurrent_dispatches(self):
+        """多协程并发时通过全局锁串行执行（threading.Lock 跨 loop/线程安全）"""
+        from jjz_alert.service.jjz import renew_trigger
+
+        running = 0
+        max_concurrent = 0
+        order = []
+
+        async def fake_execute_renew(plate_config, *args, **kwargs):
+            nonlocal running, max_concurrent
+            running += 1
+            max_concurrent = max(max_concurrent, running)
+            order.append(plate_config.plate)
+            await asyncio.sleep(0)
+            running -= 1
+            return RenewResult(
+                plate=plate_config.plate,
+                success=True,
+                message="ok",
+                step="done",
+            )
+
+        with patch(
+            "jjz_alert.service.jjz.renew_trigger._has_renewed_today",
+            new=AsyncMock(return_value=False),
+        ), patch(
+            "jjz_alert.service.jjz.renew_trigger.asyncio.sleep",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "jjz_alert.service.jjz.renew_trigger.auto_renew_service"
+        ) as mock_service:
+            mock_service.execute_renew = AsyncMock(side_effect=fake_execute_renew)
+            mock_service.push_renew_result = AsyncMock(return_value=None)
+
+            tasks = [
+                renew_trigger.schedule_renew(
+                    _make_plate_config(plate=f"京A0000{i}"),
+                    _make_jjz_status(plate=f"京A0000{i}"),
+                    {"data": {}},
+                    accounts=None,
+                    decision=RenewDecision.RENEW_TODAY,
+                    min_delay=0,
+                    max_delay=0,
+                )
+                for i in range(4)
+            ]
+            await asyncio.gather(*tasks)
+
+        assert max_concurrent == 1
+        assert len(order) == 4

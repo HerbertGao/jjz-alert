@@ -162,6 +162,30 @@ def schedule_jobs():
             finally:
                 loop.close()
 
+    def async_renew_only_wrapper():
+        """Wrapper 仅执行续办决策与派发，不发状态推送通知"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            from jjz_alert.service.jjz.renew_workflow import (
+                run_renew_only_workflow,
+            )
+
+            loop.run_until_complete(run_renew_only_workflow())
+        except Exception as e:
+            logging.error(f"自动续办兜底任务失败: {e}")
+        finally:
+            try:
+                pending = asyncio.all_tasks(loop)
+                if pending:
+                    loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True)
+                    )
+            except Exception as e:
+                logging.warning(f"清理续办兜底任务时出错: {e}")
+            finally:
+                loop.close()
+
     # 仅在提醒功能启用时注册提醒定时任务
     remind_enabled = (
         app_config.global_config.remind.enable
@@ -180,46 +204,28 @@ def schedule_jobs():
             )
             logging.info(f"已添加定时任务: 每天 {hour:02d}:{minute:02d}")
 
-    # 注册自动续办定时任务（每天 00:00 触发）
-    renew_plates = [
-        p for p in app_config.plates if p.auto_renew and p.auto_renew.enabled
-    ]
-    if renew_plates:
+    # 自动续办由 remind cron 触发的查询流程驱动（参见 renew_decider + renew_trigger），
+    # 不再注册独立的 cron 任务。
 
-        def async_renew_wrapper():
-            """Wrapper to run auto renew check in sync scheduler"""
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                from jjz_alert.service.jjz.auto_renew_service import (
-                    run_auto_renew_check,
-                )
-
-                loop.run_until_complete(run_auto_renew_check())
-            except Exception as e:
-                logging.error(f"自动续办任务执行失败: {e}")
-            finally:
-                try:
-                    pending = asyncio.all_tasks(loop)
-                    if pending:
-                        loop.run_until_complete(
-                            asyncio.gather(*pending, return_exceptions=True)
-                        )
-                except Exception as e:
-                    logging.warning(f"清理自动续办待处理任务时出错: {e}")
-                finally:
-                    loop.close()
-
+    has_auto_renew_plates = any(
+        p.auto_renew and p.auto_renew.enabled for p in app_config.plates
+    )
+    # 判断 remind.times 中是否已有凌晨（00:00-04:00）时刻；
+    # 若无且启用了自动续办，注册 00:30 兜底 cron——确保 23:55 触发后
+    # 北京交管放号失败的车辆能在凌晨重试，不必等到次日白天 remind
+    has_post_midnight_remind = remind_enabled and any(
+        int(t.split(":")[0]) < 4 for t in remind_times if ":" in t
+    )
+    if has_auto_renew_plates and not has_post_midnight_remind:
         scheduler.add_job(
-            async_renew_wrapper,
-            CronTrigger(hour=0, minute=0),
-            misfire_grace_time=3600,  # 最多延迟1小时执行，避免深夜误触发
+            async_renew_only_wrapper,
+            CronTrigger(hour=0, minute=30),
+            misfire_grace_time=3600,
             max_instances=1,
         )
         logging.info(
-            f"已添加自动续办定时任务: 每天 00:00 "
-            f"(随机窗口 {app_config.global_config.auto_renew.time_window_start}"
-            f"-{app_config.global_config.auto_renew.time_window_end})"
+            "已注册自动续办凌晨兜底任务: 每天 00:30"
+            "（仅决策+派发续办，不推送状态通知）"
         )
 
     logging.info("定时任务调度器启动")
@@ -255,13 +261,12 @@ if __name__ == "__main__":
         except ImportError:
             logging.warning("REST API 模块不可用，跳过API服务启动")
 
-    # 检查是否有启用自动续办的车牌
     has_auto_renew = any(
         p.auto_renew and p.auto_renew.enabled for p in app_config.plates
     )
 
     if remind_enabled or has_auto_renew:
-        # 启动定时任务（阻塞）— 包含提醒和/或自动续办
+        # 启动定时任务（阻塞）—— remind 触发查询并按需派发续办
         schedule_jobs()
     else:
         # 仅执行一次查询

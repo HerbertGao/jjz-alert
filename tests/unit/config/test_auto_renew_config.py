@@ -29,8 +29,8 @@ class TestAutoRenewConfigParsing:
             "global": {
                 "redis": {"host": "localhost"},
                 "auto_renew": {
-                    "time_window_start": "01:00",
-                    "time_window_end": "05:00",
+                    "min_delay_seconds": 60,
+                    "max_delay_seconds": 240,
                 },
             },
             "plates": [
@@ -69,8 +69,8 @@ class TestAutoRenewConfigParsing:
         config = manager.load_config()
 
         # 全局配置
-        assert config.global_config.auto_renew.time_window_start == "01:00"
-        assert config.global_config.auto_renew.time_window_end == "05:00"
+        assert config.global_config.auto_renew.min_delay_seconds == 60
+        assert config.global_config.auto_renew.max_delay_seconds == 240
 
         # 车牌配置
         plate = config.plates[0]
@@ -104,8 +104,61 @@ class TestAutoRenewConfigParsing:
         manager = ConfigManager(str(config_file))
         config = manager.load_config()
 
-        assert config.global_config.auto_renew.time_window_start == "00:00"
-        assert config.global_config.auto_renew.time_window_end == "06:00"
+        assert config.global_config.auto_renew.min_delay_seconds == 30
+        assert config.global_config.auto_renew.max_delay_seconds == 180
+
+    def test_legacy_time_window_fields_warn_and_use_defaults(self, tmp_path, caplog):
+        """旧 time_window_* 字段保留时输出 WARN 但不阻塞，使用新字段默认值"""
+        import logging as _logging
+
+        config_data = {
+            "global": {
+                "redis": {"host": "localhost"},
+                "auto_renew": {
+                    "time_window_start": "00:00",
+                    "time_window_end": "06:00",
+                },
+            }
+        }
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
+
+        manager = ConfigManager(str(config_file))
+        with caplog.at_level(_logging.WARNING):
+            config = manager.load_config()
+
+        assert config.global_config.auto_renew.min_delay_seconds == 30
+        assert config.global_config.auto_renew.max_delay_seconds == 180
+        assert any("time_window_start" in r.message for r in caplog.records)
+
+    def test_invalid_delay_value_falls_back_to_default(self, tmp_path, caplog):
+        """min_delay_seconds 配为非数字时输出 WARN 并使用默认，且不丢失其他配置"""
+        import logging as _logging
+
+        config_data = {
+            "global": {
+                "redis": {"host": "localhost"},
+                "auto_renew": {"min_delay_seconds": "not-a-number"},
+            },
+            "jjz_accounts": [
+                {"name": "测试账户", "jjz": {"token": "t", "url": "https://x/pro/a"}}
+            ],
+            "plates": [{"plate": "京A12345", "notifications": []}],
+        }
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml.dump(config_data), encoding="utf-8")
+
+        manager = ConfigManager(str(config_file))
+        with caplog.at_level(_logging.WARNING):
+            config = manager.load_config()
+
+        # 异常字段使用默认值
+        assert config.global_config.auto_renew.min_delay_seconds == 30
+        assert any("min_delay_seconds" in r.message for r in caplog.records)
+        # 其他配置未丢失
+        assert len(config.jjz_accounts) == 1
+        assert len(config.plates) == 1
+        assert config.plates[0].plate == "京A12345"
 
     def test_default_apply_location(self, tmp_path):
         """未配置 apply_location 时使用默认坐标（非 destination 坐标）"""
@@ -209,22 +262,32 @@ class TestAutoRenewConfigValidation:
         ]
         assert validator.validate(config) is True
 
-    def test_invalid_time_window(self):
-        """无效时间窗口报错"""
+    def test_invalid_delay_range(self):
+        """min > max 报错"""
         validator = ConfigValidator()
         config = AppConfig()
         config.global_config.auto_renew = GlobalAutoRenewConfig(
-            time_window_start="06:00", time_window_end="01:00"
+            min_delay_seconds=300, max_delay_seconds=60
         )
         validator.validate(config)
-        assert any("起始时间必须早于结束时间" in e for e in validator.errors)
+        assert any("min_delay_seconds" in e for e in validator.errors)
 
-    def test_valid_time_window(self):
-        """合法时间窗口通过"""
+    def test_negative_delay(self):
+        """负数延迟报错"""
         validator = ConfigValidator()
         config = AppConfig()
         config.global_config.auto_renew = GlobalAutoRenewConfig(
-            time_window_start="01:00", time_window_end="05:00"
+            min_delay_seconds=-1, max_delay_seconds=180
         )
-        result = validator.validate(config)
-        assert not any("时间窗口" in e for e in validator.errors)
+        validator.validate(config)
+        assert any("min_delay_seconds" in e for e in validator.errors)
+
+    def test_valid_delay_range(self):
+        """合法延迟范围通过"""
+        validator = ConfigValidator()
+        config = AppConfig()
+        config.global_config.auto_renew = GlobalAutoRenewConfig(
+            min_delay_seconds=30, max_delay_seconds=180
+        )
+        validator.validate(config)
+        assert not any("delay" in e.lower() for e in validator.errors)

@@ -8,7 +8,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from jjz_alert.base.error_handler import (
     APIError,
@@ -219,18 +219,23 @@ class JJZService:
                 plate=plate, status="error", error_message=str(e), data_source="api"
             )
 
-    @with_error_handling(
-        exceptions=(APIError, NetworkError, ConfigurationError, Exception),
-        service_name="jjz_service",
-        default_return={},
-        recovery_config={"max_attempts": 2, "delay": 1.0},
-    )
-    async def get_multiple_status_optimized(
+    async def _query_multiple_status(
         self, plates: List[str]
-    ) -> Dict[str, JJZStatus]:
-        """优化的批量获取多个车牌的进京证状态 - 减少API调用次数"""
+    ) -> Tuple[
+        Dict[str, JJZStatus],
+        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus]],
+    ]:
+        """
+        内部实现：返回 (results, plate_contexts)。
+        plate_contexts 按车牌记录续办专用三元组 (response_data, account, renew_status)，
+        其中 renew_status 仅取该车牌六环外记录中 apply_time 最新的一条；若车牌无六环外记录则不写入。
+        多账户场景下保证后续续办派发使用正确账户与正确的六环外 status。
+        """
         results = {plate: None for plate in plates}
         accounts = self.load_accounts()
+        plate_contexts: Dict[
+            str, Tuple[Dict[str, Any], JJZAccount, JJZStatus]
+        ] = {}
 
         if not accounts:
             for plate in plates:
@@ -240,12 +245,13 @@ class JJZService:
                     error_message="未配置进京证账户",
                     data_source="api",
                 )
-            return results
+            return results, plate_contexts
 
-        # 记录每个车牌找到的状态
-        plate_statuses = {plate: [] for plate in plates}
+        # 同车牌可能出现在多账户里，记录三元组以便后续按 latest 同步选择正确账户
+        plate_statuses: Dict[str, List[Tuple[JJZStatus, Dict[str, Any], JJZAccount]]] = {
+            plate: [] for plate in plates
+        }
 
-        # 只遍历一次所有账户，为所有车牌收集数据
         for account in accounts:
             try:
                 logging.debug(f"使用账户 {account.name} 查询所有进京证数据")
@@ -259,32 +265,47 @@ class JJZService:
                     )
                     continue
 
-                # 解析所有进京证数据
                 all_records = parse_all_jjz_records(
                     response_data, self._determine_status, JJZStatus
                 )
 
-                # 为所有车牌查找匹配的记录
                 for record in all_records:
                     for plate in plates:
                         if record.plate.upper() == plate.upper():
-                            plate_statuses[plate].append(record)
+                            plate_statuses[plate].append(
+                                (record, response_data, account)
+                            )
 
             except Exception as e:
                 logging.warning(f"账户 {account.name} 查询失败: {e}")
                 continue
 
-        # 为每个车牌选择最新的状态并缓存
         for plate in plates:
-            statuses = plate_statuses[plate]
-            if statuses:
-                # 按申请时间排序，选择最新的记录
-                latest_status = max(statuses, key=lambda s: s.apply_time or "")
-                results[plate] = latest_status
+            triples = plate_statuses[plate]
+            if triples:
+                # 推送/显示用：所有记录中 apply_time 最新的一条
+                latest_record, latest_response, latest_account = max(
+                    triples, key=lambda t: t[0].apply_time or ""
+                )
+                results[plate] = latest_record
 
-                # 缓存成功查询的结果
-                if latest_status.status != JJZStatusEnum.ERROR.value:
-                    await self._cache_status(latest_status)
+                if latest_record.status != JJZStatusEnum.ERROR.value:
+                    await self._cache_status(latest_record)
+
+                # 续办用：仅从六环外记录中选最新一条；无六环外则不写入 plate_contexts
+                outer_triples = [
+                    t for t in triples
+                    if t[0].jjzzlmc and "六环外" in t[0].jjzzlmc
+                ]
+                if outer_triples:
+                    renew_record, renew_response, renew_account = max(
+                        outer_triples, key=lambda t: t[0].apply_time or ""
+                    )
+                    plate_contexts[plate] = (
+                        renew_response,
+                        renew_account,
+                        renew_record,
+                    )
             else:
                 results[plate] = JJZStatus(
                     plate=plate,
@@ -293,7 +314,39 @@ class JJZService:
                     data_source="api",
                 )
 
+        return results, plate_contexts
+
+    @with_error_handling(
+        exceptions=(APIError, NetworkError, ConfigurationError, Exception),
+        service_name="jjz_service",
+        default_return={},
+        recovery_config={"max_attempts": 2, "delay": 1.0},
+    )
+    async def get_multiple_status_optimized(
+        self, plates: List[str]
+    ) -> Dict[str, JJZStatus]:
+        """优化的批量获取多个车牌的进京证状态 - 减少API调用次数"""
+        results, _ = await self._query_multiple_status(plates)
         return results
+
+    @with_error_handling(
+        exceptions=(APIError, NetworkError, ConfigurationError, Exception),
+        service_name="jjz_service",
+        default_return=({}, {}),
+        recovery_config={"max_attempts": 2, "delay": 1.0},
+    )
+    async def get_multiple_status_with_context(
+        self, plates: List[str]
+    ) -> Tuple[
+        Dict[str, JJZStatus],
+        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus]],
+    ]:
+        """返回每个车牌对应的续办上下文 (response_data, account, renew_status)。
+
+        renew_status 仅取该车牌六环外记录中 apply_time 最新的一条；若无六环外记录则不写入。
+        多账户场景下保证后续续办派发使用正确账户。
+        """
+        return await self._query_multiple_status(plates)
 
     @with_retry(max_attempts=3, delay=1.0)
     async def _fetch_from_api(self, plate: str) -> JJZStatus:

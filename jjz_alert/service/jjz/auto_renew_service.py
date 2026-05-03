@@ -1,26 +1,21 @@
 """
 六环外进京证自动续办服务
 
-在到期前一天自动提交续办申请，支持随机时间调度和结果通知。
+封装续办 API 调用链、请求体组装、结果通知和当日防重。
+触发由 `renew_trigger.schedule_renew` 派发，决策由 `renew_decider.decide` 给出。
 """
 
-import asyncio
 import logging
-import random
 import time
 from dataclasses import dataclass
-from datetime import datetime, date, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import date
+from typing import Any, Dict, Optional
 
 from jjz_alert.base.http import http_post
 from jjz_alert.base.logger import get_structured_logger, LogCategory
 from jjz_alert.config.config_models import AutoRenewConfig, PlateConfig
-from jjz_alert.service.jjz.jjz_parse import (
-    extract_renew_metadata,
-    parse_all_jjz_records,
-)
+from jjz_alert.service.jjz.jjz_parse import extract_renew_metadata
 from jjz_alert.service.jjz.jjz_status import JJZStatus
-from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 
 logger = logging.getLogger(__name__)
 
@@ -209,45 +204,6 @@ class AutoRenewService:
                 message=f"续办异常: {e}",
                 step="exception",
             )
-
-    # ------------------------------------------------------------------
-    # 续办判断
-    # ------------------------------------------------------------------
-
-    def should_renew(self, plate_config: PlateConfig, jjz_status: JJZStatus) -> bool:
-        """判断是否应触发续办"""
-        ar = plate_config.auto_renew
-        if not ar or not ar.enabled:
-            return False
-
-        # 仅六环外（jjzzlmc 为 None 或空时也不续办）
-        if not jjz_status.jjzzlmc or "六环外" not in jjz_status.jjzzlmc:
-            return False
-
-        # 已有待审记录
-        if jjz_status.sfyecbzxx:
-            logger.info(f"车牌 {plate_config.plate} 已有待审记录，跳过续办")
-            return False
-
-        # 注意：elzsfkb 的检查由调用方处理，以便在不可办理时推送通知
-
-        # 判断有效期：明天到期或已过期
-        if jjz_status.valid_end:
-            try:
-                end_date = datetime.strptime(jjz_status.valid_end, "%Y-%m-%d").date()
-                today = date.today()
-                tomorrow = today + timedelta(days=1)
-
-                if end_date <= tomorrow:
-                    return True
-            except (ValueError, TypeError):
-                pass
-
-        # 状态为过期
-        if jjz_status.status == JJZStatusEnum.EXPIRED.value:
-            return True
-
-        return False
 
     # ------------------------------------------------------------------
     # API 调用链
@@ -508,164 +464,5 @@ class AutoRenewService:
             except Exception as e:
                 logger.error(f"续办结果推送失败: {e}")
 
-    # ------------------------------------------------------------------
-    # 随机延迟
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def calculate_random_delay(
-        time_window_start: str = "00:00", time_window_end: str = "06:00"
-    ) -> int:
-        """计算从当前时刻到时间窗口内随机时刻的等待秒数"""
-        start_parts = list(map(int, time_window_start.split(":")))
-        end_parts = list(map(int, time_window_end.split(":")))
-        start_seconds = start_parts[0] * 3600 + start_parts[1] * 60
-        end_seconds = end_parts[0] * 3600 + end_parts[1] * 60
-
-        if start_seconds >= end_seconds:
-            logger.warning("续办时间窗口配置无效(start >= end)，跳过")
-            return -1
-
-        now = datetime.now()
-        now_seconds = now.hour * 3600 + now.minute * 60 + now.second
-
-        if now_seconds >= end_seconds:
-            # 已超过窗口结束时间，返回 -1 表示不应执行
-            return -1
-
-        # 有效随机范围的起点：窗口起始或当前时间（取较晚者）
-        effective_start = max(start_seconds, now_seconds)
-
-        # 从当前时刻到随机目标时刻的延迟
-        random_target = random.randint(effective_start, end_seconds - 1)
-        return random_target - now_seconds
-
-
 # 全局实例
 auto_renew_service = AutoRenewService()
-
-
-async def run_auto_renew_check():
-    """
-    自动续办检查入口 — 由定时任务调用
-
-    流程：随机延迟 → 加载配置 → 遍历启用续办的车牌 → 查询状态 → 执行续办 → 推送结果
-    """
-    from jjz_alert.config.config import config_manager
-    from jjz_alert.service.jjz.jjz_service import JJZService
-
-    app_config = config_manager.load_config()
-    ar_global = app_config.global_config.auto_renew
-
-    # 找出启用了续办的车牌
-    renew_plates = [
-        p for p in app_config.plates if p.auto_renew and p.auto_renew.enabled
-    ]
-    if not renew_plates:
-        logger.debug("无启用自动续办的车牌，跳过")
-        return
-
-    # 随机延迟
-    delay = AutoRenewService.calculate_random_delay(
-        ar_global.time_window_start, ar_global.time_window_end
-    )
-    if delay < 0:
-        logger.info(f"当前时间已超过续办窗口 {ar_global.time_window_end}，跳过本次执行")
-        return
-    if delay > 0:
-        target_time = datetime.now() + timedelta(seconds=delay)
-        logger.info(
-            f"自动续办将在 {target_time.strftime('%H:%M:%S')} 执行 "
-            f"(延迟 {delay // 60} 分钟)"
-        )
-        await asyncio.sleep(delay)
-
-    # 延迟后重新加载配置，确保使用最新的车牌和续办设置
-    app_config = config_manager.reload_config()
-    renew_plates = [
-        p for p in app_config.plates if p.auto_renew and p.auto_renew.enabled
-    ]
-    if not renew_plates:
-        logger.debug("延迟后重新检查：无启用自动续办的车牌，跳过")
-        return
-
-    logger.info(f"开始自动续办检查，共 {len(renew_plates)} 个车牌")
-
-    jjz_service = JJZService()
-
-    # 一次性查询所有车辆状态（stateList 返回所有车辆数据）
-    accounts = jjz_service.load_accounts()
-    if not accounts:
-        logger.error("无可用进京证账户")
-        return
-
-    response_data = jjz_service.check_jjz_status(
-        accounts[0].jjz.url, accounts[0].jjz.token
-    )
-    if not response_data or "error" in response_data:
-        logger.warning("查询进京证状态失败，跳过自动续办")
-        return
-
-    all_records = parse_all_jjz_records(
-        response_data, jjz_service._determine_status, JJZStatus
-    )
-
-    for plate_config in renew_plates:
-        plate = plate_config.plate
-        try:
-            # 从已解析的记录中找到匹配车牌的六环外最新记录
-            target_record = None
-            for record in all_records:
-                if record.plate.upper() == plate.upper():
-                    if record.jjzzlmc and "六环外" in record.jjzzlmc:
-                        if target_record is None or (record.apply_time or "") > (
-                            target_record.apply_time or ""
-                        ):
-                            target_record = record
-
-            if not target_record:
-                logger.info(f"车牌 {plate} 未找到六环外进京证记录")
-                continue
-
-            # 判断是否需要续办（有效期、待审记录等）
-            if not auto_renew_service.should_renew(plate_config, target_record):
-                logger.info(f"车牌 {plate} 不满足续办条件，跳过")
-                continue
-
-            # 需要续办但六环外不可办理时发通知
-            if target_record.elzsfkb is False:
-                await auto_renew_service.push_renew_result(
-                    plate_config,
-                    RenewResult(
-                        plate=plate,
-                        success=False,
-                        message="六环外进京证当前不可办理",
-                        step="eligibility_check",
-                    ),
-                )
-                continue
-
-            # 执行续办
-            renew_result = await auto_renew_service.execute_renew(
-                plate_config, target_record, response_data, accounts
-            )
-
-            # 推送结果
-            await auto_renew_service.push_renew_result(plate_config, renew_result)
-
-            logger.info(
-                f"车牌 {plate} 续办{'成功' if renew_result.success else '失败'}: "
-                f"{renew_result.message}"
-            )
-
-        except Exception as e:
-            logger.error(f"车牌 {plate} 自动续办异常: {e}")
-            await auto_renew_service.push_renew_result(
-                plate_config,
-                RenewResult(
-                    plate=plate,
-                    success=False,
-                    message=f"续办异常: {e}",
-                    step="exception",
-                ),
-            )

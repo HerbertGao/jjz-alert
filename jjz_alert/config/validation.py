@@ -83,7 +83,7 @@ class ConfigValidator:
         # 验证自动续办全局配置
         ar_global = config.global_config.auto_renew
         if ar_global:
-            self._validate_auto_renew_time_window(ar_global)
+            self._validate_auto_renew_delay(ar_global)
 
         # 验证Home Assistant配置
         ha_config = config.global_config.homeassistant
@@ -246,25 +246,26 @@ class ConfigValidator:
                         f"{context}自动续办住宿配置缺少必需字段: {field_name}"
                     )
 
-    def _validate_auto_renew_time_window(self, ar_global):
-        """验证自动续办全局时间窗口配置"""
-        start = ar_global.time_window_start
-        end = ar_global.time_window_end
+    def _validate_auto_renew_delay(self, ar_global):
+        """验证自动续办全局派发延迟配置"""
+        min_delay = ar_global.min_delay_seconds
+        max_delay = ar_global.max_delay_seconds
 
-        if not self._validate_time_format(start):
-            self.errors.append(f"自动续办时间窗口起始时间格式无效: {start}")
+        if not isinstance(min_delay, int) or min_delay < 0:
+            self.errors.append(
+                f"续办延迟最小值必须为非负整数: min_delay_seconds={min_delay}"
+            )
             return
-        if not self._validate_time_format(end):
-            self.errors.append(f"自动续办时间窗口结束时间格式无效: {end}")
+        if not isinstance(max_delay, int) or max_delay < 0:
+            self.errors.append(
+                f"续办延迟最大值必须为非负整数: max_delay_seconds={max_delay}"
+            )
             return
-
-        # 起始时间必须早于结束时间
-        start_parts = list(map(int, start.split(":")))
-        end_parts = list(map(int, end.split(":")))
-        start_minutes = start_parts[0] * 60 + start_parts[1]
-        end_minutes = end_parts[0] * 60 + end_parts[1]
-        if start_minutes >= end_minutes:
-            self.errors.append("续办时间窗口起始时间必须早于结束时间")
+        if min_delay > max_delay:
+            self.errors.append(
+                "续办延迟最小值必须 >= 0 且不大于最大值: "
+                f"min_delay_seconds={min_delay}, max_delay_seconds={max_delay}"
+            )
 
     def _validate_admin_notifications(self, notifications: List[NotificationConfig]):
         """验证管理员推送配置"""
