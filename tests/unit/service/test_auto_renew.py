@@ -157,9 +157,9 @@ class TestPushRenewResult:
         kwargs = mock_push.await_args.kwargs
         assert kwargs.get("plate_config") is plate_config  # 关键：必填参数
         assert kwargs.get("title") == "进京证自动续办成功"
-        assert "进京日期" in kwargs.get("body") or kwargs.get("jjrq") in str(
-            kwargs.get("body", "")
-        )
+        # body 应包含进京日期值（模板渲染后）
+        body = kwargs.get("body") or ""
+        assert result.jjrq in body
         # 历史 bug 关键词检查：不应再传 notification_config / plate kwargs
         assert "notification_config" not in kwargs
         assert "plate" not in kwargs
@@ -190,7 +190,8 @@ class TestPushRenewResult:
 
     @pytest.mark.asyncio
     async def test_token_failure_uses_token_expired_template(self):
-        """失败消息含 'token' 关键词时使用 Token 失效模板，标题不同"""
+        """失败消息命中 token/unauthorized/401/403/认证失败/令牌 任一关键词时
+        切换到 Token 失效模板，标题改为 "Token已失效" 提示用户手动更新配置"""
         from jjz_alert.service.notification.unified_pusher import (
             unified_pusher as up_module,
         )
