@@ -7,7 +7,7 @@
 import asyncio
 import logging
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from jjz_alert.base.error_handler import (
@@ -26,6 +26,30 @@ from jjz_alert.service.cache.cache_service import CacheService
 from jjz_alert.service.jjz.jjz_parse import parse_all_jjz_records
 from jjz_alert.service.jjz.jjz_status import JJZStatus
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
+
+
+def _is_effective_on(record: JJZStatus, day: date) -> bool:
+    """记录是否在 `day` 当日构成有效覆盖。
+
+    必须满足：valid_start/valid_end 均能解析为日期、day 在区间内、blztmc 含
+    "生效中" 或 "待生效"（已批准未来生效也算覆盖）。
+
+    实现注意：fromisoformat 走 ``datetime.date`` 而非模块级 ``date`` 符号，
+    避免单元测试用 ``patch("jjz_service.date")`` 整体替换时把解析也炸掉。
+    """
+    import datetime as _dt
+
+    if not record.valid_start or not record.valid_end:
+        return False
+    try:
+        start = _dt.date.fromisoformat(record.valid_start)
+        end = _dt.date.fromisoformat(record.valid_end)
+    except (TypeError, ValueError):
+        return False
+    if not (start <= day <= end):
+        return False
+    blztmc = record.blztmc or ""
+    return "生效中" in blztmc or "待生效" in blztmc
 
 
 class JJZService:
@@ -221,17 +245,23 @@ class JJZService:
 
     async def _query_multiple_status(self, plates: List[str]) -> Tuple[
         Dict[str, JJZStatus],
-        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus]],
+        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus, bool, bool]],
     ]:
         """
         内部实现：返回 (results, plate_contexts)。
-        plate_contexts 按车牌记录续办专用三元组 (response_data, account, renew_status)，
-        其中 renew_status 仅取该车牌六环外记录中 apply_time 最新的一条；若车牌无六环外记录则不写入。
+        plate_contexts 按车牌记录续办专用五元组
+        (response_data, account, renew_status, today_covered, tomorrow_covered)：
+        - renew_status 仅取该车牌六环外记录中 apply_time 最新的一条
+        - today_covered / tomorrow_covered 基于该车牌全部记录（六环内 ∪ 六环外）
+          通过 `_is_effective_on` 计算，覆盖判定包含"生效中"与"已批准待生效"
+        若车牌无六环外记录则不写入 plate_contexts（无 vId 等续办字段，无法 auto_renew）。
         多账户场景下保证后续续办派发使用正确账户与正确的六环外 status。
         """
         results = {plate: None for plate in plates}
         accounts = self.load_accounts()
-        plate_contexts: Dict[str, Tuple[Dict[str, Any], JJZAccount, JJZStatus]] = {}
+        plate_contexts: Dict[
+            str, Tuple[Dict[str, Any], JJZAccount, JJZStatus, bool, bool]
+        ] = {}
 
         if not accounts:
             for plate in plates:
@@ -276,6 +306,9 @@ class JJZService:
                 logging.warning(f"账户 {account.name} 查询失败: {e}")
                 continue
 
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
+
         for plate in plates:
             triples = plate_statuses[plate]
             if triples:
@@ -296,10 +329,19 @@ class JJZService:
                     renew_record, renew_response, renew_account = max(
                         outer_triples, key=lambda t: t[0].apply_time or ""
                     )
+                    # 覆盖信号基于全部记录（六环内 ∪ 六环外）；任意一条覆盖目标日即认为覆盖
+                    today_covered = any(
+                        _is_effective_on(t[0], today) for t in triples
+                    )
+                    tomorrow_covered = any(
+                        _is_effective_on(t[0], tomorrow) for t in triples
+                    )
                     plate_contexts[plate] = (
                         renew_response,
                         renew_account,
                         renew_record,
+                        today_covered,
+                        tomorrow_covered,
                     )
             else:
                 results[plate] = JJZStatus(
@@ -332,12 +374,14 @@ class JJZService:
     )
     async def get_multiple_status_with_context(self, plates: List[str]) -> Tuple[
         Dict[str, JJZStatus],
-        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus]],
+        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus, bool, bool]],
     ]:
-        """返回每个车牌对应的续办上下文 (response_data, account, renew_status)。
+        """返回每个车牌对应的续办上下文五元组
+        ``(response_data, account, renew_status, today_covered, tomorrow_covered)``。
 
-        renew_status 仅取该车牌六环外记录中 apply_time 最新的一条；若无六环外记录则不写入。
-        多账户场景下保证后续续办派发使用正确账户。
+        ``renew_status`` 仅取该车牌六环外记录中 apply_time 最新的一条；若无六环外
+        记录则不写入。``today_covered`` / ``tomorrow_covered`` 基于该车牌全部记录
+        （六环内 ∪ 六环外）的覆盖判定结果。
         """
         return await self._query_multiple_status(plates)
 

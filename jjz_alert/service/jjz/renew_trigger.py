@@ -52,9 +52,20 @@ async def schedule_renew(
     decision: RenewDecision,
     min_delay: int = 30,
     max_delay: int = 180,
+    *,
+    today_covered: bool,
+    tomorrow_covered: bool,
 ) -> None:
     """
     异步派发一辆车的续办：随机延迟 → 抢全局锁 → 二次校验 → 执行续办 → 推送结果。
+
+    today_covered / tomorrow_covered 透传给 execute_renew，用于 checkHandle 后的
+    useful 过滤（服务端给的日期已被本地覆盖时静默 SKIP）。
+
+    Note:
+        `today_covered` / `tomorrow_covered` 必传（无默认值），与 `decide()` 的
+        keyword-only 强制理由一致：遗漏会静默走"无覆盖"路径，潜在错误难以发现，
+        因此让 Python 在调用时立刻 TypeError 而非默认 False 静默错路径。
     """
     plate = plate_config.plate
 
@@ -77,8 +88,13 @@ async def schedule_renew(
         logger.info("[renew] cancelled during sleep plate=%s", plate)
         raise
 
-    # 用 threading.Lock 跨 loop 串行；await to_thread 让出协程并阻塞拿锁
-    await asyncio.to_thread(RENEW_GLOBAL_LOCK.acquire)
+    # 用 threading.Lock 跨 loop 串行。
+    # 不能用 `await asyncio.to_thread(LOCK.acquire)`：协程被取消时工作线程
+    # 仍会成功拿锁但 try/finally 不可达，导致锁永久泄漏、后续续办全部死锁。
+    # 改用非阻塞 acquire + sleep 轮询：取消时锁要么没拿到（自然不泄漏），
+    # 要么已经持有并进入 try/finally。
+    while not RENEW_GLOBAL_LOCK.acquire(blocking=False):
+        await asyncio.sleep(0.1)
     try:
         if await _has_renewed_today(plate):
             logger.info("[renew] skipped plate=%s reason=dedup_key_exists", plate)
@@ -86,7 +102,12 @@ async def schedule_renew(
 
         try:
             result = await auto_renew_service.execute_renew(
-                plate_config, jjz_status, response_data, accounts
+                plate_config,
+                jjz_status,
+                response_data,
+                accounts,
+                today_covered=today_covered,
+                tomorrow_covered=tomorrow_covered,
             )
         except Exception as exc:
             logger.error("[renew] execute_renew exception plate=%s: %s", plate, exc)

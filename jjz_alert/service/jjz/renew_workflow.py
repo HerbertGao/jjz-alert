@@ -50,13 +50,33 @@ async def run_renew_only_workflow() -> None:
         if ctx is None:
             logger.debug(f"[renew_only] 车牌 {plate} 缺少续办上下文，跳过")
             continue
-        ctx_response_data, ctx_account, ctx_renew_status = ctx
+        (
+            ctx_response_data,
+            ctx_account,
+            ctx_renew_status,
+            ctx_today_cov,
+            ctx_tomorrow_cov,
+        ) = ctx
 
         try:
-            decision = decide(plate_config, ctx_renew_status)
+            decision = decide(
+                plate_config=plate_config,
+                outer_renew_status=ctx_renew_status,
+                today_covered=ctx_today_cov,
+                tomorrow_covered=ctx_tomorrow_cov,
+            )
         except Exception as exc:
             logger.warning(f"[renew_only] 车牌 {plate} 决策异常: {exc}")
             continue
+
+        logger.info(
+            "[renew_only] decision plate=%s -> %s "
+            "today_cov=%s tomorrow_cov=%s elzsfkb=%s sfyecbzxx=%s",
+            plate, decision.value,
+            ctx_today_cov, ctx_tomorrow_cov,
+            ctx_renew_status.elzsfkb,
+            ctx_renew_status.sfyecbzxx,
+        )
 
         if decision in (RenewDecision.RENEW_TODAY, RenewDecision.RENEW_TOMORROW):
             from jjz_alert.service.jjz.renew_trigger import schedule_renew
@@ -70,12 +90,12 @@ async def run_renew_only_workflow() -> None:
                     decision,
                     min_delay=ar_global.min_delay_seconds,
                     max_delay=ar_global.max_delay_seconds,
+                    today_covered=ctx_today_cov,
+                    tomorrow_covered=ctx_tomorrow_cov,
                 )
             )
             dispatched_tasks.append(task)
-            logger.info(
-                f"[renew_only] decision plate={plate} -> {decision.value} 已派发"
-            )
+            logger.info(f"[renew_only] dispatched plate={plate}")
         elif decision == RenewDecision.NOT_AVAILABLE:
             try:
                 from jjz_alert.service.jjz.auto_renew_service import (

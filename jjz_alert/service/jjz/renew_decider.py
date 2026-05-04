@@ -1,18 +1,22 @@
 """
-自动续办决策器
+自动续办决策器（基于覆盖缺口的口径）
 
-基于 PlateConfig + JJZStatus 决定续办分支：
-  SKIP / RENEW_TODAY / RENEW_TOMORROW / PENDING / NOT_AVAILABLE
+输入：
+  - plate_config：车牌配置（含 auto_renew 块）
+  - outer_renew_status：六环外最新记录（仅用于读取车辆级字段 elzsfkb / sfyecbzxx）
+  - today_covered / tomorrow_covered：全车牌（六环内 ∪ 六环外）的覆盖布尔，
+    由 JJZService 在批量查询时基于 blztmc + 有效期算出
 
-优先级：PENDING > NOT_AVAILABLE > RENEW_* > SKIP
+输出五种结果：SKIP / RENEW_TODAY / RENEW_TOMORROW / PENDING / NOT_AVAILABLE
+
+互斥规则下：六环内与六环外不会同时生效；服务端在六环内活跃时把 elzsfkb 置为 False。
+"已有覆盖 + elzsfkb=False" 不再误判为告警，按本决策矩阵静默 SKIP。
 """
 
-from datetime import date, timedelta
 from enum import Enum
 
 from jjz_alert.config.config_models import PlateConfig
 from jjz_alert.service.jjz.jjz_status import JJZStatus
-from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 
 
 class RenewDecision(str, Enum):
@@ -23,55 +27,56 @@ class RenewDecision(str, Enum):
     NOT_AVAILABLE = "not_available"
 
 
-def decide(plate_config: PlateConfig, jjz_status: JJZStatus) -> RenewDecision:
-    """
-    决定一辆车在当前查询时刻的续办分支。
+def decide(
+    *,
+    plate_config: PlateConfig,
+    outer_renew_status: JJZStatus | None,
+    today_covered: bool,
+    tomorrow_covered: bool,
+) -> RenewDecision:
+    """决定一辆车在当前查询时刻的续办分支。
 
-    判断口径：以 jjz_status.valid_end 与本地 today/tomorrow 比较；
-    sfyecbzxx / elzsfkb 二次校验由 vehicle 级字段提供。
+    决策树：
+        auto_renew 未启用                       → SKIP
+        无六环外历史记录                        → SKIP（缺 vId 等续办字段）
+        sfyecbzxx == True                       → PENDING（已有待审，最高优先级）
+        today_covered == True：
+            tomorrow_covered == True            → SKIP（双覆盖，无需操作）
+            tomorrow_covered == False:
+                elzsfkb == True                 → RENEW_TOMORROW（明日缺，今日派发）
+                elzsfkb == False                → SKIP（政策窗口未开，等下一轮）
+        today_covered == False:
+            elzsfkb == True                     → RENEW_TODAY（今日断档，立即派发；
+                                                    服务端实际给的日期由 useful 过滤精判）
+            elzsfkb == False:
+                tomorrow_covered == True        → SKIP（已有明日兜底）
+                tomorrow_covered == False       → NOT_AVAILABLE（真断档+不可办，告警）
     """
     ar = plate_config.auto_renew
     if not ar or not ar.enabled:
         return RenewDecision.SKIP
 
-    # 续办仅支持六环外（execute_renew 固定 jjzzl="02"）；
-    # 当车牌最新记录不是六环外（jjzzlmc 缺失或不含"六环外"）时跳过
-    if not jjz_status.jjzzlmc or "六环外" not in jjz_status.jjzzlmc:
+    if outer_renew_status is None:
         return RenewDecision.SKIP
 
-    if jjz_status.sfyecbzxx:
+    if outer_renew_status.sfyecbzxx:
         return RenewDecision.PENDING
 
-    if jjz_status.elzsfkb is False:
-        return RenewDecision.NOT_AVAILABLE
+    elzsfkb_open = outer_renew_status.elzsfkb is not False  # None 当作 True，与旧行为对齐
 
-    today = date.today()
-    tomorrow = today + timedelta(days=1)
+    if today_covered:
+        if tomorrow_covered:
+            return RenewDecision.SKIP
+        if elzsfkb_open:
+            return RenewDecision.RENEW_TOMORROW
+        return RenewDecision.SKIP  # 政策窗口未开
 
-    valid_end_str = jjz_status.valid_end
-    valid_end_date = None
-    if valid_end_str:
-        try:
-            valid_end_date = date.fromisoformat(valid_end_str)
-        except (ValueError, TypeError):
-            valid_end_date = None
-
-    # INVALID 表示"无任何进京证记录"或解析失败，缺少 vId 等续办字段，
-    # 即使派发也会在 execute_renew 失败；与用户设计共识"不考虑无续办上下文"一致，
-    # 显式跳过避免无意义派发。
-    if jjz_status.status == JJZStatusEnum.EXPIRED.value:
+    # today_covered is False
+    if elzsfkb_open:
         return RenewDecision.RENEW_TODAY
-
-    if valid_end_date is None:
-        return RenewDecision.SKIP
-
-    if valid_end_date < today:
-        return RenewDecision.RENEW_TODAY
-
-    if valid_end_date < tomorrow:
-        return RenewDecision.RENEW_TOMORROW
-
-    return RenewDecision.SKIP
+    if tomorrow_covered:
+        return RenewDecision.SKIP  # 已有明日兜底
+    return RenewDecision.NOT_AVAILABLE
 
 
 __all__ = ["RenewDecision", "decide"]

@@ -599,8 +599,9 @@ class TrafficService:
         智能获取限行规则 - 根据当前时间决定查询今天还是明天的规则
         20:30前查询今天，20:30后查询明天
         """
-        from datetime import datetime
-
+        # 直接使用模块级导入的 datetime（顶部 `from datetime import datetime, ...`），
+        # 不要在此处局部 re-import——会遮蔽模块级符号，使
+        # `patch("traffic_service.datetime")` 在测试中失效（实际时间会泄漏）
         now = datetime.now()
         send_next_day = now.hour > 20 or (now.hour == 20 and now.minute >= 30)
 
