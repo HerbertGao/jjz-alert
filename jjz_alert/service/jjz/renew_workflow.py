@@ -72,8 +72,10 @@ async def run_renew_only_workflow() -> None:
         logger.info(
             "[renew_only] decision plate=%s -> %s "
             "today_cov=%s tomorrow_cov=%s elzsfkb=%s sfyecbzxx=%s",
-            plate, decision.value,
-            ctx_today_cov, ctx_tomorrow_cov,
+            plate,
+            decision.value,
+            ctx_today_cov,
+            ctx_tomorrow_cov,
             ctx_renew_status.elzsfkb,
             ctx_renew_status.sfyecbzxx,
         )

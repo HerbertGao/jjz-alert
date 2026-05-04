@@ -274,8 +274,12 @@ class TestExecuteRenewOrchestration:
             service, "_has_renewed_today", new=AsyncMock(return_value=True)
         ):
             result = await service.execute_renew(
-                plate_config, status, {"data": {}}, [self._make_account()],
-                today_covered=False, tomorrow_covered=False,
+                plate_config,
+                status,
+                {"data": {}},
+                [self._make_account()],
+                today_covered=False,
+                tomorrow_covered=False,
             )
         assert result.success is True
         assert result.step == "dedup_skip"
@@ -286,8 +290,12 @@ class TestExecuteRenewOrchestration:
         plate_config = _make_plate_config()
         status = _make_jjz_status()
         result = await service.execute_renew(
-            plate_config, status, {"data": {}}, accounts=None,
-            today_covered=False, tomorrow_covered=False,
+            plate_config,
+            status,
+            {"data": {}},
+            accounts=None,
+            today_covered=False,
+            tomorrow_covered=False,
         )
         assert result.success is False
         assert result.step == "init"
@@ -301,8 +309,12 @@ class TestExecuteRenewOrchestration:
             service, "_has_renewed_today", new=AsyncMock(return_value=False)
         ):
             result = await service.execute_renew(
-                plate_config, status, {"data": {}}, [self._make_account()],
-                today_covered=False, tomorrow_covered=False,
+                plate_config,
+                status,
+                {"data": {}},
+                [self._make_account()],
+                today_covered=False,
+                tomorrow_covered=False,
             )
         assert result.success is False
         assert result.step == "validate_fields"
@@ -317,8 +329,12 @@ class TestExecuteRenewOrchestration:
             service, "_has_renewed_today", new=AsyncMock(return_value=False)
         ), patch.object(service, "_vehicle_check", return_value=False):
             result = await service.execute_renew(
-                plate_config, status, {"data": {}}, [self._make_account()],
-                today_covered=False, tomorrow_covered=False,
+                plate_config,
+                status,
+                {"data": {}},
+                [self._make_account()],
+                today_covered=False,
+                tomorrow_covered=False,
             )
         assert result.success is False
         assert result.step == "vehicle_check"
@@ -340,8 +356,12 @@ class TestExecuteRenewOrchestration:
             service, "_check_handle", return_value={"jjrqs": []}
         ):
             result = await service.execute_renew(
-                plate_config, status, {"data": {}}, [self._make_account()],
-                today_covered=False, tomorrow_covered=False,
+                plate_config,
+                status,
+                {"data": {}},
+                [self._make_account()],
+                today_covered=False,
+                tomorrow_covered=False,
             )
         assert result.success is False
         assert result.step == "check_handle"
@@ -644,8 +664,46 @@ class TestExecuteRenewJjrqsBranches:
             mock_mark.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_jjrqs_only_past_dates_alerts_no_dedup(self):
+        """jjrqs=[昨天] 只含过去日期 → 告警路径，不写防重 key
+
+        防回归（Copilot review 发现）：旧 `_has_parseable_date` 只检查能否解析，
+        ``[昨天]`` 能解析但实际不可办，会被错判为"全部已被覆盖"走静默 SKIP，
+        吞掉服务端数据异常并错误写防重 key。修复后用 `_has_useful_candidate`，
+        只认 ``>= today`` 的合法日期。
+        """
+        service = AutoRenewService()
+        plate_config = _make_plate_config()
+        status = _make_jjz_status()
+        yesterday_str = (date.today() - timedelta(days=1)).isoformat()
+        from contextlib import ExitStack
+
+        for bad_jjrqs in [
+            [yesterday_str],
+            [yesterday_str, "not-a-date"],
+            [(date.today() - timedelta(days=7)).isoformat()],
+        ]:
+            with ExitStack() as stack, patch.object(
+                service, "_mark_renewed_today", new=AsyncMock(return_value=None)
+            ) as mock_mark:
+                for p in self._patch_chain(service, bad_jjrqs):
+                    stack.enter_context(p)
+                result = await service.execute_renew(
+                    plate_config,
+                    status,
+                    {"data": {}},
+                    [self._make_account()],
+                    today_covered=False,
+                    tomorrow_covered=False,
+                )
+            assert result.success is False, f"bad_jjrqs={bad_jjrqs}"
+            assert result.skipped is False, f"bad_jjrqs={bad_jjrqs}"
+            assert result.step == "check_handle", f"bad_jjrqs={bad_jjrqs}"
+            mock_mark.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_jjrqs_mixed_parseable_and_unparseable(self):
-        """jjrqs 混合合法/非法 + 合法日期已被覆盖 → 走 useful=[] 静默 SKIP（合法日期走 has_parseable_date 命中）"""
+        """jjrqs 混合合法/非法 + 合法日期已被覆盖 → 走 useful=[] 静默 SKIP（明日是 >= today 的有效候选）"""
         service = AutoRenewService()
         plate_config = _make_plate_config()
         status = _make_jjz_status()
@@ -1182,22 +1240,85 @@ class TestScheduleRenew:
 
             await asyncio.gather(
                 renew_trigger.schedule_renew(
-                    plate_config, jjz_status, {"data": {}},
-                    accounts=None, decision=RenewDecision.RENEW_TOMORROW,
-                    min_delay=0, max_delay=0,
-                    today_covered=False, tomorrow_covered=False,
+                    plate_config,
+                    jjz_status,
+                    {"data": {}},
+                    accounts=None,
+                    decision=RenewDecision.RENEW_TOMORROW,
+                    min_delay=0,
+                    max_delay=0,
+                    today_covered=False,
+                    tomorrow_covered=False,
                 ),
                 renew_trigger.schedule_renew(
-                    plate_config, jjz_status, {"data": {}},
-                    accounts=None, decision=RenewDecision.RENEW_TOMORROW,
-                    min_delay=0, max_delay=0,
-                    today_covered=False, tomorrow_covered=False,
+                    plate_config,
+                    jjz_status,
+                    {"data": {}},
+                    accounts=None,
+                    decision=RenewDecision.RENEW_TOMORROW,
+                    min_delay=0,
+                    max_delay=0,
+                    today_covered=False,
+                    tomorrow_covered=False,
                 ),
             )
 
         # 关键断言：execute_renew 只被调用一次（第二个抢到锁后读到 marked → 跳过）
         assert len(execute_calls) == 1
         assert plate_config.plate in marked_plates
+
+    @pytest.mark.asyncio
+    async def test_push_runs_outside_global_lock(self):
+        """push_renew_result 必须在锁外执行：慢推送不应阻塞下一个车牌的续办 API。
+
+        防回归（Copilot review 发现）：把 push 放在锁内会让通知投递的网络延迟
+        变成续办积压。验证方法：让 push 在执行时检查锁是否已被释放。
+        """
+        from jjz_alert.service.jjz import renew_trigger
+
+        plate_config = _make_plate_config()
+        jjz_status = _make_jjz_status()
+        push_saw_lock_held: list[bool] = []
+
+        async def fake_push(*args, **kwargs):
+            # 在 push 期间检查全局锁是否已经被释放
+            lock_held = not renew_trigger.RENEW_GLOBAL_LOCK.acquire(blocking=False)
+            push_saw_lock_held.append(lock_held)
+            if not lock_held:
+                renew_trigger.RENEW_GLOBAL_LOCK.release()
+
+        with patch(
+            "jjz_alert.service.jjz.renew_trigger._has_renewed_today",
+            new=AsyncMock(return_value=False),
+        ), patch(
+            "jjz_alert.service.jjz.renew_trigger.auto_renew_service"
+        ) as mock_service:
+            mock_service.execute_renew = AsyncMock(
+                return_value=RenewResult(
+                    plate=plate_config.plate,
+                    success=True,
+                    message="ok",
+                    step="done",
+                )
+            )
+            mock_service.push_renew_result = AsyncMock(side_effect=fake_push)
+
+            await renew_trigger.schedule_renew(
+                plate_config,
+                jjz_status,
+                {"data": {}},
+                accounts=None,
+                decision=RenewDecision.RENEW_TODAY,
+                min_delay=0,
+                max_delay=0,
+                today_covered=False,
+                tomorrow_covered=False,
+            )
+
+        assert push_saw_lock_held == [False], (
+            "push_renew_result 必须在 RENEW_GLOBAL_LOCK 释放后调用，"
+            "否则慢推送会阻塞下一个车牌的续办 API 调用"
+        )
 
 
 @pytest.mark.unit

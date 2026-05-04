@@ -1092,9 +1092,7 @@ class TestTrafficService:
         ) as mock_datetime, patch(
             "jjz_alert.service.traffic.traffic_service.date"
         ) as mock_date:
-            mock_datetime.now.return_value = datetime(
-                2025, 8, 15, 21, 0, 0
-            )  # 21:00
+            mock_datetime.now.return_value = datetime(2025, 8, 15, 21, 0, 0)  # 21:00
             mock_date.today.return_value = today
             import datetime as dt_module
 
@@ -1134,9 +1132,7 @@ class TestTrafficService:
         ) as mock_datetime, patch(
             "jjz_alert.service.traffic.traffic_service.date"
         ) as mock_date:
-            mock_datetime.now.return_value = datetime(
-                2025, 8, 15, 20, 30, 0
-            )  # 20:30
+            mock_datetime.now.return_value = datetime(2025, 8, 15, 20, 30, 0)  # 20:30
             mock_date.today.return_value = today
             import datetime as dt_module
 

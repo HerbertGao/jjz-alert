@@ -170,10 +170,12 @@ class AutoRenewService:
             )
             if not useful:
                 # useful=[] 有两种成因，必须区分：
-                #   ① 原始 jjrqs 至少有一个合法日期但都已被本地覆盖 → 静默 SKIP，写防重
-                #   ② 原始 jjrqs 全部无法解析（服务端数据异常）→ 告警，不写防重
+                #   ① 原始 jjrqs 至少有一个 >= today 的合法日期但都已被本地覆盖
+                #     → 静默 SKIP，写防重
+                #   ② 原始 jjrqs 全是过去日期（如 [昨天]）或全部不可解析（服务端数据异常）
+                #     → 告警，不写防重
                 duration_ms = round((time.time() - start_time) * 1000, 2)
-                if not self._has_parseable_date(raw_jjrqs):
+                if not self._has_useful_candidate(raw_jjrqs, today):
                     logger.warning(
                         "[renew] checkHandle returned unparseable jjrqs plate=%s "
                         "jjrqs_sample=%s jjrqs_total=%d",
@@ -317,9 +319,10 @@ class AutoRenewService:
           - 晚于明天且明天未覆盖 → 保留（服务端给的连续段能覆盖明日起的真空）
           - 其它（已被覆盖、解析失败）→ 丢弃
 
-        注意：本方法静默丢弃无法解析的日期。调用方在 useful=[] 时还需通过
-        `_has_parseable_date` 区分"全部已被本地覆盖（静默 SKIP）"与"原始数据
-        全部无法解析（服务端异常应告警）"两种语义。
+        注意：本方法静默丢弃无法解析的日期与过去日期（自动落在三条规则之外）。
+        调用方在 useful=[] 时还需通过 `_has_useful_candidate(raw_jjrqs, today)`
+        区分"至少有合法的今天/未来日期但被本地覆盖（静默 SKIP）"与"全是过去日期
+        或全部不可解析（服务端异常应告警）"两种语义。
         """
         useful: List[str] = []
         for d_str in jjrqs:
@@ -336,18 +339,23 @@ class AutoRenewService:
         return useful
 
     @staticmethod
-    def _has_parseable_date(jjrqs: List[str]) -> bool:
-        """判断 jjrqs 中是否至少有一个能解析为合法日期的元素。
+    def _has_useful_candidate(jjrqs: List[str], today: date) -> bool:
+        """判断 jjrqs 中是否至少有一个 ``>= today`` 的合法日期。
 
-        用于在 useful=[] 时区分"日期合法但都已被覆盖"（应静默 SKIP + 写防重）
-        与"日期格式全部异常"（应告警 + 不写防重）。
+        用于在 useful=[] 时区分两种语义：
+          - 至少有 today/未来 的合法日期但被本地覆盖 → 静默 SKIP + 写防重
+          - 全是过去日期（如 ``[昨天]``） / 全部不可解析 → 服务端数据异常，告警 + 不写防重
+
+        过去日期（< today）在续办语义里没意义——证件不可能办昨天的，服务端给这种
+        日期意味着接口返回陈旧/错位，与"格式不可解析"同源，都该告警让人工看。
         """
         for d_str in jjrqs:
             try:
-                date.fromisoformat(d_str)
-                return True
+                d = date.fromisoformat(d_str)
             except (TypeError, ValueError):
                 continue
+            if d >= today:
+                return True
         return False
 
     @staticmethod

@@ -330,9 +330,7 @@ class JJZService:
                         outer_triples, key=lambda t: t[0].apply_time or ""
                     )
                     # 覆盖信号基于全部记录（六环内 ∪ 六环外）；任意一条覆盖目标日即认为覆盖
-                    today_covered = any(
-                        _is_effective_on(t[0], today) for t in triples
-                    )
+                    today_covered = any(_is_effective_on(t[0], today) for t in triples)
                     tomorrow_covered = any(
                         _is_effective_on(t[0], tomorrow) for t in triples
                     )

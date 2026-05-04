@@ -62,7 +62,9 @@ def decide(
     if outer_renew_status.sfyecbzxx:
         return RenewDecision.PENDING
 
-    elzsfkb_open = outer_renew_status.elzsfkb is not False  # None 当作 True，与旧行为对齐
+    elzsfkb_open = (
+        outer_renew_status.elzsfkb is not False
+    )  # None 当作 True，与旧行为对齐
 
     if today_covered:
         if tomorrow_covered:

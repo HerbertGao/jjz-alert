@@ -13,11 +13,12 @@ from jjz_alert.service.jjz.jjz_service import _is_effective_on
 from jjz_alert.service.jjz.jjz_status import JJZStatus
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 
-
 _UNSET = object()
 
 
-def _record(blztmc="审核通过(生效中)", valid_start=_UNSET, valid_end=_UNSET, **overrides):
+def _record(
+    blztmc="审核通过(生效中)", valid_start=_UNSET, valid_end=_UNSET, **overrides
+):
     today = date.today()
     defaults = dict(
         plate="京A12345",
@@ -129,16 +130,16 @@ class TestQueryMultipleStatusCoverage:
                 "check_jjz_status",
                 return_value={"data": {"bzclxx": bzclxx}},
             ):
-                with patch(
-                    "jjz_alert.service.jjz.jjz_service.date"
-                ) as mock_date:
+                with patch("jjz_alert.service.jjz.jjz_service.date") as mock_date:
                     mock_date.today.return_value = date.fromisoformat(today_iso)
                     mock_date.fromisoformat = date.fromisoformat
                     return await jjz_service.get_multiple_status_with_context(
                         ["京A12345"]
                     )
 
-    async def test_outer_active_today_covers_today(self, jjz_service, sample_jjz_account):
+    async def test_outer_active_today_covers_today(
+        self, jjz_service, sample_jjz_account
+    ):
         bzclxx = [
             {
                 "hphm": "京A12345",

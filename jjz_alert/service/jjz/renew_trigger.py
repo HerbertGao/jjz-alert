@@ -95,6 +95,11 @@ async def schedule_renew(
     # 要么已经持有并进入 try/finally。
     while not RENEW_GLOBAL_LOCK.acquire(blocking=False):
         await asyncio.sleep(0.1)
+
+    # 锁的目的是续办 API 调用串行错峰反爬。push 通知走外部网络（Bark/Server酱
+    # /Webhook 等），与 API 错峰无关——必须在锁外执行，否则慢推送会让下一个
+    # 车牌的续办积压。dedup_skip 时直接 return（finally 释放锁），不进入推送。
+    result: Optional[RenewResult] = None
     try:
         if await _has_renewed_today(plate):
             logger.info("[renew] skipped plate=%s reason=dedup_key_exists", plate)
@@ -117,20 +122,23 @@ async def schedule_renew(
                 message=f"续办异常: {exc}",
                 step="exception",
             )
-
-        try:
-            await auto_renew_service.push_renew_result(plate_config, result)
-        except Exception as exc:
-            logger.error("[renew] push_renew_result failed plate=%s: %s", plate, exc)
-
-        logger.info(
-            "[renew] completed plate=%s success=%s step=%s",
-            plate,
-            result.success,
-            result.step,
-        )
     finally:
         RENEW_GLOBAL_LOCK.release()
+
+    # 锁外推送：通知延迟不阻塞下一个车牌进入 execute_renew
+    if result is None:  # 仅 dedup_skip 路径
+        return
+    try:
+        await auto_renew_service.push_renew_result(plate_config, result)
+    except Exception as exc:
+        logger.error("[renew] push_renew_result failed plate=%s: %s", plate, exc)
+
+    logger.info(
+        "[renew] completed plate=%s success=%s step=%s",
+        plate,
+        result.success,
+        result.step,
+    )
 
 
 __all__ = ["RENEW_GLOBAL_LOCK", "schedule_renew"]

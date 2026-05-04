@@ -141,7 +141,9 @@ class TestPriorityAndEdges:
         )
 
     def test_auto_renew_none(self):
-        assert _decide(_plate(None), _outer_status(), False, False) == RenewDecision.SKIP
+        assert (
+            _decide(_plate(None), _outer_status(), False, False) == RenewDecision.SKIP
+        )
 
     def test_elzsfkb_none_treated_as_open(self):
         """elzsfkb=None（字段缺失）保守视为可办，与历史 _build_apply_request 默认值对齐"""
