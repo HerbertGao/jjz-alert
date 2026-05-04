@@ -397,6 +397,7 @@ class JJZPushService:
                         ctx_renew_status = None
                         ctx_today_cov = False
                         ctx_tomorrow_cov = False
+                        ctx_today_anchor = None
                     else:
                         (
                             ctx_response_data,
@@ -404,6 +405,7 @@ class JJZPushService:
                             ctx_renew_status,
                             ctx_today_cov,
                             ctx_tomorrow_cov,
+                            ctx_today_anchor,
                         ) = ctx
                         try:
                             decision = renew_decide(
@@ -449,6 +451,7 @@ class JJZPushService:
                                     max_delay=ar_global.max_delay_seconds,
                                     today_covered=ctx_today_cov,
                                     tomorrow_covered=ctx_tomorrow_cov,
+                                    today_anchor=ctx_today_anchor,
                                 )
                             )
                             renew_dispatched = True

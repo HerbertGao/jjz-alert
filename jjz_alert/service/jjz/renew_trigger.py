@@ -55,17 +55,19 @@ async def schedule_renew(
     *,
     today_covered: bool,
     tomorrow_covered: bool,
+    today_anchor: date,
 ) -> None:
     """
     异步派发一辆车的续办：随机延迟 → 抢全局锁 → 二次校验 → 执行续办 → 推送结果。
 
     today_covered / tomorrow_covered 透传给 execute_renew，用于 checkHandle 后的
     useful 过滤（服务端给的日期已被本地覆盖时静默 SKIP）。
+    today_anchor 是 cov 布尔计算时的"今天"，与 cov 同源透传到 execute_renew 内
+    的 useful 过滤，避免随机延迟跨午夜后 cov 与 filter 的 today 错位（Cursor 跨日漂移问题）。
 
     Note:
-        `today_covered` / `tomorrow_covered` 必传（无默认值），与 `decide()` 的
-        keyword-only 强制理由一致：遗漏会静默走"无覆盖"路径，潜在错误难以发现，
-        因此让 Python 在调用时立刻 TypeError 而非默认 False 静默错路径。
+        keyword-only 参数无默认值，与 `decide()` 的强制理由一致：遗漏会静默走错
+        路径，潜在错误难以发现，让 Python 在调用时立刻 TypeError。
     """
     plate = plate_config.plate
 
@@ -113,6 +115,7 @@ async def schedule_renew(
                 accounts,
                 today_covered=today_covered,
                 tomorrow_covered=tomorrow_covered,
+                today_anchor=today_anchor,
             )
         except Exception as exc:
             logger.error("[renew] execute_renew exception plate=%s: %s", plate, exc)

@@ -56,6 +56,7 @@ async def run_renew_only_workflow() -> None:
             ctx_renew_status,
             ctx_today_cov,
             ctx_tomorrow_cov,
+            ctx_today_anchor,
         ) = ctx
 
         try:
@@ -94,6 +95,7 @@ async def run_renew_only_workflow() -> None:
                     max_delay=ar_global.max_delay_seconds,
                     today_covered=ctx_today_cov,
                     tomorrow_covered=ctx_tomorrow_cov,
+                    today_anchor=ctx_today_anchor,
                 )
             )
             dispatched_tasks.append(task)

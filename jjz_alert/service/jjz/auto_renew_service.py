@@ -58,6 +58,7 @@ class AutoRenewService:
         *,
         today_covered: bool,
         tomorrow_covered: bool,
+        today_anchor: date,
     ) -> RenewResult:
         """
         对单个车牌执行续办流程
@@ -69,11 +70,13 @@ class AutoRenewService:
             accounts: 进京证账户列表（避免重复加载配置）
             today_covered: 该车牌今天是否已有任意进京证覆盖（用于 jjrqs useful 过滤）
             tomorrow_covered: 该车牌明天是否已有任意进京证覆盖（用于 jjrqs useful 过滤）
+            today_anchor: cov 布尔计算时的"今天"。useful 过滤须用此 anchor 而非
+                ``date.today()``，否则随机延迟跨过午夜时 cov 与 filter 的 today
+                会指向不同日历日导致错配。
 
         Note:
-            `today_covered` / `tomorrow_covered` 必传（无默认值），与 `decide()` 的
-            keyword-only 强制理由一致：遗漏会静默走"无覆盖"路径，潜在错误难以发现，
-            因此让 Python 在调用时立刻 TypeError 而非默认 False 静默错路径。
+            keyword-only 参数无默认值，与 `decide()` 的强制理由一致：遗漏会静默
+            走错路径，潜在错误难以发现，让 Python 在调用时立刻 TypeError。
         """
         plate = plate_config.plate
         ar_config = plate_config.auto_renew
@@ -161,8 +164,11 @@ class AutoRenewService:
                     step="check_handle",
                 )
 
-            # useful 过滤：只取实际填补覆盖缺口的日期
-            today = date.today()
+            # useful 过滤：只取实际填补覆盖缺口的日期。
+            # 必须用 today_anchor 而非 date.today()——cov 布尔在 query 时计算，
+            # 派发协程随机延迟可能跨过午夜，此时 date.today() 已是新日期但 cov
+            # 信号还是旧日期的，错配会让 useful 过滤判错。
+            today = today_anchor
             tomorrow = today + timedelta(days=1)
             raw_jjrqs = handle_data["jjrqs"]
             useful = self._filter_useful(

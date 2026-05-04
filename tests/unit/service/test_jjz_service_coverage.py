@@ -161,6 +161,7 @@ class TestQueryMultipleStatusCoverage:
         ctx = ctxs["京A12345"]
         assert ctx[3] is True  # today_cov
         assert ctx[4] is False  # tomorrow_cov
+        assert ctx[5] == date(2025, 8, 15)  # today_anchor 与 mock 的 today 一致
 
     async def test_inner_active_inner_outer_mutual_exclusion(
         self, jjz_service, sample_jjz_account

@@ -72,7 +72,14 @@ async def test_run_renew_only_workflow_dispatches_renew_today():
     )
     fake_account = MagicMock()
     plate_renew_contexts = {
-        "京A12345": ({"data": {}}, fake_account, renew_status, False, False)
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            False,
+            False,
+            date.today(),
+        )
     }
 
     with patch.object(
@@ -118,7 +125,14 @@ async def test_run_renew_only_workflow_no_pushes_to_status_endpoints():
     renew_status = _make_renew_status(valid_end=date.today().isoformat())
     fake_account = MagicMock()
     plate_renew_contexts = {
-        "京A12345": ({"data": {}}, fake_account, renew_status, False, False)
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            False,
+            False,
+            date.today(),
+        )
     }
 
     with patch.object(
@@ -199,7 +213,14 @@ async def test_run_renew_only_workflow_handles_decision_exception():
     renew_status = _make_renew_status()
     fake_account = MagicMock()
     plate_renew_contexts = {
-        "京A12345": ({"data": {}}, fake_account, renew_status, False, False)
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            False,
+            False,
+            date.today(),
+        )
     }
 
     with patch.object(
@@ -230,7 +251,14 @@ async def test_run_renew_only_workflow_passes_coverage_to_schedule():
     renew_status = _make_renew_status(valid_end=date.today().isoformat())
     fake_account = MagicMock()
     plate_renew_contexts = {
-        "京A12345": ({"data": {}}, fake_account, renew_status, True, False)
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            True,
+            False,
+            date.today(),
+        )
     }
 
     with patch.object(
@@ -263,7 +291,7 @@ async def test_run_renew_only_workflow_silent_skip_does_not_dispatch_or_alert():
     renew_status = _make_renew_status(elzsfkb=False)
     fake_account = MagicMock()
     plate_renew_contexts = {
-        "京A12345": ({"data": {}}, fake_account, renew_status, True, True)
+        "京A12345": ({"data": {}}, fake_account, renew_status, True, True, date.today())
     }
 
     with patch.object(
@@ -297,7 +325,14 @@ async def test_run_renew_only_workflow_not_available_pushes_alert():
     renew_status = _make_renew_status(elzsfkb=False)
     fake_account = MagicMock()
     plate_renew_contexts = {
-        "京A12345": ({"data": {}}, fake_account, renew_status, False, False)
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            False,
+            False,
+            date.today(),
+        )
     }
 
     with patch.object(

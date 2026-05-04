@@ -245,22 +245,25 @@ class JJZService:
 
     async def _query_multiple_status(self, plates: List[str]) -> Tuple[
         Dict[str, JJZStatus],
-        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus, bool, bool]],
+        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus, bool, bool, date]],
     ]:
         """
         内部实现：返回 (results, plate_contexts)。
-        plate_contexts 按车牌记录续办专用五元组
-        (response_data, account, renew_status, today_covered, tomorrow_covered)：
+        plate_contexts 按车牌记录续办专用六元组
+        (response_data, account, renew_status, today_covered, tomorrow_covered, today_anchor)：
         - renew_status 仅取该车牌六环外记录中 apply_time 最新的一条
         - today_covered / tomorrow_covered 基于该车牌全部记录（六环内 ∪ 六环外）
           通过 `_is_effective_on` 计算，覆盖判定包含"生效中"与"已批准待生效"
+        - today_anchor 是计算覆盖时的"今天"日期，须随 cov 布尔一并传到 execute_renew
+          以避免跨午夜漂移（cov 计算与 filter 用同一参考日期）
         若车牌无六环外记录则不写入 plate_contexts（无 vId 等续办字段，无法 auto_renew）。
         多账户场景下保证后续续办派发使用正确账户与正确的六环外 status。
         """
         results = {plate: None for plate in plates}
         accounts = self.load_accounts()
         plate_contexts: Dict[
-            str, Tuple[Dict[str, Any], JJZAccount, JJZStatus, bool, bool]
+            str,
+            Tuple[Dict[str, Any], JJZAccount, JJZStatus, bool, bool, date],
         ] = {}
 
         if not accounts:
@@ -330,6 +333,7 @@ class JJZService:
                         outer_triples, key=lambda t: t[0].apply_time or ""
                     )
                     # 覆盖信号基于全部记录（六环内 ∪ 六环外）；任意一条覆盖目标日即认为覆盖
+                    # 注意：today/tomorrow 用同一个 anchor，与下游 _filter_useful 用 today_anchor 配套
                     today_covered = any(_is_effective_on(t[0], today) for t in triples)
                     tomorrow_covered = any(
                         _is_effective_on(t[0], tomorrow) for t in triples
@@ -340,6 +344,7 @@ class JJZService:
                         renew_record,
                         today_covered,
                         tomorrow_covered,
+                        today,
                     )
             else:
                 results[plate] = JJZStatus(
@@ -372,14 +377,17 @@ class JJZService:
     )
     async def get_multiple_status_with_context(self, plates: List[str]) -> Tuple[
         Dict[str, JJZStatus],
-        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus, bool, bool]],
+        Dict[str, Tuple[Dict[str, Any], "JJZAccount", JJZStatus, bool, bool, date]],
     ]:
-        """返回每个车牌对应的续办上下文五元组
-        ``(response_data, account, renew_status, today_covered, tomorrow_covered)``。
+        """返回每个车牌对应的续办上下文六元组
+        ``(response_data, account, renew_status, today_covered, tomorrow_covered, today_anchor)``。
 
-        ``renew_status`` 仅取该车牌六环外记录中 apply_time 最新的一条；若无六环外
-        记录则不写入。``today_covered`` / ``tomorrow_covered`` 基于该车牌全部记录
-        （六环内 ∪ 六环外）的覆盖判定结果。
+        - ``renew_status``：仅取该车牌六环外记录中 apply_time 最新的一条；若无六环外
+          记录则不写入。
+        - ``today_covered`` / ``tomorrow_covered``：基于该车牌全部记录（六环内 ∪ 六环外）
+          的覆盖判定结果。
+        - ``today_anchor``：计算覆盖时的"今天"日期，下游 ``execute_renew`` 须用此 anchor
+          替代 ``date.today()``，避免跨午夜漂移让 cov 布尔与 filter 的 today 错位。
         """
         return await self._query_multiple_status(plates)
 

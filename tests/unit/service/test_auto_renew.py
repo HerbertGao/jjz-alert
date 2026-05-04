@@ -280,6 +280,7 @@ class TestExecuteRenewOrchestration:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
         assert result.success is True
         assert result.step == "dedup_skip"
@@ -296,6 +297,7 @@ class TestExecuteRenewOrchestration:
             accounts=None,
             today_covered=False,
             tomorrow_covered=False,
+            today_anchor=date.today(),
         )
         assert result.success is False
         assert result.step == "init"
@@ -315,6 +317,7 @@ class TestExecuteRenewOrchestration:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
         assert result.success is False
         assert result.step == "validate_fields"
@@ -335,6 +338,7 @@ class TestExecuteRenewOrchestration:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
         assert result.success is False
         assert result.step == "vehicle_check"
@@ -362,6 +366,7 @@ class TestExecuteRenewOrchestration:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
         assert result.success is False
         assert result.step == "check_handle"
@@ -402,6 +407,7 @@ class TestExecuteRenewOrchestration:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
         assert result.success is True
         assert result.step == "done"
@@ -541,6 +547,7 @@ class TestExecuteRenewJjrqsBranches:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
         assert result.success is True
         assert result.skipped is False
@@ -571,6 +578,7 @@ class TestExecuteRenewJjrqsBranches:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=True,
+                today_anchor=date.today(),
             )
         assert result.success is False
         assert result.skipped is True
@@ -601,6 +609,7 @@ class TestExecuteRenewJjrqsBranches:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
         assert result.success is True
         assert result.skipped is False
@@ -626,6 +635,7 @@ class TestExecuteRenewJjrqsBranches:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
         assert result.success is False
         assert result.skipped is False
@@ -657,6 +667,7 @@ class TestExecuteRenewJjrqsBranches:
                     [self._make_account()],
                     today_covered=False,
                     tomorrow_covered=False,
+                    today_anchor=date.today(),
                 )
             assert result.success is False, f"bad_jjrqs={bad_jjrqs}"
             assert result.skipped is False, f"bad_jjrqs={bad_jjrqs}"
@@ -695,6 +706,7 @@ class TestExecuteRenewJjrqsBranches:
                     [self._make_account()],
                     today_covered=False,
                     tomorrow_covered=False,
+                    today_anchor=date.today(),
                 )
             assert result.success is False, f"bad_jjrqs={bad_jjrqs}"
             assert result.skipped is False, f"bad_jjrqs={bad_jjrqs}"
@@ -723,6 +735,7 @@ class TestExecuteRenewJjrqsBranches:
                 [self._make_account()],
                 today_covered=False,
                 tomorrow_covered=True,
+                today_anchor=date.today(),
             )
         assert result.success is False
         assert result.skipped is True  # 静默 SKIP，因为合法日期被本地覆盖
@@ -925,6 +938,7 @@ class TestScheduleRenew:
                 max_delay=0,
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
 
             mock_service.execute_renew.assert_awaited_once()
@@ -933,6 +947,7 @@ class TestScheduleRenew:
             kwargs = mock_service.execute_renew.await_args.kwargs
             assert kwargs.get("today_covered") is False
             assert kwargs.get("tomorrow_covered") is False
+            assert kwargs.get("today_anchor") == date.today()
             mock_service.push_renew_result.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -964,6 +979,7 @@ class TestScheduleRenew:
                 max_delay=0,
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
 
             mock_service.execute_renew.assert_not_called()
@@ -1015,6 +1031,7 @@ class TestScheduleRenew:
                     max_delay=0,
                     today_covered=False,
                     tomorrow_covered=False,
+                    today_anchor=date.today(),
                 )
                 for i in range(4)
             ]
@@ -1055,6 +1072,7 @@ class TestScheduleRenew:
                 max_delay=-5,
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
             mock_service.execute_renew.assert_awaited_once()
 
@@ -1091,6 +1109,7 @@ class TestScheduleRenew:
                 max_delay=0,
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
         assert captured["result"].success is False
         assert captured["result"].step == "exception"
@@ -1132,6 +1151,7 @@ class TestScheduleRenew:
                 max_delay=0,
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
 
     @pytest.mark.asyncio
@@ -1188,6 +1208,7 @@ class TestScheduleRenew:
                         max_delay=0,
                         today_covered=False,
                         tomorrow_covered=False,
+                        today_anchor=date.today(),
                     )
                 )
                 # 等真实 0.15s 让协程过完 outer delay（=0）进入 acquire 轮询
@@ -1249,6 +1270,7 @@ class TestScheduleRenew:
                     max_delay=0,
                     today_covered=False,
                     tomorrow_covered=False,
+                    today_anchor=date.today(),
                 ),
                 renew_trigger.schedule_renew(
                     plate_config,
@@ -1260,6 +1282,7 @@ class TestScheduleRenew:
                     max_delay=0,
                     today_covered=False,
                     tomorrow_covered=False,
+                    today_anchor=date.today(),
                 ),
             )
 
@@ -1313,6 +1336,7 @@ class TestScheduleRenew:
                 max_delay=0,
                 today_covered=False,
                 tomorrow_covered=False,
+                today_anchor=date.today(),
             )
 
         assert push_saw_lock_held == [False], (
