@@ -2,9 +2,10 @@ name: Docker Image Build
 
 on:
   push:
-    branches: [ '**' ]
+    branches: ['**']
+    tags: ['v*']
   pull_request:
-    branches: [ 'master']
+    branches: ['master']
   workflow_dispatch:
     inputs:
       version:
@@ -12,79 +13,253 @@ on:
         required: true
         type: string
 
+env:
+  REGISTRY: ghcr.io
+
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
-    # 为 dependabot 分支跳过构建，避免权限问题
     if: ${{ !startsWith(github.actor, 'dependabot') }}
+    permissions: {}
+    outputs:
+      should_push: ${{ steps.cfg.outputs.should_push }}
+      is_tag: ${{ steps.cfg.outputs.is_tag }}
+      is_master: ${{ steps.cfg.outputs.is_master }}
+      version: ${{ steps.cfg.outputs.version }}
+      image: ${{ steps.cfg.outputs.image }}
+    steps:
+      - id: cfg
+        env:
+          GH_REF: ${{ github.ref }}
+          GH_EVENT: ${{ github.event_name }}
+          GH_REPO: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          IMAGE_LOWER="${GH_REPO,,}"
+          IMAGE="${{ env.REGISTRY }}/${IMAGE_LOWER}"
+          IS_TAG=false
+          IS_MASTER=false
+          SHOULD_PUSH=false
+
+          # 是否在 master 分支上（独立判断，覆盖 push 与 dispatch 两种触发）
+          if [[ "$GH_REF" == "refs/heads/master" ]]; then
+            IS_MASTER=true
+          fi
+
+          if [[ "$GH_REF" == refs/tags/* ]]; then
+            RAW="${GH_REF#refs/tags/}"
+            SHOULD_PUSH=true
+            IS_TAG=true
+          elif [[ "$GH_EVENT" == "workflow_dispatch" ]]; then
+            RAW="$DISPATCH_VERSION"
+            SHOULD_PUSH=true
+          elif [[ "$IS_MASTER" == "true" ]]; then
+            RAW="$GH_SHA"
+            SHOULD_PUSH=true
+          else
+            RAW="${GH_REF#refs/heads/}"
+          fi
+
+          # Docker 镜像 tag 仅允许 [A-Za-z0-9_.-]，且不能以 . 或 - 起头；
+          # 其它字符（含 semver build metadata 中的 +、分支里的 /）一律替换为 -
+          SANITIZED="${RAW//[!a-zA-Z0-9_.-]/-}"
+          while [[ "$SANITIZED" == [.-]* ]]; do
+            SANITIZED="${SANITIZED:1}"
+          done
+          [[ -z "$SANITIZED" ]] && SANITIZED="unknown"
+          VERSION="${SANITIZED:0:128}"
+
+          {
+            echo "image=$IMAGE"
+            echo "version=$VERSION"
+            echo "is_tag=$IS_TAG"
+            echo "is_master=$IS_MASTER"
+            echo "should_push=$SHOULD_PUSH"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log into GHCR
+        if: needs.setup.outputs.should_push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (push by digest)
+        if: needs.setup.outputs.should_push == 'true'
+        id: build_push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.github-actions
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            VERSION=${{ needs.setup.outputs.version }}
+          outputs: type=image,name=${{ needs.setup.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ needs.setup.outputs.image }}:buildcache-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ needs.setup.outputs.image }}:buildcache-${{ matrix.arch }},mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Build (verify only)
+        if: needs.setup.outputs.should_push != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.github-actions
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            VERSION=${{ needs.setup.outputs.version }}
+          push: false
+          load: false
+          cache-from: type=registry,ref=${{ needs.setup.outputs.image }}:buildcache-${{ matrix.arch }}
+          provenance: false
+          sbom: false
+
+      - name: Export digest
+        if: needs.setup.outputs.should_push == 'true'
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build_push.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: needs.setup.outputs.should_push == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: [setup, build]
+    if: needs.setup.outputs.should_push == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_ref: ${{ steps.manifest.outputs.image_ref }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log into GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest
+        id: manifest
+        working-directory: /tmp/digests
+        env:
+          IMG: ${{ needs.setup.outputs.image }}
+          VER: ${{ needs.setup.outputs.version }}
+          IS_TAG: ${{ needs.setup.outputs.is_tag }}
+          IS_MASTER: ${{ needs.setup.outputs.is_master }}
+        run: |
+          tag_args=("-t" "$IMG:$VER")
+          if [[ "$IS_TAG" == "true" || "$IS_MASTER" == "true" ]]; then
+            tag_args+=("-t" "$IMG:latest")
+          fi
+
+          src_args=()
+          for f in *; do
+            src_args+=("$IMG@sha256:$f")
+          done
+
+          docker buildx imagetools create "${tag_args[@]}" "${src_args[@]}"
+          echo "image_ref=$IMG:$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect "${{ steps.manifest.outputs.image_ref }}"
+
+  scan:
+    needs: [setup, merge]
+    if: needs.setup.outputs.should_push == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
       security-events: write
     steps:
-    - uses: actions/checkout@v6
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
-      with:
-        driver-opts: |
-          image=moby/buildkit:v0.12.0
+      # 漏洞发现不阻断流水线（exit-code=0），但扫描器自身失败仍会让 step 失败
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ needs.merge.outputs.image_ref }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          exit-code: '0'
+          cache: 'true'
 
-    - name: Log into GitHub Container Registry
-      run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy-scan'
 
-    - name: Determine version and tags
-      run: |
-        # 获取分支名，移除 refs/heads/ 前缀
-        BRANCH_NAME=${GITHUB_REF#refs/heads/}
-        # 将分支名中的特殊字符替换为连字符，确保标签有效
-        SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9.-]/-/g')
-        
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          VERSION="${{ inputs.version }}"
-        elif [ "$BRANCH_NAME" = "master" ]; then
-          VERSION="${{ github.sha }}"
-        else
-          VERSION="$SAFE_BRANCH_NAME"
-        fi
-        echo "IMAGE_VERSION=$VERSION" >> $GITHUB_ENV
-        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+  release:
+    needs: [setup, merge]
+    if: needs.setup.outputs.is_tag == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-    - name: Build and push Docker image (multi-arch)
-      run: |
-        PLATFORMS=linux/arm64,linux/amd64
-        DOCKER_IMAGE=ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-        VERSION=${IMAGE_VERSION:-latest}
-        BRANCH_NAME=${BRANCH_NAME:-unknown}
-        echo "DOCKER_IMAGE_LOWERCASE=$DOCKER_IMAGE" >> $GITHUB_ENV
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## Docker 镜像
 
-        if [ "$BRANCH_NAME" = "master" ]; then
-          docker buildx build --platform $PLATFORMS \
-            -f Dockerfile.github-actions \
-            -t $DOCKER_IMAGE:latest \
-            -t $DOCKER_IMAGE:${VERSION} \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            --push .
-        else
-          docker buildx build --platform $PLATFORMS \
-            -f Dockerfile.github-actions \
-            -t $DOCKER_IMAGE:${VERSION} \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            --push .
-        fi
+            支持架构：`linux/amd64`、`linux/arm64`
 
-    - name: Run security scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ env.DOCKER_IMAGE_LOWERCASE }}:${{ env.IMAGE_VERSION }}
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v4
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
-        category: 'trivy-scan' 
+            ```sh
+            docker pull ${{ needs.setup.outputs.image }}:${{ needs.setup.outputs.version }}
+            docker pull ${{ needs.setup.outputs.image }}:latest
+            ```
