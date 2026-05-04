@@ -138,3 +138,113 @@ async def test_run_renew_only_workflow_no_pushes_to_status_endpoints():
         # 关键断言：兜底工作流不发状态/提醒推送
         mock_push_status.assert_not_called()
         mock_push_reminder.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_renew_only_workflow_skips_plate_without_context():
+    """ctx is None 时跳过派发，不调用 schedule_renew"""
+    from jjz_alert.service.jjz import renew_workflow
+
+    config = _make_config_with_renew_plate()
+
+    with patch.object(
+        renew_workflow.config_manager, "load_config", return_value=config
+    ), patch.object(
+        renew_workflow.JJZService,
+        "get_multiple_status_with_context",
+        new=AsyncMock(return_value=({}, {})),  # 空 plate_renew_contexts
+    ), patch(
+        "jjz_alert.service.jjz.renew_trigger.schedule_renew",
+        new=AsyncMock(),
+    ) as mock_schedule:
+        await renew_workflow.run_renew_only_workflow()
+        mock_schedule.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_renew_only_workflow_handles_query_failure():
+    """get_multiple_status_with_context 抛异常时优雅退出，不崩溃"""
+    from jjz_alert.service.jjz import renew_workflow
+
+    config = _make_config_with_renew_plate()
+
+    with patch.object(
+        renew_workflow.config_manager, "load_config", return_value=config
+    ), patch.object(
+        renew_workflow.JJZService,
+        "get_multiple_status_with_context",
+        new=AsyncMock(side_effect=RuntimeError("网络故障")),
+    ), patch(
+        "jjz_alert.service.jjz.renew_trigger.schedule_renew",
+        new=AsyncMock(),
+    ) as mock_schedule:
+        # 不应抛出
+        await renew_workflow.run_renew_only_workflow()
+        mock_schedule.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_renew_only_workflow_handles_decision_exception():
+    """decide() 抛异常时跳过该车牌但不影响其他车牌"""
+    from jjz_alert.service.jjz import renew_workflow
+
+    config = _make_config_with_renew_plate()
+    renew_status = _make_renew_status()
+    fake_account = MagicMock()
+    plate_renew_contexts = {"京A12345": ({"data": {}}, fake_account, renew_status)}
+
+    with patch.object(
+        renew_workflow.config_manager, "load_config", return_value=config
+    ), patch.object(
+        renew_workflow.JJZService,
+        "get_multiple_status_with_context",
+        new=AsyncMock(return_value=({}, plate_renew_contexts)),
+    ), patch.object(
+        renew_workflow, "decide", side_effect=RuntimeError("decide failed")
+    ), patch(
+        "jjz_alert.service.jjz.renew_trigger.schedule_renew",
+        new=AsyncMock(),
+    ) as mock_schedule:
+        # 不应抛出
+        await renew_workflow.run_renew_only_workflow()
+        mock_schedule.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_renew_only_workflow_not_available_pushes_alert():
+    """决策为 NOT_AVAILABLE 时调用 push_renew_result 发不可办告警"""
+    from jjz_alert.service.jjz import renew_workflow
+    from jjz_alert.service.jjz.renew_decider import RenewDecision
+
+    config = _make_config_with_renew_plate()
+    renew_status = _make_renew_status(elzsfkb=False)
+    fake_account = MagicMock()
+    plate_renew_contexts = {"京A12345": ({"data": {}}, fake_account, renew_status)}
+
+    with patch.object(
+        renew_workflow.config_manager, "load_config", return_value=config
+    ), patch.object(
+        renew_workflow.JJZService,
+        "get_multiple_status_with_context",
+        new=AsyncMock(return_value=({}, plate_renew_contexts)),
+    ), patch.object(
+        renew_workflow, "decide", return_value=RenewDecision.NOT_AVAILABLE
+    ), patch(
+        "jjz_alert.service.jjz.auto_renew_service.auto_renew_service.push_renew_result",
+        new=AsyncMock(return_value=None),
+    ) as mock_push, patch(
+        "jjz_alert.service.jjz.renew_trigger.schedule_renew",
+        new=AsyncMock(),
+    ) as mock_schedule:
+        await renew_workflow.run_renew_only_workflow()
+        mock_push.assert_awaited_once()
+        # 不再派发续办
+        mock_schedule.assert_not_called()
+        # 验证告警内容
+        call_result = mock_push.await_args.args[1]
+        assert call_result.success is False
+        assert call_result.step == "eligibility_check"
