@@ -230,7 +230,7 @@ jobs:
 
       # 漏洞发现不阻断流水线（exit-code=0），但扫描器自身失败仍会让 step 失败
       - name: Run Trivy
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ needs.merge.outputs.image_ref }}
           format: 'sarif'
