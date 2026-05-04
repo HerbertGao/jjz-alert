@@ -1084,24 +1084,25 @@ class TestTrafficService:
             cached_rules
         )
 
-        # 需要mock方法内部的datetime.now()，因为方法内部有 from datetime import datetime
-        with patch("jjz_alert.service.traffic.traffic_service.date") as mock_date:
+        # patch 模块级 binding（traffic_service.py 顶部 from datetime import datetime
+        # 把 datetime 类绑到本模块）。不要 patch("datetime.datetime")——那只动 datetime
+        # 模块上的 class 对象，traffic_service 已绑定的 name 不受影响。
+        with patch(
+            "jjz_alert.service.traffic.traffic_service.datetime"
+        ) as mock_datetime, patch(
+            "jjz_alert.service.traffic.traffic_service.date"
+        ) as mock_date:
+            mock_datetime.now.return_value = datetime(2025, 8, 15, 21, 0, 0)  # 21:00
             mock_date.today.return_value = today
-            # 直接patch datetime模块的now方法
-            with patch("datetime.datetime") as mock_datetime_class:
-                mock_datetime_class.now.return_value = datetime(
-                    2025, 8, 15, 21, 0, 0
-                )  # 21:00
-                mock_datetime_class.fromisoformat = datetime.fromisoformat
-                import datetime as dt_module
+            import datetime as dt_module
 
-                mock_datetime_class.timedelta = dt_module.timedelta
+            mock_datetime.fromisoformat = dt_module.datetime.fromisoformat
 
-                result = await traffic_service.get_smart_traffic_rules()
+            result = await traffic_service.get_smart_traffic_rules()
 
-                assert result["query_type"] == "tomorrow"
-                assert result["target_date"] == tomorrow
-                assert result["target_rule"] is not None
+            assert result["query_type"] == "tomorrow"
+            assert result["target_date"] == tomorrow
+            assert result["target_rule"] is not None
 
     @pytest.mark.asyncio
     async def test_get_smart_traffic_rules_at_2030(self, traffic_service):
@@ -1123,23 +1124,24 @@ class TestTrafficService:
             cached_rules
         )
 
-        # 需要mock方法内部的datetime.now()，因为方法内部有 from datetime import datetime
-        with patch("jjz_alert.service.traffic.traffic_service.date") as mock_date:
+        # patch 模块级 binding（traffic_service.py 顶部 from datetime import datetime
+        # 把 datetime 类绑到本模块）。不要 patch("datetime.datetime")——那只动 datetime
+        # 模块上的 class 对象，traffic_service 已绑定的 name 不受影响。
+        with patch(
+            "jjz_alert.service.traffic.traffic_service.datetime"
+        ) as mock_datetime, patch(
+            "jjz_alert.service.traffic.traffic_service.date"
+        ) as mock_date:
+            mock_datetime.now.return_value = datetime(2025, 8, 15, 20, 30, 0)  # 20:30
             mock_date.today.return_value = today
-            # 直接patch datetime模块的now方法
-            with patch("datetime.datetime") as mock_datetime_class:
-                mock_datetime_class.now.return_value = datetime(
-                    2025, 8, 15, 20, 30, 0
-                )  # 20:30
-                mock_datetime_class.fromisoformat = datetime.fromisoformat
-                import datetime as dt_module
+            import datetime as dt_module
 
-                mock_datetime_class.timedelta = dt_module.timedelta
+            mock_datetime.fromisoformat = dt_module.datetime.fromisoformat
 
-                result = await traffic_service.get_smart_traffic_rules()
+            result = await traffic_service.get_smart_traffic_rules()
 
-                assert result["query_type"] == "tomorrow"
-                assert result["target_date"] == tomorrow
+            assert result["query_type"] == "tomorrow"
+            assert result["target_date"] == tomorrow
 
     @pytest.mark.asyncio
     async def test_get_smart_traffic_rules_cache_miss(self, traffic_service):

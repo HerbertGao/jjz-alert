@@ -8,8 +8,8 @@
 import logging
 import time
 from dataclasses import dataclass
-from datetime import date
-from typing import Any, Dict, Optional
+from datetime import date, timedelta
+from typing import Any, Dict, List, Optional
 
 from jjz_alert.base.http import http_post
 from jjz_alert.base.logger import get_structured_logger, LogCategory
@@ -22,13 +22,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RenewResult:
-    """续办结果"""
+    """续办结果
+
+    三态语义：
+      success=True,  skipped=False → 成功（推"已提交，等待审核"）
+      success=False, skipped=False → 失败（推失败原因，含 NOT_AVAILABLE / Token / API 链异常）
+      success=False, skipped=True  → 静默跳过（写防重 key、不推送、记 INFO 日志）
+    """
 
     plate: str
     success: bool
     message: str
     step: str = ""
     jjrq: Optional[str] = None
+    skipped: bool = False
 
 
 class AutoRenewService:
@@ -48,6 +55,10 @@ class AutoRenewService:
         jjz_status: JJZStatus,
         response_data: Dict[str, Any],
         accounts=None,
+        *,
+        today_covered: bool,
+        tomorrow_covered: bool,
+        today_anchor: date,
     ) -> RenewResult:
         """
         对单个车牌执行续办流程
@@ -57,6 +68,15 @@ class AutoRenewService:
             jjz_status: 当前进京证状态（含 vId 等车辆字段）
             response_data: stateList 原始响应（用于提取元数据）
             accounts: 进京证账户列表（避免重复加载配置）
+            today_covered: 该车牌今天是否已有任意进京证覆盖（用于 jjrqs useful 过滤）
+            tomorrow_covered: 该车牌明天是否已有任意进京证覆盖（用于 jjrqs useful 过滤）
+            today_anchor: cov 布尔计算时的"今天"。useful 过滤须用此 anchor 而非
+                ``date.today()``，否则随机延迟跨过午夜时 cov 与 filter 的 today
+                会指向不同日历日导致错配。
+
+        Note:
+            keyword-only 参数无默认值，与 `decide()` 的强制理由一致：遗漏会静默
+            走错路径，潜在错误难以发现，让 Python 在调用时立刻 TypeError。
         """
         plate = plate_config.plate
         ar_config = plate_config.auto_renew
@@ -136,11 +156,91 @@ class AutoRenewService:
                 base_url, token, jjz_status.vId, jjz_status.plate
             )
             if not handle_data or not handle_data.get("jjrqs"):
+                # 服务端啥都不给——视为异常，告警让人工看
                 return RenewResult(
                     plate=plate,
                     success=False,
                     message=f"当前无可选进京日期: {self._last_api_error}",
                     step="check_handle",
+                )
+
+            # useful 过滤：只取实际填补覆盖缺口的日期。
+            # 必须用 today_anchor 而非 date.today()——cov 布尔在 query 时计算，
+            # 派发协程随机延迟可能跨过午夜，此时 date.today() 已是新日期但 cov
+            # 信号还是旧日期的，错配会让 useful 过滤判错。
+            today = today_anchor
+            tomorrow = today + timedelta(days=1)
+            raw_jjrqs = handle_data["jjrqs"]
+            useful = self._filter_useful(
+                raw_jjrqs, today_covered, tomorrow_covered, today, tomorrow
+            )
+            if not useful:
+                # useful=[] 有两种成因，必须区分：
+                #   ① 原始 jjrqs 至少有一个 >= today 的合法日期但都已被本地覆盖
+                #     → 静默 SKIP，写防重
+                #   ② 原始 jjrqs 全是过去日期（如 [昨天]）或全部不可解析（服务端数据异常）
+                #     → 告警，不写防重
+                duration_ms = round((time.time() - start_time) * 1000, 2)
+                if not self._has_useful_candidate(raw_jjrqs, today):
+                    logger.warning(
+                        "[renew] checkHandle returned unparseable jjrqs plate=%s "
+                        "jjrqs_sample=%s jjrqs_total=%d",
+                        plate,
+                        raw_jjrqs[:5],
+                        len(raw_jjrqs),
+                    )
+                    self.structured_logger.log_business_operation(
+                        operation="auto_renew",
+                        plate_number=plate,
+                        success=False,
+                        duration_ms=duration_ms,
+                        extra_data={
+                            "step": "check_handle",
+                            "reason": "unparseable_jjrqs",
+                            # 截断防日志膨胀；服务端理论可返回任意长度
+                            "jjrqs_sample": raw_jjrqs[:5],
+                            "jjrqs_total": len(raw_jjrqs),
+                        },
+                    )
+                    return RenewResult(
+                        plate=plate,
+                        success=False,
+                        message=f"服务端返回的进京日期格式异常: {raw_jjrqs}",
+                        step="check_handle",
+                    )
+                # ① 服务端给的日期全部被本地覆盖（典型场景：明天有待生效进京证）
+                logger.info(
+                    "[renew] silently skipped plate=%s reason=jjrqs_all_covered "
+                    "jjrqs_sample=%s jjrqs_total=%d today_cov=%s tomorrow_cov=%s",
+                    plate,
+                    raw_jjrqs[:5],
+                    len(raw_jjrqs),
+                    today_covered,
+                    tomorrow_covered,
+                )
+                self.structured_logger.log_business_operation(
+                    operation="auto_renew",
+                    plate_number=plate,
+                    success=False,
+                    duration_ms=duration_ms,
+                    extra_data={
+                        "step": "useful_filter_skip",
+                        "skipped": True,
+                        "reason": "jjrqs_all_covered",
+                        # 截断防日志膨胀；服务端理论可返回任意长度
+                        "jjrqs_sample": raw_jjrqs[:5],
+                        "jjrqs_total": len(raw_jjrqs),
+                        "today_covered": today_covered,
+                        "tomorrow_covered": tomorrow_covered,
+                    },
+                )
+                await self._mark_renewed_today(plate)
+                return RenewResult(
+                    plate=plate,
+                    success=False,
+                    message="服务端可办日期已被本地覆盖，无需续办",
+                    step="useful_filter_skip",
+                    skipped=True,
                 )
 
             # ⑤ 检查是否需填行驶路线
@@ -154,7 +254,7 @@ class AutoRenewService:
                 )
 
             # ⑥ 组装并提交申请
-            jjrq = handle_data["jjrqs"][0]
+            jjrq = useful[0]
             metadata = extract_renew_metadata(response_data)
             request_body = self._build_apply_request(
                 jjz_status, ar_config, driver_info, jjrq, metadata
@@ -208,6 +308,61 @@ class AutoRenewService:
     # ------------------------------------------------------------------
     # API 调用链
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _filter_useful(
+        jjrqs: List[str],
+        today_covered: bool,
+        tomorrow_covered: bool,
+        today: date,
+        tomorrow: date,
+    ) -> List[str]:
+        """从服务端返回的可办日期列表中过滤出"实际填补覆盖缺口"的日期。
+
+        规则：
+          - 等于今天且今天未覆盖 → 保留（填补今日断档）
+          - 等于明天且明天未覆盖 → 保留（填补明日断档）
+          - 晚于明天且明天未覆盖 → 保留（服务端给的连续段能覆盖明日起的真空）
+          - 其它（已被覆盖、解析失败）→ 丢弃
+
+        注意：本方法静默丢弃无法解析的日期与过去日期（自动落在三条规则之外）。
+        调用方在 useful=[] 时还需通过 `_has_useful_candidate(raw_jjrqs, today)`
+        区分"至少有合法的今天/未来日期但被本地覆盖（静默 SKIP）"与"全是过去日期
+        或全部不可解析（服务端异常应告警）"两种语义。
+        """
+        useful: List[str] = []
+        for d_str in jjrqs:
+            try:
+                d = date.fromisoformat(d_str)
+            except (TypeError, ValueError):
+                continue
+            if d == today and not today_covered:
+                useful.append(d_str)
+            elif d == tomorrow and not tomorrow_covered:
+                useful.append(d_str)
+            elif d > tomorrow and not tomorrow_covered:
+                useful.append(d_str)
+        return useful
+
+    @staticmethod
+    def _has_useful_candidate(jjrqs: List[str], today: date) -> bool:
+        """判断 jjrqs 中是否至少有一个 ``>= today`` 的合法日期。
+
+        用于在 useful=[] 时区分两种语义：
+          - 至少有 today/未来 的合法日期但被本地覆盖 → 静默 SKIP + 写防重
+          - 全是过去日期（如 ``[昨天]``） / 全部不可解析 → 服务端数据异常，告警 + 不写防重
+
+        过去日期（< today）在续办语义里没意义——证件不可能办昨天的，服务端给这种
+        日期意味着接口返回陈旧/错位，与"格式不可解析"同源，都该告警让人工看。
+        """
+        for d_str in jjrqs:
+            try:
+                d = date.fromisoformat(d_str)
+            except (TypeError, ValueError):
+                continue
+            if d >= today:
+                return True
+        return False
 
     @staticmethod
     def extract_account_info(accounts) -> tuple:
@@ -413,7 +568,15 @@ class AutoRenewService:
     # ------------------------------------------------------------------
 
     async def push_renew_result(self, plate_config: PlateConfig, result: RenewResult):
-        """推送续办结果通知（dedup 跳过时不推送）"""
+        """推送续办结果通知（dedup 跳过 / 静默跳过时均不推送）"""
+        if result.skipped:
+            logger.info(
+                "[renew] skipped push plate=%s step=%s reason=%s",
+                result.plate,
+                result.step,
+                result.message,
+            )
+            return
         if result.step == "dedup_skip":
             logger.debug(f"车牌 {result.plate} 当日已续办，不推送通知")
             return

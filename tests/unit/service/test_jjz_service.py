@@ -970,6 +970,8 @@ class TestJJZService:
 
                 with patch("jjz_alert.service.jjz.jjz_service.date") as mock_date:
                     mock_date.today.return_value = date(2025, 8, 15)
+                    # 让 fromisoformat 走真正实现，否则 _is_effective_on 比较会炸
+                    mock_date.fromisoformat = date.fromisoformat
 
                     (
                         results,
@@ -983,13 +985,27 @@ class TestJJZService:
                     # plate_contexts 续办上下文必须仅取六环外
                     assert "京A12345" in plate_contexts
                     ctx = plate_contexts["京A12345"]
-                    assert (
-                        len(ctx) == 3
-                    ), "plate_contexts 必须为 (response, account, renew_status) 三元组"
-                    ctx_response, ctx_account, ctx_renew_status = ctx
+                    assert len(ctx) == 6, (
+                        "plate_contexts 必须为 (response, account, renew_status, "
+                        "today_covered, tomorrow_covered, today_anchor) 六元组"
+                    )
+                    (
+                        ctx_response,
+                        ctx_account,
+                        ctx_renew_status,
+                        ctx_today_cov,
+                        ctx_tomorrow_cov,
+                        ctx_today_anchor,
+                    ) = ctx
                     assert ctx_account is sample_jjz_account
                     assert ctx_renew_status.jjzzlmc == "进京证(六环外)"
                     assert ctx_renew_status.valid_end == "2025-08-15"
+                    # 互斥规则：六环内 valid 2025-08-15..2025-08-20 在今天 2025-08-15 生效
+                    # → today_cov=True；2025-08-16 仍在六环内有效区间 → tomorrow_cov=True
+                    assert ctx_today_cov is True
+                    assert ctx_tomorrow_cov is True
+                    # today_anchor 必须等于 mock 的 today
+                    assert ctx_today_anchor == date(2025, 8, 15)
 
     @pytest.mark.asyncio
     async def test_get_multiple_status_with_context_no_outer(
@@ -1026,6 +1042,7 @@ class TestJJZService:
 
                 with patch("jjz_alert.service.jjz.jjz_service.date") as mock_date:
                     mock_date.today.return_value = date(2025, 8, 15)
+                    mock_date.fromisoformat = date.fromisoformat
 
                     (
                         results,

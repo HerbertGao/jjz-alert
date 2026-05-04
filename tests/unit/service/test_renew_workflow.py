@@ -71,7 +71,16 @@ async def test_run_renew_only_workflow_dispatches_renew_today():
         status=JJZStatusEnum.EXPIRED.value,
     )
     fake_account = MagicMock()
-    plate_renew_contexts = {"京A12345": ({"data": {}}, fake_account, renew_status)}
+    plate_renew_contexts = {
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            False,
+            False,
+            date.today(),
+        )
+    }
 
     with patch.object(
         renew_workflow.config_manager, "load_config", return_value=config
@@ -115,7 +124,16 @@ async def test_run_renew_only_workflow_no_pushes_to_status_endpoints():
     config = _make_config_with_renew_plate()
     renew_status = _make_renew_status(valid_end=date.today().isoformat())
     fake_account = MagicMock()
-    plate_renew_contexts = {"京A12345": ({"data": {}}, fake_account, renew_status)}
+    plate_renew_contexts = {
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            False,
+            False,
+            date.today(),
+        )
+    }
 
     with patch.object(
         renew_workflow.config_manager, "load_config", return_value=config
@@ -194,7 +212,16 @@ async def test_run_renew_only_workflow_handles_decision_exception():
     config = _make_config_with_renew_plate()
     renew_status = _make_renew_status()
     fake_account = MagicMock()
-    plate_renew_contexts = {"京A12345": ({"data": {}}, fake_account, renew_status)}
+    plate_renew_contexts = {
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            False,
+            False,
+            date.today(),
+        )
+    }
 
     with patch.object(
         renew_workflow.config_manager, "load_config", return_value=config
@@ -215,6 +242,80 @@ async def test_run_renew_only_workflow_handles_decision_exception():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_run_renew_only_workflow_passes_coverage_to_schedule():
+    """RENEW_TOMORROW 派发时必须把 today_cov / tomorrow_cov 透传给 schedule_renew"""
+    from jjz_alert.service.jjz import renew_workflow
+    from jjz_alert.service.jjz.renew_decider import RenewDecision
+
+    config = _make_config_with_renew_plate()
+    renew_status = _make_renew_status(valid_end=date.today().isoformat())
+    fake_account = MagicMock()
+    plate_renew_contexts = {
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            True,
+            False,
+            date.today(),
+        )
+    }
+
+    with patch.object(
+        renew_workflow.config_manager, "load_config", return_value=config
+    ), patch.object(
+        renew_workflow.JJZService,
+        "get_multiple_status_with_context",
+        new=AsyncMock(return_value=({}, plate_renew_contexts)),
+    ), patch.object(
+        renew_workflow, "decide", return_value=RenewDecision.RENEW_TOMORROW
+    ), patch(
+        "jjz_alert.service.jjz.renew_trigger.schedule_renew",
+        new=AsyncMock(),
+    ) as mock_schedule:
+        await renew_workflow.run_renew_only_workflow()
+        mock_schedule.assert_awaited_once()
+        kwargs = mock_schedule.await_args.kwargs
+        assert kwargs.get("today_covered") is True
+        assert kwargs.get("tomorrow_covered") is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_renew_only_workflow_silent_skip_does_not_dispatch_or_alert():
+    """SKIP 决策（如已有覆盖 + elzsfkb=False）：既不派发续办，也不发告警"""
+    from jjz_alert.service.jjz import renew_workflow
+    from jjz_alert.service.jjz.renew_decider import RenewDecision
+
+    config = _make_config_with_renew_plate()
+    renew_status = _make_renew_status(elzsfkb=False)
+    fake_account = MagicMock()
+    plate_renew_contexts = {
+        "京A12345": ({"data": {}}, fake_account, renew_status, True, True, date.today())
+    }
+
+    with patch.object(
+        renew_workflow.config_manager, "load_config", return_value=config
+    ), patch.object(
+        renew_workflow.JJZService,
+        "get_multiple_status_with_context",
+        new=AsyncMock(return_value=({}, plate_renew_contexts)),
+    ), patch.object(
+        renew_workflow, "decide", return_value=RenewDecision.SKIP
+    ), patch(
+        "jjz_alert.service.jjz.auto_renew_service.auto_renew_service.push_renew_result",
+        new=AsyncMock(return_value=None),
+    ) as mock_push, patch(
+        "jjz_alert.service.jjz.renew_trigger.schedule_renew",
+        new=AsyncMock(),
+    ) as mock_schedule:
+        await renew_workflow.run_renew_only_workflow()
+        mock_schedule.assert_not_called()
+        mock_push.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_run_renew_only_workflow_not_available_pushes_alert():
     """决策为 NOT_AVAILABLE 时调用 push_renew_result 发不可办告警"""
     from jjz_alert.service.jjz import renew_workflow
@@ -223,7 +324,16 @@ async def test_run_renew_only_workflow_not_available_pushes_alert():
     config = _make_config_with_renew_plate()
     renew_status = _make_renew_status(elzsfkb=False)
     fake_account = MagicMock()
-    plate_renew_contexts = {"京A12345": ({"data": {}}, fake_account, renew_status)}
+    plate_renew_contexts = {
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            renew_status,
+            False,
+            False,
+            date.today(),
+        )
+    }
 
     with patch.object(
         renew_workflow.config_manager, "load_config", return_value=config

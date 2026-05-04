@@ -386,7 +386,7 @@ class JJZPushService:
                     plate_result["jjz_status"] = jjz_status.to_dict()
 
                     # 自动续办决策：命中 RENEW_* 时异步派发续办协程，并抑制冲突的"催办"提醒
-                    # 决策必须基于 ctx.renew_status（仅六环外）以避免被同车牌的六环内最新记录干扰
+                    # 决策基于 ctx.renew_status（六环外车辆字段）+ 全车牌覆盖布尔
                     renew_dispatched = False
                     decision = None
                     ctx = plate_renew_contexts.get(plate)
@@ -395,13 +395,40 @@ class JJZPushService:
                         ctx_response_data = None
                         ctx_account = None
                         ctx_renew_status = None
+                        ctx_today_cov = False
+                        ctx_tomorrow_cov = False
+                        ctx_today_anchor = None
                     else:
-                        ctx_response_data, ctx_account, ctx_renew_status = ctx
+                        (
+                            ctx_response_data,
+                            ctx_account,
+                            ctx_renew_status,
+                            ctx_today_cov,
+                            ctx_tomorrow_cov,
+                            ctx_today_anchor,
+                        ) = ctx
                         try:
-                            decision = renew_decide(plate_config, ctx_renew_status)
+                            decision = renew_decide(
+                                plate_config=plate_config,
+                                outer_renew_status=ctx_renew_status,
+                                today_covered=ctx_today_cov,
+                                tomorrow_covered=ctx_tomorrow_cov,
+                            )
                         except Exception as e:
                             logging.warning(f"车牌 {plate} 续办决策异常: {e}")
                             decision = None
+
+                        if decision is not None:
+                            logging.info(
+                                "[renew] decision plate=%s -> %s "
+                                "today_cov=%s tomorrow_cov=%s elzsfkb=%s sfyecbzxx=%s",
+                                plate,
+                                decision.value,
+                                ctx_today_cov,
+                                ctx_tomorrow_cov,
+                                ctx_renew_status.elzsfkb,
+                                ctx_renew_status.sfyecbzxx,
+                            )
 
                     if ctx is not None and decision in (
                         RenewDecision.RENEW_TODAY,
@@ -422,12 +449,13 @@ class JJZPushService:
                                     decision,
                                     min_delay=ar_global.min_delay_seconds,
                                     max_delay=ar_global.max_delay_seconds,
+                                    today_covered=ctx_today_cov,
+                                    tomorrow_covered=ctx_tomorrow_cov,
+                                    today_anchor=ctx_today_anchor,
                                 )
                             )
                             renew_dispatched = True
-                            logging.info(
-                                f"[renew] decision plate={plate} -> {decision.value} 已派发"
-                            )
+                            logging.info(f"[renew] dispatched plate={plate}")
                         except Exception as e:
                             logging.error(f"车牌 {plate} 续办派发失败: {e}")
                     elif ctx is not None and decision == RenewDecision.NOT_AVAILABLE:

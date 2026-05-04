@@ -1,5 +1,7 @@
-## 新增需求
+## 目的
 
+本能力定义自动续办相关的配置项格式与校验规则，包括车牌级 `auto_renew` 配置（启用开关、必需字段、住宿、申请地坐标）与 `global.auto_renew` 全局配置（续办派发延迟范围）。配置项缺失或非法时必须在加载阶段拒绝启动或输出明确告警。
+## 需求
 ### 需求:车牌级续办配置
 系统必须支持在 `plates[]` 配置中为每个车牌独立声明自动续办配置。配置块 `auto_renew` 为可选，未配置或 `enabled: false` 时该车牌禁止触发自动续办。
 
@@ -52,17 +54,22 @@
 - **当** `apply_location` 未配置
 - **那么** 系统必须使用默认值 `lng="116.4"`, `lat="39.9"`
 
-### 需求:全局续办时间窗口配置
-系统必须支持在 `global.auto_renew` 中配置续办随机时间窗口的起止时间。格式为 `HH:MM`。未配置时必须使用默认值 `00:00` 至 `06:00`。
+### 需求:全局续办延迟配置
+系统必须支持在 `global.auto_renew` 中配置续办派发的随机延迟范围。`min_delay_seconds` 与 `max_delay_seconds` 均为整数（单位：秒），未配置时必须使用默认值 30 与 180。配置必须满足 `min_delay_seconds >= 0` 且 `min_delay_seconds <= max_delay_seconds`。
 
-#### 场景:自定义时间窗口
-- **当** 用户配置 `global.auto_renew.time_window_start` 为 `"01:00"` 且 `time_window_end` 为 `"05:00"`
-- **那么** 系统必须在每天 01:00 至 05:00 之间随机选择续办执行时刻
+#### 场景:自定义延迟范围
+- **当** 用户配置 `global.auto_renew.min_delay_seconds: 60` 与 `max_delay_seconds: 300`
+- **那么** 系统必须在每条续办协程派发后，于 60 至 300 秒之间随机选择一个延迟值进行 `asyncio.sleep`
 
-#### 场景:使用默认时间窗口
-- **当** `global.auto_renew` 未配置
-- **那么** 系统必须使用 `00:00` 至 `06:00` 作为随机时间窗口
+#### 场景:使用默认延迟范围
+- **当** `global.auto_renew` 未配置 `min_delay_seconds` 与 `max_delay_seconds`
+- **那么** 系统必须使用默认值 `min_delay_seconds=30`、`max_delay_seconds=180`
 
-#### 场景:无效时间窗口
-- **当** `time_window_start` 晚于或等于 `time_window_end`
-- **那么** 系统必须在配置校验阶段报错，提示"续办时间窗口起始时间必须早于结束时间"
+#### 场景:无效延迟范围
+- **当** `min_delay_seconds < 0` 或 `min_delay_seconds > max_delay_seconds`
+- **那么** 系统必须在配置校验阶段报错，提示"续办延迟最小值必须 >= 0 且不大于最大值"
+
+#### 场景:检测到已废弃字段
+- **当** 用户配置文件中仍存在 `time_window_start` 或 `time_window_end` 字段
+- **那么** 系统必须在配置加载阶段输出 WARN 级日志，提示这些字段已废弃将被忽略，不得阻塞启动
+
