@@ -99,8 +99,8 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      # 无条件登录：push 路径需要写，verify 路径需要从 registry 读 cache
       - name: Log into GHCR
-        if: needs.setup.outputs.should_push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -210,6 +210,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
       security-events: write
     steps:
       - name: Cache Trivy DB
@@ -219,6 +220,13 @@ jobs:
           key: trivy-db-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             trivy-db-${{ runner.os }}-
+
+      - name: Log into GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # 漏洞发现不阻断流水线（exit-code=0），但扫描器自身失败仍会让 step 失败
       - name: Run Trivy
