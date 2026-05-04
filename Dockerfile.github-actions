@@ -1,60 +1,31 @@
 # syntax=docker/dockerfile:1.7-labs
 
-# 预下载 wheels（在构建机平台执行，避免 ARM64 下网络与解析开销）
-FROM --platform=$BUILDPLATFORM python:3.14-slim AS wheelhouse
-
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-ENV PIP_NO_INPUT=1
-WORKDIR /wheels
-COPY requirements-prod.txt ./
-RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
-    pip download --only-binary=:all: \
-      --implementation cp --python-version 314 --abi cp314 \
-      --platform manylinux_2_17_x86_64 \
-      --dest /wheels/x86_64 \
-      -r requirements-prod.txt && \
-    pip download --only-binary=:all: \
-      --implementation cp --python-version 314 --abi cp314 \
-      --platform manylinux_2_17_aarch64 \
-      --dest /wheels/aarch64 \
-      -r requirements-prod.txt
-
-# 最终运行镜像
 FROM python:3.14-slim
 
-# 设置工作目录与环境
 WORKDIR /app
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV TZ=Asia/Shanghai
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TZ=Asia/Shanghai \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_INPUT=1 \
+    UV_LINK_MODE=copy \
+    UV_SYSTEM_PYTHON=1
+
 ARG VERSION=latest
 ENV VERSION=${VERSION}
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-ENV PIP_NO_INPUT=1
-# 声明来自 buildx 的自动构建参数
-ARG TARGETARCH
 
-# 复制依赖与离线 wheels
+COPY --from=ghcr.io/astral-sh/uv:0.11.8 /uv /usr/local/bin/uv
+
 COPY requirements-prod.txt ./
-COPY --from=wheelhouse /wheels /wheels
+RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
+    uv pip install --system -r requirements-prod.txt
 
-# 按平台选择对应 wheels 目录并离线安装
-RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
-    if [ "$TARGETARCH" = "arm64" ]; then \
-      WHEELDIR=/wheels/aarch64; \
-    else \
-      WHEELDIR=/wheels/x86_64; \
-    fi; \
-    echo "Using wheel dir: $WHEELDIR for TARGETARCH=$TARGETARCH"; \
-    pip install --no-index --find-links=$WHEELDIR -r requirements-prod.txt
+COPY main.py rest_api.py cli_tools.py ./
+COPY jjz_alert/ ./jjz_alert/
+COPY modules/ ./modules/
 
-# 复制项目文件
-COPY . .
-
-# 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import os; assert os.path.exists('/app/main.py')" || exit 1
 
-# 启动命令
-CMD ["python", "main.py"] 
+CMD ["python", "main.py"]
