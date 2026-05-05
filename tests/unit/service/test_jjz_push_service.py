@@ -145,7 +145,9 @@ async def test_execute_push_workflow_dispatches_renew_for_inner_only_plate():
         call_args = mock_schedule.await_args.args
         # schedule_renew 既支持位置又支持 kwargs，统一从 args+kwargs 提取
         # 签名: (plate_config, jjz_status, response_data, accounts, decision, ...)
-        passed_status = call_args[1] if len(call_args) >= 2 else call_kwargs.get("jjz_status")
+        passed_status = (
+            call_args[1] if len(call_args) >= 2 else call_kwargs.get("jjz_status")
+        )
         assert passed_status is inner_status
         assert "六环内" in passed_status.jjzzlmc
 
