@@ -11,7 +11,7 @@ aioredis>=2.0.0
 # Apprise多通道推送
 apprise>=1.10.0
 # Home Assistant集成
-aiohttp>=3.8.0 
+aiohttp>=3.13.5 
 # MQTT（用于HA Discovery）
 gmqtt>=0.7.0
 # 测试相关依赖
