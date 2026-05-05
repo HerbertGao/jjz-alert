@@ -387,62 +387,32 @@ class TestFormatJJZBodyAndPriority:
 
 @pytest.mark.unit
 class TestNormalizeResponseParens:
-    """normalize_response_parens 入边界规范化"""
+    """normalize_response_parens 字符串规范化（仅用于业务字段 jjzzlmc/blztmc）"""
 
-    def test_normalize_string(self):
+    def test_normalize_full_width_parens(self):
+        """全角括号 → 半角括号"""
         assert (
             jjz_utils.normalize_response_parens("进京证（六环外）") == "进京证(六环外)"
         )
-
-    def test_normalize_dict(self):
-        out = jjz_utils.normalize_response_parens(
-            {"jjzzlmc": "进京证（六环内）", "blztmc": "审核通过（生效中）"}
+        assert (
+            jjz_utils.normalize_response_parens("审核通过（生效中）")
+            == "审核通过(生效中)"
         )
-        assert out == {"jjzzlmc": "进京证(六环内)", "blztmc": "审核通过(生效中)"}
 
-    def test_normalize_nested_response_shape(self):
-        """模拟真实 stateList 响应结构"""
-        payload = {
-            "code": 200,
-            "data": {
-                "elzqyms": "六环外（部分时段限行）",
-                "bzclxx": [
-                    {
-                        "hphm": "京A12345",
-                        "bzxx": [
-                            {
-                                "jjzzlmc": "进京证（六环内）",
-                                "blztmc": "审核通过（生效中）",
-                            }
-                        ],
-                    }
-                ],
-            },
-        }
-        out = jjz_utils.normalize_response_parens(payload)
-        assert out["data"]["elzqyms"] == "六环外(部分时段限行)"
-        assert out["data"]["bzclxx"][0]["bzxx"][0]["jjzzlmc"] == "进京证(六环内)"
-        assert out["data"]["bzclxx"][0]["bzxx"][0]["blztmc"] == "审核通过(生效中)"
-
-    def test_normalize_preserves_non_string_values(self):
-        out = jjz_utils.normalize_response_parens(
-            {"code": 200, "ok": True, "ratio": 0.5, "note": None, "tags": ["a（b）"]}
-        )
-        assert out["code"] == 200
-        assert out["ok"] is True
-        assert out["ratio"] == 0.5
-        assert out["note"] is None
-        assert out["tags"] == ["a(b)"]
-
-    def test_normalize_error_response(self):
-        """错误响应也应被规范化（即使 jjz_service 自己生成的，调用方期望统一形态）"""
-        out = jjz_utils.normalize_response_parens({"error": "网络异常（超时）"})
-        assert out == {"error": "网络异常(超时)"}
-
-    def test_normalize_tuple(self):
-        out = jjz_utils.normalize_response_parens(("a（1）", "b（2）"))
-        assert out == ("a(1)", "b(2)")
+    def test_normalize_empty_or_none(self):
+        """空字符串与 None 都返回 ''"""
+        assert jjz_utils.normalize_response_parens("") == ""
+        assert jjz_utils.normalize_response_parens(None) == ""
 
     def test_normalize_no_parens_unchanged(self):
-        payload = {"a": "no parens here", "b": ["plain", 1]}
-        assert jjz_utils.normalize_response_parens(payload) == payload
+        """无括号场景原样返回"""
+        assert jjz_utils.normalize_response_parens("进京证") == "进京证"
+        assert jjz_utils.normalize_response_parens("已失效") == "已失效"
+
+    def test_normalize_mixed_text(self):
+        """混合中英括号与中文文本"""
+        # 半角括号保持不变；全角括号被转换
+        assert (
+            jjz_utils.normalize_response_parens("进京证(六环内)（备用）")
+            == "进京证(六环内)(备用)"
+        )

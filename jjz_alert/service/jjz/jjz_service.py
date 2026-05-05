@@ -26,7 +26,6 @@ from jjz_alert.service.cache.cache_service import CacheService
 from jjz_alert.service.jjz.jjz_parse import parse_all_jjz_records
 from jjz_alert.service.jjz.jjz_status import JJZStatus
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
-from jjz_alert.service.jjz.jjz_utils import normalize_response_parens
 
 
 def _is_effective_on(record: JJZStatus, day: date) -> bool:
@@ -63,14 +62,20 @@ class JJZService:
         self.structured_logger = get_structured_logger("jjz_service")
 
     def check_jjz_status(self, url: str, token: str) -> Dict[str, Any]:
-        """查询进京证状态"""
+        """查询进京证状态。
+
+        raw response 完全透传给调用方：顶层 metadata
+        （`data.elzqyms` / `data.ylzqyms` / `data.elzmc` / `data.ylzmc`）会被
+        ``extract_renew_metadata`` 取出并原样回传给 ``insertApplyRecord``，因此
+        在 API 边界对响应体做全角→半角 mutate 等于篡改 request 内容。业务字段
+        （``jjzzlmc`` / ``blztmc``）的规范化已下沉到 ``jjz_parse``：解析单条
+        record 写入 ``JJZStatus`` 前调用 ``normalize_response_parens``。
+        """
         headers = {"Authorization": token, "Content-Type": "application/json"}
         try:
             resp = http_post(url, headers=headers, json_data={})
             resp.raise_for_status()
-            # 入边界统一规范化：服务端原生使用全角括号（如 "进京证（六环外）"），
-            # 这里一次性替换为半角，下游解析/比较/日志都只面对半角形态
-            payload = normalize_response_parens(resp.json())
+            payload = resp.json()
             logging.debug(f"进京证状态查询成功: {payload}")
             return payload
         except Exception as e:
@@ -102,12 +107,10 @@ class JJZService:
                 asyncio.create_task(
                     self._notify_admin_system_error(error_type, error_msg)
                 )
-                return normalize_response_parens(
-                    {"error": f"{error_type}: {error_msg}"}
-                )
+                return {"error": f"{error_type}: {error_msg}"}
             else:
                 logging.error(f"进京证查询失败: {error_msg}")
-                return normalize_response_parens({"error": error_msg})
+                return {"error": error_msg}
 
     def load_accounts(self) -> List[JJZAccount]:
         """加载进京证账户配置"""

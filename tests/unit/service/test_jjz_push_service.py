@@ -149,7 +149,6 @@ async def test_execute_push_workflow_dispatches_renew_for_inner_only_plate():
             call_args[1] if len(call_args) >= 2 else call_kwargs.get("jjz_status")
         )
         assert passed_status is inner_status
-        assert "六环内" in passed_status.jjzzlmc
 
         # 工作流结果反映派发成功
         assert result["total_plates"] == 1

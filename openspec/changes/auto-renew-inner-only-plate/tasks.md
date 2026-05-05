@@ -4,7 +4,7 @@
 - [x] 1.2 修改 `jjz_alert/service/jjz/renew_decider.py`：更新模块顶部 docstring 与 `decide` 内 `outer_renew_status is None → SKIP` 分支的注释，将"无六环外历史记录"改为"上下文缺失"；逻辑分支本身保持不变。
 - [x] 1.3 修改 `jjz_alert/service/jjz/renew_workflow.py:run_renew_only_workflow`：把 `ctx is None` 时的 `logger.debug` 改为 `logger.info`，文案"缺少续办上下文，跳过"保留。
 - [x] 1.4 检查 `jjz_alert/service/jjz/jjz_push_service.py:process_single_plate` 是否存在类似 `ctx is None` 的 DEBUG 跳过分支，如有同步提级到 INFO；如无则跳过此项。（实际位于 `service/notification/jjz_push_service.py`：原本无日志，补充了一条 INFO 日志，仅当车牌启用了 auto_renew 才打，避免噪音；注释同步更新。）
-- [x] 1.5 在 `jjz_alert/service/jjz/jjz_utils.py` 新增 `normalize_response_parens(data)` 工具：递归遍历 dict/list/tuple 中的字符串值，把全角 `（` / `）` 替换为半角 `(` / `)`；在 `JJZService.check_jjz_status` 返回 `resp.json()` 前调用以规范化整个响应体。Request 侧不受影响（Request 不会有全角括号问题）。配套加单元测试覆盖嵌套结构、非字符串值、错误响应（含 `{"error": ...}` 也要走 normalize）。（实测：tests/unit/ 881 全绿。）
+- [x] 1.5 在 `jjz_alert/service/jjz/jjz_utils.py` 新增 `normalize_response_parens(text)` 字符串工具：把全角 `（` / `）` 替换为半角 `(` / `)`；normalize 时机推到 parse 层（`parse_single_jjz_record` / `parse_jjz_response` 在写入 `JJZStatus` 前对 `jjzzlmc` / `blztmc` 调用），raw response 完全透传，不影响 `insertApplyRecord` 的 metadata 字段（`elzqyms` / `ylzqyms` / `elzmc` / `ylzmc`，由 `extract_renew_metadata` 取出后原样回传）。配套加单元测试覆盖字符串规范化、空值、parse 层规范化与 `check_jjz_status` 透传边界护栏。
 
 ## 2. 测试
 

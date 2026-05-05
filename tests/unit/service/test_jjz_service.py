@@ -380,6 +380,63 @@ class TestJJZService:
                 json_data={},
             )
 
+    def test_check_jjz_status_passes_through_top_level_metadata(self, jjz_service):
+        """边界护栏：check_jjz_status 必须完全透传 raw response，
+        顶层 metadata（elzqyms/ylzqyms/elzmc/ylzmc）会被 extract_renew_metadata
+        取出并原样回传给 insertApplyRecord，因此严禁在 API 入边界做任何 mutate
+        （包括全角→半角规范化）。业务字段的规范化已下沉到 parse 层。"""
+        url = "https://test.example.com"
+        token = "test_token"
+
+        raw_payload = {
+            "code": 200,
+            "data": {
+                "elzqyms": "六环外（部分时段限行）",
+                "ylzqyms": "原六环外（限行）",
+                "elzmc": "二环（含）以内",
+                "ylzmc": "原二环（含）以内",
+                "bzclxx": [
+                    {
+                        "hphm": "京A12345",
+                        "sycs": "8",
+                        "bzxx": [
+                            {
+                                "blzt": "1",
+                                "blztmc": "审核通过（生效中）",
+                                "jjzzlmc": "进京证（六环内）",
+                                "sqsj": "2025-08-15 10:00:00",
+                                "yxqs": "2025-08-15",
+                                "yxqz": "2025-08-20",
+                                "sxsyts": "5",
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+
+        mock_resp = Mock()
+        mock_resp.json.return_value = raw_payload
+        mock_resp.raise_for_status = Mock()
+
+        with patch("jjz_alert.service.jjz.jjz_service.http_post") as mock_post:
+            mock_post.return_value = mock_resp
+
+            result = jjz_service.check_jjz_status(url, token)
+
+            # 顶层 metadata 必须保持服务端原始的全角形态（透传）
+            assert result["data"]["elzqyms"] == "六环外（部分时段限行）"
+            assert result["data"]["ylzqyms"] == "原六环外（限行）"
+            assert result["data"]["elzmc"] == "二环（含）以内"
+            assert result["data"]["ylzmc"] == "原二环（含）以内"
+            # bzxx 业务字段在 raw response 中也保持全角（解析层才会规范化）
+            assert (
+                result["data"]["bzclxx"][0]["bzxx"][0]["jjzzlmc"] == "进京证（六环内）"
+            )
+            assert (
+                result["data"]["bzclxx"][0]["bzxx"][0]["blztmc"] == "审核通过（生效中）"
+            )
+
     def test_check_jjz_status_error(self, jjz_service):
         """测试进京证状态查询异常"""
         url = "https://test.example.com"
@@ -1006,9 +1063,11 @@ class TestJJZService:
                         ctx_today_anchor,
                     ) = ctx
                     assert ctx_account is sample_jjz_account
-                    # renew_status 取 apply_time 最新一条（六环内）
-                    assert ctx_renew_status.jjzzlmc == "进京证(六环内)"
-                    assert ctx_renew_status.valid_end == "2025-08-20"
+                    # renew_status 与 results 同源（apply_time 最新一条）；
+                    # spec 仅承诺 renew_status 的 vehicle 层字段，不约束 record 层
+                    # （jjzzlmc/valid_end 等）— 故此处只断言 identity 与 vehicle 层字段
+                    assert ctx_renew_status is results["京A12345"]
+                    assert ctx_renew_status.apply_time == "2025-08-15 09:00:00"
                     # 车辆级字段无论从哪条 record 取都一致
                     assert ctx_renew_status.vId == "VEH-001"
                     assert ctx_renew_status.elzsfkb is True
@@ -1076,7 +1135,8 @@ class TestJJZService:
                     # results 仍取最新（也是唯一）记录
                     assert results["京A12345"].jjzzlmc == "进京证(六环内)"
 
-                    # plate_contexts 必须写入，renew_status 取该六环内记录
+                    # plate_contexts 必须写入，renew_status 与 results 同源
+                    # （spec 仅承诺 vehicle 层字段，不约束 record 层）
                     assert "京A12345" in plate_contexts
                     (
                         ctx_response,
@@ -1086,7 +1146,7 @@ class TestJJZService:
                         ctx_tomorrow_cov,
                         ctx_today_anchor,
                     ) = plate_contexts["京A12345"]
-                    assert ctx_renew_status.jjzzlmc == "进京证(六环内)"
+                    # apply_time 用于验证 latest-by-apply_time 选择口径
                     assert ctx_renew_status.apply_time == "2025-08-09 19:25:57"
 
                     # 车辆级字段必须完整透传（下游续办依赖这些字段）
