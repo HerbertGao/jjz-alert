@@ -268,6 +268,34 @@ class TestParseSingleJJZRecord:
 
         assert result is None
 
+    def test_parse_single_jjz_record_normalizes_parens(self):
+        """业务字段 jjzzlmc / blztmc 在写入 JJZStatus 前应被规范化为半角括号
+        （raw response 由调用方保留，此处只规范化解析后的业务对象）"""
+        plate = "京A12345"
+        record = {
+            "blzt": "1",
+            "blztmc": "审核通过（生效中）",
+            "sqsj": "2025-08-15 10:00:00",
+            "yxqs": "2025-08-15",
+            "yxqz": "2025-08-20",
+            "sxsyts": "5",
+            "jjzzlmc": "进京证（六环外）",
+        }
+        vehicle = {"sycs": "8"}
+
+        def status_resolver(blzt, blztmc, yxqz, yxqs):
+            # 解析层应已先把全角→半角，传入 resolver 时是半角
+            assert blztmc == "审核通过(生效中)"
+            return JJZStatusEnum.VALID.value
+
+        result = parse_single_jjz_record(
+            plate, record, vehicle, "active", status_resolver, JJZStatus
+        )
+
+        assert result is not None
+        assert result.jjzzlmc == "进京证(六环外)"
+        assert result.blztmc == "审核通过(生效中)"
+
 
 @pytest.mark.unit
 class TestParseAllJJZRecords:
@@ -393,3 +421,48 @@ class TestParseJJZResponse:
         assert result.plate == plate
         assert result.status == JJZStatusEnum.INVALID.value
         assert "未找到进京证记录" in result.error_message
+
+    def test_parse_jjz_response_normalizes_parens(self):
+        """parse_jjz_response 同样在解析后规范化业务字段，但不动 raw response"""
+        plate = "京A12345"
+        response_data = {
+            "data": {
+                "elzqyms": "六环外（部分时段限行）",  # 顶层 metadata 不应被改写
+                "bzclxx": [
+                    {
+                        "hphm": "京A12345",
+                        "sycs": "8",
+                        "bzxx": [
+                            {
+                                "blzt": "1",
+                                "blztmc": "审核通过（生效中）",
+                                "sqsj": "2025-08-15 10:00:00",
+                                "yxqs": "2025-08-15",
+                                "yxqz": "2025-08-20",
+                                "sxsyts": "5",
+                                "jjzzlmc": "进京证（六环内）",
+                            }
+                        ],
+                    }
+                ],
+            }
+        }
+
+        def status_resolver(blzt, blztmc, yxqz, yxqs):
+            return JJZStatusEnum.VALID.value
+
+        result = parse_jjz_response(plate, response_data, status_resolver, JJZStatus)
+
+        # 解析后 JJZStatus 的业务字段是半角
+        assert result.jjzzlmc == "进京证(六环内)"
+        assert result.blztmc == "审核通过(生效中)"
+        # raw response 完全透传，顶层 metadata 与 bzxx 内字段都保持服务端原始全角
+        assert response_data["data"]["elzqyms"] == "六环外（部分时段限行）"
+        assert (
+            response_data["data"]["bzclxx"][0]["bzxx"][0]["jjzzlmc"]
+            == "进京证（六环内）"
+        )
+        assert (
+            response_data["data"]["bzclxx"][0]["bzxx"][0]["blztmc"]
+            == "审核通过（生效中）"
+        )

@@ -62,13 +62,22 @@ class JJZService:
         self.structured_logger = get_structured_logger("jjz_service")
 
     def check_jjz_status(self, url: str, token: str) -> Dict[str, Any]:
-        """查询进京证状态"""
+        """查询进京证状态。
+
+        raw response 完全透传给调用方：顶层 metadata
+        （`data.elzqyms` / `data.ylzqyms` / `data.elzmc` / `data.ylzmc`）会被
+        ``extract_renew_metadata`` 取出并原样回传给 ``insertApplyRecord``，因此
+        在 API 边界对响应体做全角→半角 mutate 等于篡改 request 内容。业务字段
+        （``jjzzlmc`` / ``blztmc``）的规范化已下沉到 ``jjz_parse``：解析单条
+        record 写入 ``JJZStatus`` 前调用 ``normalize_response_parens``。
+        """
         headers = {"Authorization": token, "Content-Type": "application/json"}
         try:
             resp = http_post(url, headers=headers, json_data={})
             resp.raise_for_status()
-            logging.debug(f"进京证状态查询成功: {resp.json()}")
-            return resp.json()
+            payload = resp.json()
+            logging.debug(f"进京证状态查询成功: {payload}")
+            return payload
         except Exception as e:
             error_msg = str(e)
 
@@ -251,13 +260,16 @@ class JJZService:
         内部实现：返回 (results, plate_contexts)。
         plate_contexts 按车牌记录续办专用六元组
         (response_data, account, renew_status, today_covered, tomorrow_covered, today_anchor)：
-        - renew_status 仅取该车牌六环外记录中 apply_time 最新的一条
+        - renew_status 取该车牌全部记录中 apply_time 最新的一条（六环内/六环外不限）；
+          下游消费方仅可读取车辆级字段（vId/hpzl/cllx/elzsfkb/ylzsfkb/sfyecbzxx），
+          这些字段在该车的所有 record 上共享同一份 vehicle 层值，不依赖记录类型
         - today_covered / tomorrow_covered 基于该车牌全部记录（六环内 ∪ 六环外）
           通过 `_is_effective_on` 计算，覆盖判定包含"生效中"与"已批准待生效"
         - today_anchor 是计算覆盖时的"今天"日期，须随 cov 布尔一并传到 execute_renew
           以避免跨午夜漂移（cov 计算与 filter 用同一参考日期）
-        若车牌无六环外记录则不写入 plate_contexts（无 vId 等续办字段，无法 auto_renew）。
-        多账户场景下保证后续续办派发使用正确账户与正确的六环外 status。
+        仅当车牌在所有账户响应中都未匹配到任何记录时才不写入 plate_contexts
+        （上游 workflow 在缺上下文时跳过派发并打 INFO 日志）。
+        多账户场景下保证后续续办派发使用正确账户与正确的最新记录。
         """
         results = {plate: None for plate in plates}
         accounts = self.load_accounts()
@@ -315,7 +327,7 @@ class JJZService:
         for plate in plates:
             triples = plate_statuses[plate]
             if triples:
-                # 推送/显示用：所有记录中 apply_time 最新的一条
+                # 推送/显示与续办上下文同源：所有记录中 apply_time 最新的一条
                 latest_record, latest_response, latest_account = max(
                     triples, key=lambda t: t[0].apply_time or ""
                 )
@@ -324,28 +336,20 @@ class JJZService:
                 if latest_record.status != JJZStatusEnum.ERROR.value:
                     await self._cache_status(latest_record)
 
-                # 续办用：仅从六环外记录中选最新一条；无六环外则不写入 plate_contexts
-                outer_triples = [
-                    t for t in triples if t[0].jjzzlmc and "六环外" in t[0].jjzzlmc
-                ]
-                if outer_triples:
-                    renew_record, renew_response, renew_account = max(
-                        outer_triples, key=lambda t: t[0].apply_time or ""
-                    )
-                    # 覆盖信号基于全部记录（六环内 ∪ 六环外）；任意一条覆盖目标日即认为覆盖
-                    # 注意：today/tomorrow 用同一个 anchor，与下游 _filter_useful 用 today_anchor 配套
-                    today_covered = any(_is_effective_on(t[0], today) for t in triples)
-                    tomorrow_covered = any(
-                        _is_effective_on(t[0], tomorrow) for t in triples
-                    )
-                    plate_contexts[plate] = (
-                        renew_response,
-                        renew_account,
-                        renew_record,
-                        today_covered,
-                        tomorrow_covered,
-                        today,
-                    )
+                # 覆盖信号基于全部记录（六环内 ∪ 六环外）；任意一条覆盖目标日即认为覆盖
+                # 注意：today/tomorrow 用同一个 anchor，与下游 _filter_useful 用 today_anchor 配套
+                today_covered = any(_is_effective_on(t[0], today) for t in triples)
+                tomorrow_covered = any(
+                    _is_effective_on(t[0], tomorrow) for t in triples
+                )
+                plate_contexts[plate] = (
+                    latest_response,
+                    latest_account,
+                    latest_record,
+                    today_covered,
+                    tomorrow_covered,
+                    today,
+                )
             else:
                 results[plate] = JJZStatus(
                     plate=plate,
@@ -382,8 +386,10 @@ class JJZService:
         """返回每个车牌对应的续办上下文六元组
         ``(response_data, account, renew_status, today_covered, tomorrow_covered, today_anchor)``。
 
-        - ``renew_status``：仅取该车牌六环外记录中 apply_time 最新的一条；若无六环外
-          记录则不写入。
+        - ``renew_status``：取该车牌全部记录中 apply_time 最新的一条（六环内/六环外
+          不限）；下游消费方仅可读取车辆级字段（vId/hpzl/cllx/elzsfkb/ylzsfkb/sfyecbzxx），
+          这些字段在所有 record 上共享同一份 vehicle 层值，记录类型不影响续办语义。
+          仅当车牌在所有账户响应中均未匹配到任何记录时才不写入 plate_contexts。
         - ``today_covered`` / ``tomorrow_covered``：基于该车牌全部记录（六环内 ∪ 六环外）
           的覆盖判定结果。
         - ``today_anchor``：计算覆盖时的"今天"日期，下游 ``execute_renew`` 须用此 anchor

@@ -386,12 +386,17 @@ class JJZPushService:
                     plate_result["jjz_status"] = jjz_status.to_dict()
 
                     # 自动续办决策：命中 RENEW_* 时异步派发续办协程，并抑制冲突的"催办"提醒
-                    # 决策基于 ctx.renew_status（六环外车辆字段）+ 全车牌覆盖布尔
+                    # 决策基于 ctx.renew_status（最新记录的 vehicle 层字段）+ 全车牌覆盖布尔
                     renew_dispatched = False
                     decision = None
                     ctx = plate_renew_contexts.get(plate)
                     if ctx is None:
-                        # 没有六环外续办上下文 → 跳过派发（车牌可能仅有六环内或完全无记录）
+                        # 仅当车牌在所有账户响应中都未匹配到任何记录时才走这里——
+                        # 含六环内或六环外均已能进入续办上下文，故这里属于真"无记录"分支
+                        if plate_config.auto_renew and plate_config.auto_renew.enabled:
+                            logging.info(
+                                f"[renew] 车牌 {plate} 缺少续办上下文，跳过派发"
+                            )
                         ctx_response_data = None
                         ctx_account = None
                         ctx_renew_status = None

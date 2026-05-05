@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
+from jjz_alert.service.jjz.jjz_utils import normalize_response_parens
 
 logger = logging.getLogger(__name__)
 
@@ -77,13 +78,16 @@ def parse_single_jjz_record(
     """
     try:
         blzt = record.get("blzt", "")
-        blztmc = record.get("blztmc", "")
+        # 业务字段在写入 JJZStatus 前规范化全角→半角；raw response 不动，
+        # 顶层 metadata（elzqyms/ylzqyms/elzmc/ylzmc）保持服务端原始形态以便
+        # 续办时原样回传给 insertApplyRecord
+        blztmc = normalize_response_parens(record.get("blztmc", ""))
         sqsj = record.get("sqsj", "")
         yxqs = record.get("yxqs", "")
         yxqz = record.get("yxqz", "")
         sxsyts = record.get("sxsyts", "")
         sycs = vehicle.get("sycs", "")
-        jjzzlmc = record.get("jjzzlmc", "")
+        jjzzlmc = normalize_response_parens(record.get("jjzzlmc", ""))
 
         status = status_resolver(blzt, blztmc, yxqz, yxqs)
         days_remaining = _safe_int(sxsyts)
@@ -206,13 +210,16 @@ def parse_jjz_response(
 
     latest_record = bzxx[0]
     blzt = latest_record.get("blzt", "")
-    blztmc = latest_record.get("blztmc", "")
+    # 业务字段在写入 JJZStatus 前规范化全角→半角；raw response 不动，
+    # 顶层 metadata（elzqyms/ylzqyms/elzmc/ylzmc）保持服务端原始形态以便
+    # 续办时原样回传给 insertApplyRecord
+    blztmc = normalize_response_parens(latest_record.get("blztmc", ""))
     sqsj = latest_record.get("sqsj", "")
     yxqs = latest_record.get("yxqs", "")
     yxqz = latest_record.get("yxqz", "")
     sxsyts = latest_record.get("sxsyts", "")
     sycs = target_vehicle.get("sycs", "")
-    jjzzlmc = latest_record.get("jjzzlmc", "")
+    jjzzlmc = normalize_response_parens(latest_record.get("jjzzlmc", ""))
 
     status = status_resolver(blzt, blztmc, yxqz, yxqs)
     days_remaining = _safe_int(sxsyts)

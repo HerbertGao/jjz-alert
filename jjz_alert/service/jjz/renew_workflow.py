@@ -48,7 +48,7 @@ async def run_renew_only_workflow() -> None:
         plate = plate_config.plate
         ctx = plate_renew_contexts.get(plate)
         if ctx is None:
-            logger.debug(f"[renew_only] 车牌 {plate} 缺少续办上下文，跳过")
+            logger.info(f"[renew_only] 车牌 {plate} 缺少续办上下文，跳过")
             continue
         (
             ctx_response_data,

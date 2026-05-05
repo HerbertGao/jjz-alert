@@ -6,6 +6,29 @@
 from datetime import datetime
 
 
+def normalize_response_parens(text: str | None) -> str:
+    """把字符串中的全角括号 `（` / `）` 替换为半角 `(` / `)`。
+
+    服务端原生使用全角括号（如 "进京证（六环外）"），下游解析、测试 fixture 与
+    日志输出统一用半角更便于精确匹配与可读性。
+
+    **仅适用于业务字段**（如 ``jjzzlmc`` / ``blztmc``），由 ``parse_single_jjz_record``
+    /``parse_jjz_response`` 在写入 ``JJZStatus`` 前调用。**禁止用于整个响应体**：
+    `data.elzqyms` / `data.ylzqyms` / `data.elzmc` / `data.ylzmc` 等顶层 metadata
+    会被 ``extract_renew_metadata`` 取出后原样回传给 ``insertApplyRecord``，对响应
+    体做 mutate 等于篡改 request 内容。
+
+    Args:
+        text: 待规范化的字符串；``None`` / 空串返回 ``""``。
+
+    Returns:
+        规范化后的字符串（保证非空、必为 ``str``）。
+    """
+    if not text:
+        return ""
+    return text.replace("（", "(").replace("）", ")")
+
+
 def format_valid_dates(start_str: str | None, end_str: str | None) -> tuple[str, str]:
     """
     将有效期起止日期格式化：同年仅显示 mm-dd，跨年显示 YYYY-mm-dd。

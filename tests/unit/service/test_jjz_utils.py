@@ -383,3 +383,36 @@ class TestFormatJJZBodyAndPriority:
         assert body == "默认内容"
         assert priority == "normal"
         mock_template_manager.format_error_status.assert_called_once()
+
+
+@pytest.mark.unit
+class TestNormalizeResponseParens:
+    """normalize_response_parens 字符串规范化（仅用于业务字段 jjzzlmc/blztmc）"""
+
+    def test_normalize_full_width_parens(self):
+        """全角括号 → 半角括号"""
+        assert (
+            jjz_utils.normalize_response_parens("进京证（六环外）") == "进京证(六环外)"
+        )
+        assert (
+            jjz_utils.normalize_response_parens("审核通过（生效中）")
+            == "审核通过(生效中)"
+        )
+
+    def test_normalize_empty_or_none(self):
+        """空字符串与 None 都返回 ''"""
+        assert jjz_utils.normalize_response_parens("") == ""
+        assert jjz_utils.normalize_response_parens(None) == ""
+
+    def test_normalize_no_parens_unchanged(self):
+        """无括号场景原样返回"""
+        assert jjz_utils.normalize_response_parens("进京证") == "进京证"
+        assert jjz_utils.normalize_response_parens("已失效") == "已失效"
+
+    def test_normalize_mixed_text(self):
+        """混合中英括号与中文文本"""
+        # 半角括号保持不变；全角括号被转换
+        assert (
+            jjz_utils.normalize_response_parens("进京证(六环内)（备用）")
+            == "进京证(六环内)(备用)"
+        )

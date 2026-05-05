@@ -194,12 +194,13 @@ class TestQueryMultipleStatusCoverage:
                 ],
             }
         ]
-        _, ctxs = await self._query(jjz_service, sample_jjz_account, bzclxx)
+        results, ctxs = await self._query(jjz_service, sample_jjz_account, bzclxx)
         ctx = ctxs["京A12345"]
         assert ctx[3] is True  # today_cov 由六环内提供
         assert ctx[4] is True  # tomorrow_cov 由六环内提供
-        # 续办上下文仍然是六环外那条（虽然已失效）
-        assert ctx[2].jjzzlmc == "进京证(六环外)"
+        # 续办上下文取所有记录中 apply_time 最新一条；与 results 同源
+        # （spec 仅承诺 vehicle 层字段，不约束 record 层 jjzzlmc）
+        assert ctx[2] is results["京A12345"]
 
     async def test_pending_future_record_covers_tomorrow(
         self, jjz_service, sample_jjz_account

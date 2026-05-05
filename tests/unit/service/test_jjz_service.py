@@ -380,6 +380,63 @@ class TestJJZService:
                 json_data={},
             )
 
+    def test_check_jjz_status_passes_through_top_level_metadata(self, jjz_service):
+        """边界护栏：check_jjz_status 必须完全透传 raw response，
+        顶层 metadata（elzqyms/ylzqyms/elzmc/ylzmc）会被 extract_renew_metadata
+        取出并原样回传给 insertApplyRecord，因此严禁在 API 入边界做任何 mutate
+        （包括全角→半角规范化）。业务字段的规范化已下沉到 parse 层。"""
+        url = "https://test.example.com"
+        token = "test_token"
+
+        raw_payload = {
+            "code": 200,
+            "data": {
+                "elzqyms": "六环外（部分时段限行）",
+                "ylzqyms": "原六环外（限行）",
+                "elzmc": "二环（含）以内",
+                "ylzmc": "原二环（含）以内",
+                "bzclxx": [
+                    {
+                        "hphm": "京A12345",
+                        "sycs": "8",
+                        "bzxx": [
+                            {
+                                "blzt": "1",
+                                "blztmc": "审核通过（生效中）",
+                                "jjzzlmc": "进京证（六环内）",
+                                "sqsj": "2025-08-15 10:00:00",
+                                "yxqs": "2025-08-15",
+                                "yxqz": "2025-08-20",
+                                "sxsyts": "5",
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+
+        mock_resp = Mock()
+        mock_resp.json.return_value = raw_payload
+        mock_resp.raise_for_status = Mock()
+
+        with patch("jjz_alert.service.jjz.jjz_service.http_post") as mock_post:
+            mock_post.return_value = mock_resp
+
+            result = jjz_service.check_jjz_status(url, token)
+
+            # 顶层 metadata 必须保持服务端原始的全角形态（透传）
+            assert result["data"]["elzqyms"] == "六环外（部分时段限行）"
+            assert result["data"]["ylzqyms"] == "原六环外（限行）"
+            assert result["data"]["elzmc"] == "二环（含）以内"
+            assert result["data"]["ylzmc"] == "原二环（含）以内"
+            # bzxx 业务字段在 raw response 中也保持全角（解析层才会规范化）
+            assert (
+                result["data"]["bzclxx"][0]["bzxx"][0]["jjzzlmc"] == "进京证（六环内）"
+            )
+            assert (
+                result["data"]["bzclxx"][0]["bzxx"][0]["blztmc"] == "审核通过（生效中）"
+            )
+
     def test_check_jjz_status_error(self, jjz_service):
         """测试进京证状态查询异常"""
         url = "https://test.example.com"
@@ -922,12 +979,14 @@ class TestJJZService:
                     assert results["京A12345"].status == JJZStatusEnum.VALID.value
 
     @pytest.mark.asyncio
-    async def test_get_multiple_status_with_context_outer_only_for_renew(
+    async def test_get_multiple_status_with_context_renew_takes_latest_record(
         self, jjz_service, sample_jjz_account
     ):
         """同车牌同时存在六环外（旧）与六环内（新）记录时，
-        plate_contexts 中的 renew_status 必须仅取六环外那条；
-        results[plate] 仍取所有记录中 apply_time 最新（六环内）的一条。
+        plate_contexts 中的 renew_status 必须取所有记录中 apply_time 最新一条
+        （即六环内那条）；results[plate] 与之同源。下游消费方仅依赖车辆级字段
+        （vId/elzsfkb 等），这些字段在六环内/六环外 record 上共享同一份 vehicle
+        值，所以记录类型不影响续办流程。
         """
         plates = ["京A12345"]
 
@@ -941,6 +1000,12 @@ class TestJJZService:
                             {
                                 "hphm": "京A12345",
                                 "sycs": "8",
+                                "vId": "VEH-001",
+                                "hpzl": "02",
+                                "cllx": "K33",
+                                "elzsfkb": True,
+                                "ylzsfkb": True,
+                                "sfyecbzxx": False,
                                 "bzxx": [
                                     # 六环外，apply_time 较旧，valid_end 今日
                                     {
@@ -982,7 +1047,7 @@ class TestJJZService:
                     assert "京A12345" in results
                     assert results["京A12345"].jjzzlmc == "进京证(六环内)"
 
-                    # plate_contexts 续办上下文必须仅取六环外
+                    # plate_contexts 续办上下文与 results 同源（apply_time 最新）
                     assert "京A12345" in plate_contexts
                     ctx = plate_contexts["京A12345"]
                     assert len(ctx) == 6, (
@@ -998,8 +1063,16 @@ class TestJJZService:
                         ctx_today_anchor,
                     ) = ctx
                     assert ctx_account is sample_jjz_account
-                    assert ctx_renew_status.jjzzlmc == "进京证(六环外)"
-                    assert ctx_renew_status.valid_end == "2025-08-15"
+                    # renew_status 与 results 同源（apply_time 最新一条）；
+                    # spec 仅承诺 renew_status 的 vehicle 层字段，不约束 record 层
+                    # （jjzzlmc/valid_end 等）— 故此处只断言 identity 与 vehicle 层字段
+                    assert ctx_renew_status is results["京A12345"]
+                    assert ctx_renew_status.apply_time == "2025-08-15 09:00:00"
+                    # 车辆级字段无论从哪条 record 取都一致
+                    assert ctx_renew_status.vId == "VEH-001"
+                    assert ctx_renew_status.elzsfkb is True
+                    assert ctx_renew_status.ylzsfkb is True
+                    assert ctx_renew_status.sfyecbzxx is False
                     # 互斥规则：六环内 valid 2025-08-15..2025-08-20 在今天 2025-08-15 生效
                     # → today_cov=True；2025-08-16 仍在六环内有效区间 → tomorrow_cov=True
                     assert ctx_today_cov is True
@@ -1008,10 +1081,13 @@ class TestJJZService:
                     assert ctx_today_anchor == date(2025, 8, 15)
 
     @pytest.mark.asyncio
-    async def test_get_multiple_status_with_context_no_outer(
+    async def test_get_multiple_status_with_context_inner_only_renew_record(
         self, jjz_service, sample_jjz_account
     ):
-        """车牌仅有六环内记录时，plate_contexts 中不应写入该车牌。"""
+        """车牌仅有六环内记录时（包括已过期场景），plate_contexts 仍必须写入；
+        renew_status.jjzzlmc 含'六环内'；车辆级字段（vId/hpzl/cllx/elzsfkb/
+        ylzsfkb/sfyecbzxx）从 vehicle 层完整复制到 renew_status，下游 execute_renew
+        可直接消费。"""
         plates = ["京A12345"]
 
         with patch.object(jjz_service, "load_accounts") as mock_load:
@@ -1024,15 +1100,22 @@ class TestJJZService:
                             {
                                 "hphm": "京A12345",
                                 "sycs": "8",
+                                "vId": "VEH-XYZ-001",
+                                "hpzl": "02",
+                                "cllx": "K33",
+                                "elzsfkb": True,
+                                "ylzsfkb": False,
+                                "sfyecbzxx": False,
                                 "bzxx": [
+                                    # 仅一条已失效的六环内记录
                                     {
                                         "jjzzlmc": "进京证(六环内)",
-                                        "blztmc": "审核通过(生效中)",
-                                        "blzt": "1",
-                                        "sqsj": "2025-08-15 09:00:00",
-                                        "yxqs": "2025-08-15",
-                                        "yxqz": "2025-08-20",
-                                        "sxsyts": "5",
+                                        "blztmc": "审核通过(已失效)",
+                                        "blzt": "2",
+                                        "sqsj": "2025-08-09 19:25:57",
+                                        "yxqs": "2025-08-09",
+                                        "yxqz": "2025-08-14",
+                                        "sxsyts": "0",
                                     }
                                 ],
                             }
@@ -1049,8 +1132,34 @@ class TestJJZService:
                         plate_contexts,
                     ) = await jjz_service.get_multiple_status_with_context(plates)
 
+                    # results 仍取最新（也是唯一）记录
                     assert results["京A12345"].jjzzlmc == "进京证(六环内)"
-                    assert "京A12345" not in plate_contexts
+
+                    # plate_contexts 必须写入，renew_status 与 results 同源
+                    # （spec 仅承诺 vehicle 层字段，不约束 record 层）
+                    assert "京A12345" in plate_contexts
+                    (
+                        ctx_response,
+                        ctx_account,
+                        ctx_renew_status,
+                        ctx_today_cov,
+                        ctx_tomorrow_cov,
+                        ctx_today_anchor,
+                    ) = plate_contexts["京A12345"]
+                    # apply_time 用于验证 latest-by-apply_time 选择口径
+                    assert ctx_renew_status.apply_time == "2025-08-09 19:25:57"
+
+                    # 车辆级字段必须完整透传（下游续办依赖这些字段）
+                    assert ctx_renew_status.vId == "VEH-XYZ-001"
+                    assert ctx_renew_status.hpzl == "02"
+                    assert ctx_renew_status.cllx == "K33"
+                    assert ctx_renew_status.elzsfkb is True
+                    assert ctx_renew_status.ylzsfkb is False
+                    assert ctx_renew_status.sfyecbzxx is False
+
+                    # 该记录已失效（valid_end < today），覆盖信号都为 False
+                    assert ctx_today_cov is False
+                    assert ctx_tomorrow_cov is False
 
     @pytest.mark.asyncio
     async def test_fetch_from_api_exception(self, jjz_service, sample_jjz_account):
