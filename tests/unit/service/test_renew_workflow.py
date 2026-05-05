@@ -358,3 +358,44 @@ async def test_run_renew_only_workflow_not_available_pushes_alert():
         call_result = mock_push.await_args.args[1]
         assert call_result.success is False
         assert call_result.step == "eligibility_check"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_renew_only_workflow_dispatches_for_inner_only_plate():
+    """车牌当前只有六环内记录（renew_status.jjzzlmc 为'进京证（六环内）'），
+    但 vehicle 层 elzsfkb=True、sfyecbzxx=False、今日无覆盖 → 决策器返回
+    RENEW_TODAY，工作流必须正常派发续办，不得因 jjzzlmc 不含"六环外"而跳过。"""
+    from jjz_alert.service.jjz import renew_workflow
+
+    config = _make_config_with_renew_plate()
+    inner_renew_status = _make_renew_status(
+        valid_end=(date.today() - timedelta(days=1)).isoformat(),
+        status=JJZStatusEnum.EXPIRED.value,
+        jjzzlmc="进京证（六环内）",
+    )
+    fake_account = MagicMock()
+    plate_renew_contexts = {
+        "京A12345": (
+            {"data": {}},
+            fake_account,
+            inner_renew_status,
+            False,
+            False,
+            date.today(),
+        )
+    }
+
+    with patch.object(
+        renew_workflow.config_manager, "load_config", return_value=config
+    ), patch.object(
+        renew_workflow.JJZService,
+        "get_multiple_status_with_context",
+        new=AsyncMock(return_value=({}, plate_renew_contexts)),
+    ), patch(
+        "jjz_alert.service.jjz.renew_trigger.schedule_renew",
+        new=AsyncMock(),
+    ) as mock_schedule:
+        await renew_workflow.run_renew_only_workflow()
+
+        mock_schedule.assert_awaited_once()

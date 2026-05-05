@@ -4,6 +4,27 @@
 """
 
 from datetime import datetime
+from typing import Any
+
+
+def normalize_response_parens(data: Any) -> Any:
+    """递归把响应体里所有字符串中的全角括号 `（` / `）` 替换为半角 `(` / `)`。
+
+    服务端原生使用全角括号（如 "进京证（六环外）"），但下游解析、测试 fixture 与
+    日志输出统一用半角括号更便于精确匹配与可读性。在 API 边界处一次规范化即可，
+    避免每个解析点重复防御。
+
+    支持 dict / list / tuple 嵌套；非字符串值原样返回；str 走 .replace 双替换。
+    """
+    if isinstance(data, str):
+        return data.replace("（", "(").replace("）", ")")
+    if isinstance(data, dict):
+        return {k: normalize_response_parens(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [normalize_response_parens(item) for item in data]
+    if isinstance(data, tuple):
+        return tuple(normalize_response_parens(item) for item in data)
+    return data
 
 
 def format_valid_dates(start_str: str | None, end_str: str | None) -> tuple[str, str]:

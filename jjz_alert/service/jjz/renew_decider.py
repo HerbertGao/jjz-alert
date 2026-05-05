@@ -3,7 +3,8 @@
 
 输入：
   - plate_config：车牌配置（含 auto_renew 块）
-  - outer_renew_status：六环外最新记录（仅用于读取车辆级字段 elzsfkb / sfyecbzxx）
+  - outer_renew_status：该车牌全部记录中 apply_time 最新的一条（六环内/六环外不限），
+    仅用于读取车辆级字段 elzsfkb / sfyecbzxx；这些字段在 vehicle 层共享，与记录类型无关
   - today_covered / tomorrow_covered：全车牌（六环内 ∪ 六环外）的覆盖布尔，
     由 JJZService 在批量查询时基于 blztmc + 有效期算出
 
@@ -38,7 +39,7 @@ def decide(
 
     决策树：
         auto_renew 未启用                       → SKIP
-        无六环外历史记录                        → SKIP（缺 vId 等续办字段）
+        outer_renew_status is None              → SKIP（上下文缺失：车牌在所有账户响应里都没匹配到记录）
         sfyecbzxx == True                       → PENDING（已有待审，最高优先级）
         today_covered == True：
             tomorrow_covered == True            → SKIP（双覆盖，无需操作）

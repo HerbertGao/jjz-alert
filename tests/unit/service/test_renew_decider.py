@@ -129,10 +129,30 @@ class TestPriorityAndEdges:
         assert _decide(_plate(_ar()), outer, False, False) == RenewDecision.PENDING
         assert _decide(_plate(_ar()), outer, True, True) == RenewDecision.PENDING
 
-    def test_no_outer_record_skip(self):
-        """无六环外记录 → SKIP（缺 vId 等续办字段）"""
+    def test_no_renew_context_skip(self):
+        """续办上下文缺失（车牌在所有账户响应里都没匹配到记录）→ SKIP"""
         assert _decide(_plate(_ar()), None, False, False) == RenewDecision.SKIP
         assert _decide(_plate(_ar()), None, True, False) == RenewDecision.SKIP
+
+    def test_decide_inner_only_record_renew_today(self):
+        """车牌只有六环内记录（vehicle 层 elzsfkb=True、sfyecbzxx=False，今日无覆盖）
+        必须返回 RENEW_TODAY；jjzzlmc 是六环内不影响决策——决策器只看车辆级字段。"""
+        inner_status = JJZStatus(
+            plate="京A12345",
+            status="expired",
+            jjzzlmc="进京证（六环内）",
+            vId="V001",
+            hpzl="02",
+            elzsfkb=True,
+            ylzsfkb=True,
+            cllx="01",
+            sfyecbzxx=False,
+            data_source="api",
+        )
+        assert (
+            _decide(_plate(_ar()), inner_status, False, False)
+            == RenewDecision.RENEW_TODAY
+        )
 
     def test_auto_renew_disabled(self):
         assert (

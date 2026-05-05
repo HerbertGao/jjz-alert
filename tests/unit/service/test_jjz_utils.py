@@ -383,3 +383,66 @@ class TestFormatJJZBodyAndPriority:
         assert body == "默认内容"
         assert priority == "normal"
         mock_template_manager.format_error_status.assert_called_once()
+
+
+@pytest.mark.unit
+class TestNormalizeResponseParens:
+    """normalize_response_parens 入边界规范化"""
+
+    def test_normalize_string(self):
+        assert (
+            jjz_utils.normalize_response_parens("进京证（六环外）") == "进京证(六环外)"
+        )
+
+    def test_normalize_dict(self):
+        out = jjz_utils.normalize_response_parens(
+            {"jjzzlmc": "进京证（六环内）", "blztmc": "审核通过（生效中）"}
+        )
+        assert out == {"jjzzlmc": "进京证(六环内)", "blztmc": "审核通过(生效中)"}
+
+    def test_normalize_nested_response_shape(self):
+        """模拟真实 stateList 响应结构"""
+        payload = {
+            "code": 200,
+            "data": {
+                "elzqyms": "六环外（部分时段限行）",
+                "bzclxx": [
+                    {
+                        "hphm": "京A12345",
+                        "bzxx": [
+                            {
+                                "jjzzlmc": "进京证（六环内）",
+                                "blztmc": "审核通过（生效中）",
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+        out = jjz_utils.normalize_response_parens(payload)
+        assert out["data"]["elzqyms"] == "六环外(部分时段限行)"
+        assert out["data"]["bzclxx"][0]["bzxx"][0]["jjzzlmc"] == "进京证(六环内)"
+        assert out["data"]["bzclxx"][0]["bzxx"][0]["blztmc"] == "审核通过(生效中)"
+
+    def test_normalize_preserves_non_string_values(self):
+        out = jjz_utils.normalize_response_parens(
+            {"code": 200, "ok": True, "ratio": 0.5, "note": None, "tags": ["a（b）"]}
+        )
+        assert out["code"] == 200
+        assert out["ok"] is True
+        assert out["ratio"] == 0.5
+        assert out["note"] is None
+        assert out["tags"] == ["a(b)"]
+
+    def test_normalize_error_response(self):
+        """错误响应也应被规范化（即使 jjz_service 自己生成的，调用方期望统一形态）"""
+        out = jjz_utils.normalize_response_parens({"error": "网络异常（超时）"})
+        assert out == {"error": "网络异常(超时)"}
+
+    def test_normalize_tuple(self):
+        out = jjz_utils.normalize_response_parens(("a（1）", "b（2）"))
+        assert out == ("a(1)", "b(2)")
+
+    def test_normalize_no_parens_unchanged(self):
+        payload = {"a": "no parens here", "b": ["plain", 1]}
+        assert jjz_utils.normalize_response_parens(payload) == payload
