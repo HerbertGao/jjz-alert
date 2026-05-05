@@ -110,7 +110,7 @@ jobs:
       - name: Build (push by digest)
         if: needs.setup.outputs.should_push == 'true'
         id: build_push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.github-actions
@@ -125,7 +125,7 @@ jobs:
 
       - name: Build (verify only)
         if: needs.setup.outputs.should_push != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.github-actions
