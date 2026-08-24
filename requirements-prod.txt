@@ -9,7 +9,7 @@ pydantic
 redis>=7.4.0
 aioredis>=2.0.1
 # Apprise多通道推送
-apprise>=1.12.0
+apprise>=1.13.0
 # Home Assistant集成
 aiohttp>=3.14.3
 # MQTT（用于HA Discovery）
