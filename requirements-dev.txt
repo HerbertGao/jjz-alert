@@ -2,7 +2,7 @@
 -r requirements-prod.txt
 
 # 测试相关依赖
-tox>=4.60.0
+tox>=4.60.1
 black>=26.5.1
 pytest>=9.1.1
 pytest-asyncio>=1.4.0
