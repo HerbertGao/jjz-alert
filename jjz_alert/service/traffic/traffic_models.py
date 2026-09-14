@@ -16,7 +16,7 @@ class TrafficRule:
     limited_time: str  # 原始时间字符串
     is_limited: bool
     description: Optional[str] = None
-    data_source: str = "api"  # api, cache
+    data_source: str = "api"  # api, cache, official_page
     cached_at: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:

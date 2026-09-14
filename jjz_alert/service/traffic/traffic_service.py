@@ -5,8 +5,10 @@
 """
 
 import logging
+import re
 from datetime import datetime, date, timedelta
-from typing import Dict, List, Optional, Any
+from html.parser import HTMLParser
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from jjz_alert.base.error_handler import (
     with_error_handling,
@@ -19,6 +21,35 @@ from jjz_alert.service.cache.cache_service import CacheService
 from jjz_alert.service.traffic.traffic_models import TrafficRule, PlateTrafficStatus
 
 
+class _TrafficPageTableParser(HTMLParser):
+    """提取官网轮换表中的 HTML 行。"""
+
+    def __init__(self):
+        super().__init__()
+        self.rows: List[List[str]] = []
+        self._row: Optional[List[str]] = None
+        self._cell: Optional[List[str]] = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "tr":
+            self._row = []
+        elif tag in {"td", "th"} and self._row is not None:
+            self._cell = []
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+
+    def handle_endtag(self, tag):
+        if tag in {"td", "th"} and self._row is not None and self._cell is not None:
+            self._row.append(" ".join("".join(self._cell).split()))
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            self.rows.append(self._row)
+            self._row = None
+            self._cell = None
+
+
 class TrafficService:
     """限行业务服务（整合原TrafficLimiter功能）"""
 
@@ -26,6 +57,9 @@ class TrafficService:
         self.cache_service = cache_service or CacheService()
         self._limit_rules_url = (
             "https://yw.jtgl.beijing.gov.cn/jgjxx/services/getRuleWithWeek"
+        )
+        self._limit_rules_page_url = (
+            "https://jtgl.beijing.gov.cn/jgj/lszt/659722/660341/index.html"
         )
         self._max_retries = 3
 
@@ -98,6 +132,118 @@ class TrafficService:
             logging.error(f"解析限行规则响应失败: {e}")
             return []
 
+    def _parse_traffic_page(self, html: str) -> List[TrafficRule]:
+        """解析北京交管官网的限行轮换表页面。"""
+        try:
+            parser = _TrafficPageTableParser()
+            parser.feed(html)
+            parser.close()
+
+            header_index = next(
+                (
+                    index
+                    for index, row in enumerate(parser.rows)
+                    if len(row) >= 6 and row[0] == "轮换日期 / 星期"
+                ),
+                None,
+            )
+            if header_index is None:
+                logging.error("官网限行页面缺少轮换表表头")
+                return []
+
+            date_pattern = re.compile(r"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日")
+            schedules: List[Tuple[date, date, Dict[int, str]]] = []
+            for row in parser.rows[header_index + 1 :]:
+                if not row or not date_pattern.search(row[0]):
+                    continue
+                if len(row) < 6:
+                    logging.error("官网限行轮换表日期行列数不足")
+                    return []
+
+                dates = [
+                    date(int(year), int(month), int(day))
+                    for year, month, day in date_pattern.findall(row[0])
+                ]
+                if len(dates) != 2 or dates[0] > dates[1]:
+                    logging.error(f"官网限行轮换表日期范围无效: {row[0]}")
+                    return []
+
+                weekday_rules = {}
+                for weekday, value in enumerate(row[1:6]):
+                    normalized = re.sub(r"\s+", "", value).replace("、", "和")
+                    if not re.fullmatch(r"\d(?:和\d)?", normalized):
+                        logging.error(f"官网限行尾号格式无效: {value}")
+                        return []
+                    weekday_rules[weekday] = normalized
+                schedules.append((dates[0], dates[1], weekday_rules))
+
+            if not schedules:
+                logging.error("官网限行页面没有可解析的轮换区间")
+                return []
+
+            holidays: Set[date] = set()
+            holiday_match = re.search(
+                r"Holiday\s*=\s*new\s+Array\((.*?)\)", html, re.DOTALL
+            )
+            if holiday_match:
+                for year, month, day in re.findall(
+                    r"(\d{4})-(\d{1,2})-(\d{1,2})", holiday_match.group(1)
+                ):
+                    holidays.add(date(int(year), int(month), int(day)))
+
+            rules: List[TrafficRule] = []
+            seen_dates: Set[date] = set()
+            for start_date, end_date, weekday_rules in schedules:
+                current_date = start_date
+                while current_date <= end_date:
+                    if current_date in seen_dates:
+                        logging.error(f"官网限行轮换区间重叠: {current_date}")
+                        return []
+                    seen_dates.add(current_date)
+
+                    limited_numbers = (
+                        "不限行"
+                        if current_date.weekday() >= 5 or current_date in holidays
+                        else weekday_rules[current_date.weekday()]
+                    )
+                    limited_time = current_date.strftime("%Y年%m月%d日")
+                    rules.append(
+                        TrafficRule(
+                            date=current_date,
+                            limited_numbers=limited_numbers,
+                            limited_time=limited_time,
+                            is_limited=limited_numbers != "不限行",
+                            description="北京交管官网限行轮换表",
+                            data_source="official_page",
+                        )
+                    )
+                    current_date += timedelta(days=1)
+
+            logging.info(f"成功解析官网限行轮换表，共 {len(rules)} 条")
+            return rules
+        except Exception as e:
+            logging.error(f"解析官网限行页面失败: {e}")
+            return []
+
+    def _fetch_rules_from_page(self) -> List[TrafficRule]:
+        """从北京交管官网详情页获取限行规则。"""
+        response = http_get(self._limit_rules_page_url, verify=False)
+        response.raise_for_status()
+        rules = self._parse_traffic_page(response.text)
+        if not rules:
+            raise TrafficServiceError("官网限行页面没有可用规则")
+        return rules
+
+    @staticmethod
+    def _rule_to_legacy_dict(rule: TrafficRule) -> Dict[str, Any]:
+        """将统一规则转换为旧同步接口使用的字段。"""
+        return {
+            "limitedTime": rule.limited_time,
+            "limitedNumber": rule.limited_numbers,
+            "description": rule.description,
+            "data_source": rule.data_source,
+        }
+
     @with_error_handling(
         exceptions=(TrafficServiceError, NetworkError, APIError, Exception),
         service_name="traffic_service",
@@ -134,6 +280,15 @@ class TrafficService:
 
                 if attempt < self._max_retries - 1:
                     await asyncio.sleep(2)  # 等待2秒后重试
+
+        logging.warning("主限行 API 不可用，尝试官网轮换表备用来源")
+        try:
+            page_rules = self._fetch_rules_from_page()
+            await self._cache_rules(page_rules)
+            logging.info("已使用北京交管官网轮换表作为限行规则来源")
+            return page_rules
+        except Exception as e:
+            logging.error(f"官网限行页面备用来源失败: {e}")
 
         logging.error("获取限行规则失败，已达到最大重试次数")
         raise TrafficServiceError("获取限行规则失败，已达到最大重试次数")
@@ -401,6 +556,7 @@ class TrafficService:
                     "hit_rate": traffic_stats.get("hit_rate", 0.0),
                 },
                 "api_url": self._limit_rules_url,
+                "fallback_url": self._limit_rules_page_url,
             }
 
         except Exception as e:
@@ -422,11 +578,16 @@ class TrafficService:
             if data.get("state") == "success" and "result" in data:
                 logging.info(f'成功获取限行规则，共 {len(data["result"])} 条')
                 return data["result"]
-            else:
-                logging.error(f'获取限行规则失败: {data.get("resultMsg", "未知错误")}')
-                return None
+            logging.error(f'获取限行规则失败: {data.get("resultMsg", "未知错误")}')
         except Exception as e:
             logging.error(f"获取限行规则异常: {e}")
+
+        try:
+            logging.warning("同步主限行 API 不可用，尝试官网轮换表备用来源")
+            page_rules = self._fetch_rules_from_page()
+            return [self._rule_to_legacy_dict(rule) for rule in page_rules]
+        except Exception as e:
+            logging.error(f"官网限行页面备用来源失败: {e}")
             return None
 
     def _update_memory_cache_if_needed(self):
@@ -615,8 +776,8 @@ class TrafficService:
         cached_rules = await self.cache_service.get_traffic_rules_batch([target_date])
 
         target_rule = None
-        if cached_rules.get(target_date):
-            cached_data = cached_rules[target_date]
+        cached_data = cached_rules.get(target_date)
+        if cached_data:
             rule_date = datetime.fromisoformat(cached_data["date"]).date()
             target_rule = TrafficRule(
                 date=rule_date,
