@@ -27,5 +27,5 @@
 
 - [x] 5.1 `.venv/bin/python -m pytest tests/unit/ -q` 全绿（893 passed）
 - [x] 5.2 `tox -e format` 等价命令 `.tox/format/bin/black .` 输出 `101 files left unchanged`，无格式化 diff
-- [ ] 5.3 提 PR：标题 `feat(jjz): 透传并推送进京证审核未通过原因`，描述关闭 issue #105 并链接本变更目录
-- [ ] 5.4 PR 合并后运行 `openspec-cn archive pass-audit-reject-reason` 归档到 `openspec/specs/jjz-status-reporting/spec.md`
+- [x] 5.3 提 PR 并合并：实际标题为 `fix: 收敛 Redis 端口暴露并透传进京证审核不通过原因`，PR #106（squash 为 `ebcba14`），关闭 issue #85 与 #105
+- [x] 5.4 运行 `openspec-cn archive pass-audit-reject-reason` 归档到 `openspec/specs/jjz-status-reporting/spec.md`
