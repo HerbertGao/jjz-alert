@@ -53,6 +53,7 @@ async def push_jjz_status(
             format_jjz_pending_content,
             format_jjz_approved_pending_content,
             format_jjz_error_content,
+            resolve_error_display,
         )
 
         # 添加状态和优先级判断的调试日志
@@ -129,11 +130,13 @@ async def push_jjz_status(
             logging.debug(
                 f"[STATUS_DEBUG] 车牌 {plate} - 状态为{status}，设置优先级为NORMAL"
             )
+            # 正文展示上游原文状态与业务原因；系统级错误判定仍只看 error_message
+            display_status, display_msg = resolve_error_display(jjz_data)
             body = format_jjz_error_content(
                 display_name=display_name,
                 jjzzlmc=jjz_data.get("jjzzlmc", ""),
-                status=status,
-                error_msg=error_msg,
+                status=display_status,
+                error_msg=display_msg,
             )
 
         # 根据限行提醒在正文最前拼接提示

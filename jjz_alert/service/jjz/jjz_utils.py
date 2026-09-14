@@ -221,6 +221,17 @@ def format_jjz_approved_pending_content(
     )
 
 
+def resolve_error_display(jjz_data: dict) -> tuple[str, str]:
+    """INVALID 推送的状态文本与原因文本。
+
+    状态优先展示上游 ``blztmc`` 原文，缺失时回退到状态枚举值；原因优先展示上游
+    业务原因 ``reject_reason``，缺失时回退到系统级 ``error_message``。
+    """
+    status_text = jjz_data.get("blztmc") or jjz_data.get("status", "unknown")
+    reason = jjz_data.get("reject_reason") or jjz_data.get("error_message", "")
+    return status_text, reason
+
+
 def format_jjz_error_content(
     display_name: str, jjzzlmc: str, status: str, error_msg: str
 ) -> str:
@@ -298,11 +309,12 @@ def format_jjz_body_and_priority(
         )
     else:
         priority = "normal"
+        display_status, display_msg = resolve_error_display(jjz_data)
         body = format_jjz_error_content(
             display_name=display_name,
             jjzzlmc=jjz_data.get("jjzzlmc", ""),
-            status=status,
-            error_msg=jjz_data.get("error_message", ""),
+            status=display_status,
+            error_msg=display_msg,
         )
 
     return body, priority

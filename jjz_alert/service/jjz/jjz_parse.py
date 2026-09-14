@@ -65,6 +65,18 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
+def _reject_reason(record: Dict[str, Any], vehicle: Dict[str, Any]) -> Optional[str]:
+    """审核不通过原因：记录级 shsbyyms → 记录级 shsbyy → 车辆级 bnbzyy"""
+    for value in (
+        record.get("shsbyyms"),
+        record.get("shsbyy"),
+        vehicle.get("bnbzyy"),
+    ):
+        if value and str(value).strip():
+            return str(value)
+    return None
+
+
 def parse_single_jjz_record(
     plate: str,
     record: Dict[str, Any],
@@ -102,6 +114,7 @@ def parse_single_jjz_record(
             sycs=sycs,
             jjzzlmc=jjzzlmc,
             blztmc=blztmc,
+            reject_reason=_reject_reason(record, vehicle),
             data_source="api",
             vId=str(vehicle.get("vId", "")),
             hpzl=str(vehicle.get("hpzl", "")),
@@ -205,6 +218,8 @@ def parse_jjz_response(
             plate=plate,
             status=JJZStatusEnum.INVALID.value,
             error_message="未找到进京证记录",
+            # 无记录时唯一可用原因是车辆级字段，仍按同一优先级链取值
+            reject_reason=_reject_reason({}, target_vehicle),
             data_source="api",
         )
 
@@ -234,6 +249,7 @@ def parse_jjz_response(
         sycs=sycs,
         jjzzlmc=jjzzlmc,
         blztmc=blztmc,
+        reject_reason=_reject_reason(latest_record, target_vehicle),
         data_source="api",
         vId=str(target_vehicle.get("vId", "")),
         hpzl=str(target_vehicle.get("hpzl", "")),

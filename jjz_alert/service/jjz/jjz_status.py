@@ -20,6 +20,10 @@ class JJZStatus:
     jjzzlmc: Optional[str] = None
     blztmc: Optional[str] = None
     error_message: Optional[str] = None
+    # 上游返回的审核不通过原因原文（record 级 shsbyyms/shsbyy → 车辆级 bnbzyy）。
+    # 与 error_message 分工：这里只放业务原因，系统级/解析级错误仍走 error_message，
+    # 避免上游文本被 _is_system_error 误判而把用户推送降级为管理员告警。
+    reject_reason: Optional[str] = None
     data_source: str = "api"
     cached_at: Optional[str] = None
     # 续办所需的车辆级字段
@@ -55,6 +59,7 @@ class JJZStatus:
             "blztmc": self.blztmc,
             "status_desc_formatted": formatted_status_desc,
             "error_message": self.error_message,
+            "reject_reason": self.reject_reason,
             "data_source": self.data_source,
             "cached_at": self.cached_at,
         }
