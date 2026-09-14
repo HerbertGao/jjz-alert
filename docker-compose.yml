@@ -34,8 +34,8 @@ services:
     volumes:
       - redis_data:/data
       - ./redis.conf:/etc/redis/redis.conf:ro
-    ports:
-      - "6379:6379"
+    # 不暴露宿主机端口：应用经 jjz-network 以 REDIS_HOST=redis 访问，
+    # 映射到 0.0.0.0 会让无口令的 Redis 对整个网络可达
     networks:
       - jjz-network
     command: redis-server /etc/redis/redis.conf

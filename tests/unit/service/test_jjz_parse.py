@@ -298,6 +298,86 @@ class TestParseSingleJJZRecord:
 
 
 @pytest.mark.unit
+class TestRejectReasonPassthrough:
+    """审核不通过原因透传：record 级 shsbyyms → record 级 shsbyy → 车辆级 bnbzyy"""
+
+    def _record(self, **extra):
+        record = {
+            "blzt": "4",
+            "blztmc": "失败(审核不通过)",
+            "sqsj": "2025-08-15 10:00:00",
+            "jjzzlmc": "进京证(六环内)",
+        }
+        record.update(extra)
+        return record
+
+    @staticmethod
+    def _invalid_resolver(blzt, blztmc, yxqz, yxqs):
+        return JJZStatusEnum.INVALID.value
+
+    def test_record_level_reason_wins(self):
+        """记录级 shsbyyms 优先，且不改状态判定与 error_message"""
+        reason = "审核未通过，该车辆在京有未处理的交通违法行为。"
+
+        result = parse_single_jjz_record(
+            "京A12345",
+            self._record(shsbyyms=reason, shsbyy="备用原因"),
+            {"sycs": "8", "bnbzyy": "车辆级原因"},
+            "active",
+            self._invalid_resolver,
+            JJZStatus,
+        )
+
+        assert result is not None
+        assert result.status == JJZStatusEnum.INVALID.value
+        assert result.reject_reason == reason
+        assert result.error_message is None
+
+    def test_fallback_to_shsbyy(self):
+        """shsbyyms 缺失时回退到 shsbyy"""
+        result = parse_single_jjz_record(
+            "京A12345",
+            self._record(shsbyyms="", shsbyy="备用原因"),
+            {"sycs": "8", "bnbzyy": "车辆级原因"},
+            "active",
+            self._invalid_resolver,
+            JJZStatus,
+        )
+
+        assert result is not None
+        assert result.reject_reason == "备用原因"
+
+    def test_fallback_to_vehicle_level_reason(self):
+        """记录级字段均为空时回退到车辆级 bnbzyy"""
+        result = parse_single_jjz_record(
+            "京A12345",
+            self._record(),
+            {"sycs": "8", "bnbzyy": "车辆级原因"},
+            "active",
+            self._invalid_resolver,
+            JJZStatus,
+        )
+
+        assert result is not None
+        assert result.reject_reason == "车辆级原因"
+
+    def test_no_reason_field(self):
+        """三个字段均缺失时 reject_reason 为空，保留 INVALID 兜底"""
+        result = parse_single_jjz_record(
+            "京A12345",
+            self._record(),
+            {"sycs": "8"},
+            "active",
+            self._invalid_resolver,
+            JJZStatus,
+        )
+
+        assert result is not None
+        assert result.status == JJZStatusEnum.INVALID.value
+        assert result.reject_reason is None
+
+
+@pytest.mark.unit
 class TestParseAllJJZRecords:
     """parse_all_jjz_records 函数测试类"""
 
@@ -421,6 +501,29 @@ class TestParseJJZResponse:
         assert result.plate == plate
         assert result.status == JJZStatusEnum.INVALID.value
         assert "未找到进京证记录" in result.error_message
+
+    def test_parse_jjz_response_no_bzxx_with_vehicle_reason(self):
+        """无 bzxx 记录但存在车辆级 bnbzyy 时，仍为 INVALID 并携带原因"""
+        plate = "京A12345"
+        response_data = {
+            "data": {
+                "bzclxx": [
+                    {
+                        "hphm": "京A12345",
+                        "sycs": "8",
+                        "bnbzyy": "审核未通过，该车辆在京有未处理的交通违法行为。",
+                    }
+                ]
+            }
+        }
+
+        def status_resolver(blzt, blztmc, yxqz, yxqs):
+            return JJZStatusEnum.VALID.value
+
+        result = parse_jjz_response(plate, response_data, status_resolver, JJZStatus)
+
+        assert result.status == JJZStatusEnum.INVALID.value
+        assert result.reject_reason == "审核未通过，该车辆在京有未处理的交通违法行为。"
 
     def test_parse_jjz_response_normalizes_parens(self):
         """parse_jjz_response 同样在解析后规范化业务字段，但不动 raw response"""

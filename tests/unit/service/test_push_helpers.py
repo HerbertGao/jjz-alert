@@ -184,6 +184,36 @@ class TestPushJJZStatus:
             assert call_args.kwargs["priority"] == PushPriority.NORMAL
 
     @pytest.mark.asyncio
+    async def test_push_jjz_status_reject_reason_not_system_error(self, plate_config):
+        """审核原因含系统错误关键词时，仍必须走用户推送（reject_reason 不参与系统错误分流）"""
+        jjz_data = {
+            "status": JJZStatusEnum.INVALID.value,
+            "jjzzlmc": "进京证(六环内)",
+            "blztmc": "失败(审核不通过)",
+            "reject_reason": "审核未通过，该车环保信息配置错误。",
+        }
+
+        with patch(
+            "jjz_alert.service.notification.push_helpers.unified_pusher.push"
+        ) as mock_push, patch(
+            "jjz_alert.service.notification.push_helpers._notify_admin_system_error"
+        ) as mock_notify:
+            mock_push.return_value = {
+                "plate": "京A12345",
+                "success_count": 1,
+                "total_count": 1,
+            }
+
+            result = await push_jjz_status(plate_config, jjz_data)
+
+            assert result["success_count"] == 1
+            mock_notify.assert_not_called()
+            body = mock_push.call_args.kwargs["body"]
+            assert "失败(审核不通过)" in body
+            assert "审核未通过，该车环保信息配置错误。" in body
+            assert "invalid" not in body
+
+    @pytest.mark.asyncio
     async def test_push_jjz_status_with_traffic_reminder_today(self, plate_config):
         """测试推送进京证状态 - 带今日限行提醒"""
         jjz_data = {

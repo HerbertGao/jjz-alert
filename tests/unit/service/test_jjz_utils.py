@@ -386,6 +386,76 @@ class TestFormatJJZBodyAndPriority:
 
 
 @pytest.mark.unit
+class TestResolveErrorDisplay:
+    """resolve_error_display：INVALID 推送的状态文本与原因取值口径"""
+
+    def test_prefers_upstream_text_and_reject_reason(self):
+        """状态优先 blztmc 原文，原因优先 reject_reason"""
+        status_text, reason = jjz_utils.resolve_error_display(
+            {
+                "status": "invalid",
+                "blztmc": "失败(审核不通过)",
+                "reject_reason": "审核未通过，该车辆在京有未处理的交通违法行为。",
+                "error_message": "未找到进京证记录",
+            }
+        )
+
+        assert status_text == "失败(审核不通过)"
+        assert reason == "审核未通过，该车辆在京有未处理的交通违法行为。"
+
+    def test_falls_back_to_status_and_error_message(self):
+        """blztmc 为空时回退到状态枚举值，无原因时回退到 error_message"""
+        status_text, reason = jjz_utils.resolve_error_display(
+            {"status": "invalid", "error_message": "未找到匹配车牌的记录"}
+        )
+
+        assert status_text == "invalid"
+        assert reason == "未找到匹配车牌的记录"
+
+    def test_empty_data(self):
+        """空数据时给出稳定的默认值"""
+        status_text, reason = jjz_utils.resolve_error_display({})
+
+        assert status_text == "unknown"
+        assert reason == ""
+
+
+@pytest.mark.unit
+class TestFormatJjzBodyAndPriorityRejectReason:
+    """审核不通过推送正文（使用真实模板，断言最终文案）"""
+
+    def test_invalid_body_shows_upstream_status_and_reason(self):
+        """状态展示 blztmc 原文，原因展示上游原文，不再出现状态枚举值"""
+        jjz_data = {
+            "status": "invalid",
+            "jjzzlmc": "进京证(六环内)",
+            "blztmc": "失败(审核不通过)",
+            "reject_reason": "审核未通过，该车辆在京有未处理的交通违法行为。",
+        }
+
+        body, priority = jjz_utils.format_jjz_body_and_priority("京A12345", jjz_data)
+
+        assert "失败(审核不通过)" in body
+        assert "审核未通过，该车辆在京有未处理的交通违法行为。" in body
+        assert "invalid" not in body
+        assert priority == "normal"
+
+    def test_invalid_body_without_blztmc_keeps_fallback(self):
+        """无 blztmc 时仍输出状态枚举值与既有 error_message"""
+        jjz_data = {
+            "status": "invalid",
+            "jjzzlmc": "进京证(六环内)",
+            "error_message": "未找到匹配车牌的记录",
+        }
+
+        body, priority = jjz_utils.format_jjz_body_and_priority("京A12345", jjz_data)
+
+        assert "invalid" in body
+        assert "未找到匹配车牌的记录" in body
+        assert priority == "normal"
+
+
+@pytest.mark.unit
 class TestNormalizeResponseParens:
     """normalize_response_parens 字符串规范化（仅用于业务字段 jjzzlmc/blztmc）"""
 
