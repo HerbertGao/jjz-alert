@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import Any
 
 import urllib3
 from curl_cffi.requests import Session
@@ -8,7 +9,7 @@ from curl_cffi.requests import Session
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-def http_get(url, verify=False, headers=None, max_retries=3):
+def http_get(url, verify=False, headers=None, max_retries=3) -> Any:
     """HTTP GET请求，带重试机制"""
     for attempt in range(max_retries):
         try:
