@@ -19,6 +19,16 @@ TOKEN_MIN_LENGTH = 20
 _TOKEN_PATTERN = re.compile(rf"\b[a-zA-Z0-9_-]{{{TOKEN_MIN_LENGTH},}}\b")
 
 
+def _coerce_notify_success(push_result: Any) -> bool:
+    """将 Apprise.notify() 的返回值收成纯 bool。
+
+    Apprise 2.x 返回 AppriseResult，只有 SUCCESS 为真（PARTIAL / FAILURE /
+    NOMATCH / TIMEOUT 均为假）。1.x 返回 True / False / None，其中 None 表示
+    没有匹配到服务，按失败处理，与原先 ``if push_success`` 的计数一致。
+    """
+    return bool(push_result)
+
+
 class ApprisePusher:
     """Apprise推送器"""
 
@@ -133,8 +143,9 @@ class ApprisePusher:
             logging.debug(f"[APPRISE_DEBUG] 推送参数: {kwargs}")
             logging.debug(f"[APPRISE_DEBUG] 有效URL数量: {len(valid_url_data)}")
 
-            # 为了获取每个URL的详细推送结果，我们需要单独发送每个URL
-            # Apprise的notify()和async_notify()都只返回全局布尔值，无法区分每个URL的状态
+            # 为了获取每个URL的详细推送结果，我们需要单独发送每个URL。
+            # notify() 只给出这一次调用的整体结果（2.x 为 AppriseResult，旧版为
+            # bool/None），无法区分同一实例里多个 URL 的状态。
             # 使用 asyncio.gather() 并行发送所有URL，保持性能的同时获取准确结果
             loop = asyncio.get_running_loop()
 
@@ -155,9 +166,7 @@ class ApprisePusher:
                     Tuple[bool, Optional[str]]: (是否成功, 错误信息)
                 """
                 try:
-                    # 为每个URL创建独立的Apprise实例
-                    # 原因：Apprise的notify()只返回全局布尔值，无法区分每个URL的推送状态
-                    # 通过为每个URL创建独立实例，我们可以获取准确的单个URL推送结果
+                    # 为每个URL创建独立的Apprise实例，才能拿到该 URL 自己的推送结果。
                     # 权衡：虽然会有一定资源开销，但换来了准确的错误追踪和部分成功处理能力
                     # 注：目前功能并发量不会超过10，未来遇到性能瓶颈再优化
                     single_apobj = apprise.Apprise()
@@ -169,7 +178,8 @@ class ApprisePusher:
                         None,
                         partial(single_apobj.notify, msg_body, title=msg_title),
                     )
-                    return (push_result, None)
+                    # 2.x 的 AppriseResult 不能原样进入可序列化结果
+                    return (_coerce_notify_success(push_result), None)
                 except Exception as exc:
                     # 记录异常类型和详细信息，包含堆栈跟踪便于调试
                     error_msg = f"推送异常: {type(exc).__name__}: {str(exc)}"
@@ -220,13 +230,15 @@ class ApprisePusher:
                         )
                     else:
                         push_success, error_msg = result
-                        url_result["success"] = push_success
+                        # 再收一次，保证写入 url_results 的一定是纯 bool
+                        succeeded = _coerce_notify_success(push_success)
+                        url_result["success"] = succeeded
                         if error_msg:
                             # 清理错误消息中的敏感信息
                             url_result["error"] = self._sanitize_error_message(
                                 error_msg, orig_url
                             )
-                        if push_success:
+                        if succeeded:
                             success_count += 1
 
             end_time = datetime.now()

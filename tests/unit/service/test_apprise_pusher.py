@@ -2,10 +2,12 @@
 ApprisePusher 单元测试
 """
 
+import json
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from datetime import datetime
 
 import pytest
+from apprise import AppriseResult, AppriseResultStatus
 
 from jjz_alert.service.notification.apprise_pusher import ApprisePusher
 from jjz_alert.service.notification.apprise_config import AppriseConfig
@@ -187,6 +189,64 @@ class TestApprisePusher:
                 assert result["url_results"][0]["success"] is True
                 assert result["url_results"][1]["success"] is True
                 assert result["url_results"][2]["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_send_notification_coerces_apprise_result_to_bool(self):
+        """Apprise 2.x 的 AppriseResult 写入 url_result 时必须是纯 bool。
+
+        只有 SUCCESS 计为成功；PARTIAL 虽有部分送达，但 __bool__ 为假。
+        旧版 notify() 的 None（无匹配服务）同样按失败收成 False。
+        """
+        pusher = ApprisePusher()
+        urls = [
+            "bark://test_key1@api.day.app",
+            "bark://test_key2@api.day.app",
+            "bark://test_key3@api.day.app",
+            "bark://test_key4@api.day.app",
+            "bark://test_key5@api.day.app",
+            "bark://test_key6@api.day.app",
+        ]
+        notify_returns = [
+            AppriseResult(status=AppriseResultStatus.SUCCESS),
+            AppriseResult(status=AppriseResultStatus.FAILURE),
+            AppriseResult(status=AppriseResultStatus.PARTIAL),
+            AppriseResult(status=AppriseResultStatus.NOMATCH),
+            AppriseResult(status=AppriseResultStatus.TIMEOUT),
+            None,  # Apprise 1.x：没有匹配到服务
+        ]
+        expected_success = [True, False, False, False, False, False]
+
+        with patch(
+            "jjz_alert.service.notification.apprise_pusher.apprise"
+        ) as mock_apprise:
+            validation_instance = Mock()
+            validation_instance.add.return_value = True
+            single_instances = [Mock() for _ in urls]
+            for instance in single_instances:
+                instance.add.return_value = True
+            mock_apprise.Apprise.side_effect = [
+                validation_instance,
+                *single_instances,
+            ]
+
+            with patch("asyncio.get_running_loop") as mock_loop:
+                mock_loop_instance = Mock()
+                mock_loop_instance.run_in_executor = AsyncMock(
+                    side_effect=notify_returns
+                )
+                mock_loop.return_value = mock_loop_instance
+
+                result = await pusher.send_notification(urls, "测试标题", "测试内容")
+
+        assert result["success"] is True
+        assert result["partial_success"] is True
+        assert result["valid_urls"] == len(urls)
+        assert len(result["url_results"]) == len(urls)
+        for url_result, expected in zip(result["url_results"], expected_success):
+            assert type(url_result["success"]) is bool
+            assert url_result["success"] is expected
+        # url_results 会进入后续 JSON 序列化，不能残留 AppriseResult
+        json.dumps(result)
 
     @pytest.mark.asyncio
     async def test_send_notification_failure(self):
