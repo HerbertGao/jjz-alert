@@ -256,7 +256,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Release workflow 已经写好 notes 时不要覆盖。手动推 v* tag、
+      # 且还没有 GitHub Release 时，仍按原来的 docker pull 说明创建。
+      - name: Skip release notes when the release already exists
+        id: existing_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "release ${{ github.ref_name }} already exists; leaving notes untouched"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
+        if: steps.existing_release.outputs.exists != 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
