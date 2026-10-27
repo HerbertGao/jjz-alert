@@ -10,6 +10,15 @@ if [[ "${GITHUB_ACTIONS:-}" != "true" && "${RELEASE_ALLOW_LOCAL:-}" != "1" ]]; t
   exit 1
 fi
 
+# checkout 的 git 凭据不会让 gh 登录。Actions 里必须有 GH_TOKEN。
+if [[ -z "${GH_TOKEN:-}" && -n "${GITHUB_TOKEN:-}" ]]; then
+  export GH_TOKEN="$GITHUB_TOKEN"
+fi
+if [[ "${GITHUB_ACTIONS:-}" == "true" && -z "${GH_TOKEN:-}" ]]; then
+  echo "GH_TOKEN is not set; gh cannot publish the Release or dispatch Docker." >&2
+  exit 1
+fi
+
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=${RELEASE_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}
 cd "$ROOT"

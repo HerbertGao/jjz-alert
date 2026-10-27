@@ -11,7 +11,9 @@
    - 发布**非 draft** GitHub Release（已经发布过则不改 notes）
    - `workflow_dispatch` [Docker Image Build](.github/workflows/docker-image.yml)，在这个 tag 上构建并推送 `ghcr.io/herbertgao/jjz-alert:vX.Y.Z` 和 `:latest`
 
-`GITHUB_TOKEN` 推送的 tag **不会**再次触发 `on.push`。所以镜像构建是 workflow 里显式 dispatch 的，不是再推一次 tag。开发版 PR 的 CI 同样由 workflow dispatch `CI Checks`，因为 token 打开的 PR 不会自动跑 pull_request 工作流。
+`GITHUB_TOKEN` 推送的 tag **不会**再次触发 `on.push`。所以镜像构建是 workflow 里显式 dispatch 的，不是再推一次 tag。开发版 PR 的 CI 同样由 workflow dispatch `CI Checks`，因为 token 打开的 PR 不会自动跑 pull_request 工作流。prepare / publish 步骤把 `github.token` 放进 `GH_TOKEN`，`gh` 才能开 PR、发 Release、dispatch。
+
+发布和准备不在同一个并发队列里。合并开发版 PR 的那次运行按提交 SHA 单独排队，后面的 master push 不会把它从 pending 里挤掉。准备仍共享一个队列，只保留最新一次。
 
 仓库需要允许 GitHub Actions 创建 PR（Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests），并且 `GITHUB_TOKEN` 有 contents / pull-requests 写权限。本 workflow 已在 job 上声明这些权限。
 

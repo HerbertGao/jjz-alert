@@ -13,6 +13,7 @@ from release_version import (
     Plan,
     ReleaseError,
     apply_version,
+    ci_dispatch_needed,
     commits_for_version,
     default_image,
     docker_dispatch_needed,
@@ -97,6 +98,12 @@ def main(argv: list[str] | None = None) -> int:
     docker.add_argument("--sha", required=True)
     docker.add_argument("--runs-file", required=True)
 
+    ci = sub.add_parser(
+        "ci-needed", help="print yes/no for dispatching CI on the version branch"
+    )
+    ci.add_argument("--sha", required=True)
+    ci.add_argument("--runs-file", required=True)
+
     args = parser.parse_args(argv)
     root = _root(args.root)
     try:
@@ -126,6 +133,10 @@ def main(argv: list[str] | None = None) -> int:
             needed = docker_dispatch_needed(
                 load_runs(Path(args.runs_file)), tag=args.tag, sha=args.sha
             )
+            sys.stdout.write("yes\n" if needed else "no\n")
+            return 0
+        if args.cmd == "ci-needed":
+            needed = ci_dispatch_needed(load_runs(Path(args.runs_file)), sha=args.sha)
             sys.stdout.write("yes\n" if needed else "no\n")
             return 0
     except ReleaseError as exc:

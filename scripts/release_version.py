@@ -338,21 +338,66 @@ def render_pr_body(plan: Plan, commits: list[Commit]) -> str:
     )
 
 
+_ACTIVE_RUN_STATUSES = {"queued", "in_progress", "waiting", "pending", "requested"}
+
+
+def _run_blocks_redispatch(run: dict) -> bool:
+    conclusion = run.get("conclusion") or ""
+    status = run.get("status") or ""
+    return conclusion == "success" or status in _ACTIVE_RUN_STATUSES
+
+
 def docker_dispatch_needed(runs: list[dict], *, tag: str, sha: str) -> bool:
     """tag 上还没有成功或进行中的 Docker Image Build 时才需要再 dispatch。"""
 
-    active = {"queued", "in_progress", "waiting", "pending", "requested"}
     for run in runs:
         if (run.get("headBranch") or "") != tag:
             continue
         head_sha = run.get("headSha") or ""
         if sha and head_sha and head_sha != sha:
             continue
-        conclusion = run.get("conclusion") or ""
-        status = run.get("status") or ""
-        if conclusion == "success" or status in active:
+        if _run_blocks_redispatch(run):
             return False
     return True
+
+
+def ci_dispatch_needed(runs: list[dict], *, sha: str) -> bool:
+    """开发版分支这个 SHA 还没有成功或进行中的 CI 时才需要再 dispatch。"""
+
+    for run in runs:
+        if (run.get("headSha") or "") != sha:
+            continue
+        branch = run.get("headBranch") or ""
+        if branch not in {"", "release/version"}:
+            continue
+        if _run_blocks_redispatch(run):
+            return False
+    return True
+
+
+def release_concurrency_scope(
+    *,
+    event: str,
+    message: str = "",
+    mode: str = "",
+    sha: str,
+    ref: str,
+) -> str:
+    """发布与准备分开排队。
+
+    GitHub 在 ``cancel-in-progress: false`` 时仍只保留同一 group 里最新的
+    pending run。发布按提交 SHA 单独成组，后面的 master push 挤不掉它。
+    准备共享 ``prepare-<ref>``，只留最新一次。
+    """
+
+    text = message or ""
+    publish = (event == "workflow_dispatch" and mode == "publish") or (
+        event == "push"
+        and ("chore(release): 版本统一到" in text or "release/version" in text)
+    )
+    if publish:
+        return f"publish-{sha}"
+    return f"prepare-{ref}"
 
 
 def git(repo: Path, *args: str) -> str:

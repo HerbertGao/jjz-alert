@@ -9,6 +9,15 @@ if [[ "${GITHUB_ACTIONS:-}" != "true" && "${RELEASE_ALLOW_LOCAL:-}" != "1" ]]; t
   exit 1
 fi
 
+# checkout 的 git 凭据不会让 gh 登录。Actions 里必须有 GH_TOKEN。
+if [[ -z "${GH_TOKEN:-}" && -n "${GITHUB_TOKEN:-}" ]]; then
+  export GH_TOKEN="$GITHUB_TOKEN"
+fi
+if [[ "${GITHUB_ACTIONS:-}" == "true" && -z "${GH_TOKEN:-}" ]]; then
+  echo "GH_TOKEN is not set; gh cannot open the version PR or dispatch CI." >&2
+  exit 1
+fi
+
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=${RELEASE_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}
 cd "$ROOT"
@@ -79,6 +88,7 @@ fi
 
 new_tree=$(git write-tree)
 pushed=0
+release_sha=""
 commit_release() {
   git -c user.name='github-actions[bot]' \
     -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
@@ -88,6 +98,7 @@ commit_release() {
 
 if git rev-parse --verify --quiet refs/remotes/origin/release/version >/dev/null; then
   remote_tree=$(git rev-parse 'refs/remotes/origin/release/version^{tree}')
+  release_sha=$(git rev-parse refs/remotes/origin/release/version)
   if [[ "$new_tree" == "$remote_tree" ]]; then
     echo "release branch already has this tree"
     git reset --hard HEAD
@@ -97,11 +108,13 @@ if git rev-parse --verify --quiet refs/remotes/origin/release/version >/dev/null
     git push --force-with-lease="refs/heads/release/version:${expected}" \
       origin "HEAD:refs/heads/release/version"
     pushed=1
+    release_sha=$(git rev-parse HEAD)
   fi
 else
   commit_release
   git push origin "HEAD:refs/heads/release/version"
   pushed=1
+  release_sha=$(git rev-parse HEAD)
 fi
 
 body=$(mktemp)
@@ -134,8 +147,20 @@ else
   echo "opened version PR"
 fi
 
-if [[ "$pushed" == 1 || "$created" == 1 ]]; then
-  # GITHUB_TOKEN pushes do not trigger pull_request/push workflows.
+# 推分支不会自动触发 CI。上次 dispatch 失败时，树和 PR 都已存在，
+# 仍要在这个 SHA 没有成功或进行中的 CI 时再 dispatch 一次。
+runs=$(mktemp)
+if gh run list --workflow ci.yml --limit 40 \
+  --json headBranch,headSha,conclusion,status,event >"$runs"; then
+  need=$("$PY" "$SCRIPT_DIR/release_plan.py" ci-needed --sha "$release_sha" --runs-file "$runs")
+else
+  echo "could not list CI runs; dispatching anyway" >&2
+  need=yes
+fi
+need=$(printf '%s' "$need" | tr -d '[:space:]')
+if [[ "$need" == "yes" ]]; then
   gh workflow run ci.yml --ref release/version
-  echo "dispatched CI Checks on release/version"
+  echo "dispatched CI Checks on release/version @ $release_sha"
+else
+  echo "CI for $release_sha already succeeded or is running; not dispatching again"
 fi

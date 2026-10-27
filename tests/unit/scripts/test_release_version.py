@@ -22,12 +22,14 @@ from release_version import (  # noqa: E402
     apply_version,
     bump_for,
     bump_version,
+    ci_dispatch_needed,
     docker_dispatch_needed,
     highest_bump,
     list_semver_tags,
     parse_version,
     plan_repo,
     read_version_text,
+    release_concurrency_scope,
     render_changelog_body,
     upsert_changelog,
     write_version_text,
@@ -107,7 +109,7 @@ def _write_fake_gh(bin_dir: Path, log: Path, state: Path):
     script = bin_dir / "gh"
     script.write_text(
         f"""#!/usr/bin/env python3
-import json, os, sys
+import json, os, subprocess, sys
 from pathlib import Path
 log = Path({str(log)!r})
 state_path = Path({str(state)!r})
@@ -124,6 +126,10 @@ def save(data):
     state_path.write_text(json.dumps(data), encoding="utf-8")
 
 data = load()
+token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
+if token:
+    data["seen_token"] = token
+    save(data)
 cmd = args[0] if args else ""
 if cmd == "pr" and "list" in args:
     print(json.dumps([{{"number": number}} for number in data["prs"]]))
@@ -158,6 +164,36 @@ if cmd == "run" and "list" in args:
 if cmd == "workflow" and "run" in args:
     workflow = args[args.index("run") + 1]
     ref = args[args.index("--ref") + 1] if "--ref" in args else ""
+    if workflow == "ci.yml":
+        remaining = int(data.get("ci_fail_remaining") or 0)
+        if remaining > 0:
+            data["ci_fail_remaining"] = remaining - 1
+            save(data)
+            print("dispatch failed", file=sys.stderr)
+            raise SystemExit(1)
+        root = os.environ["RELEASE_ROOT"]
+        remote = subprocess.run(
+            ["git", "-C", root, "rev-parse", "refs/remotes/origin/release/version"],
+            text=True,
+            capture_output=True,
+        )
+        if remote.returncode == 0:
+            head = remote.stdout.strip()
+        else:
+            head = subprocess.check_output(
+                ["git", "-C", root, "rev-parse", "HEAD"],
+                text=True,
+            ).strip()
+        data["runs"].append({{
+            "headBranch": "release/version",
+            "headSha": head,
+            "conclusion": "success",
+            "status": "completed",
+            "event": "workflow_dispatch",
+            "displayTitle": ref,
+        }})
+        save(data)
+        raise SystemExit(0)
     if workflow == "docker-image.yml":
         data["runs"].append({{
             "headBranch": ref,
@@ -168,7 +204,7 @@ if cmd == "workflow" and "run" in args:
             "displayTitle": ref,
         }})
         save(data)
-    raise SystemExit(0)
+        raise SystemExit(0)
 print("unhandled gh", args, file=sys.stderr)
 raise SystemExit(2)
 """,
@@ -197,6 +233,8 @@ def _script_env(repo, *, sha, log, state, bin_dir, **extra):
         GH_STATE=str(state),
         PATH=f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
     )
+    for key in ("GITHUB_ACTIONS", "GH_TOKEN", "GITHUB_TOKEN"):
+        env.pop(key, None)
     env.update(extra)
     return env
 
@@ -424,6 +462,139 @@ def test_docker_dispatch_skips_success_and_in_progress_only_for_the_tag():
     assert docker_dispatch_needed(runs, tag="v1.2.4", sha=sha) is False
 
 
+def test_ci_dispatch_retries_unless_this_sha_already_succeeded_or_is_running():
+    sha = "abc123"
+    assert ci_dispatch_needed([], sha=sha) is True
+    assert (
+        ci_dispatch_needed(
+            [
+                {
+                    "headBranch": "master",
+                    "headSha": sha,
+                    "conclusion": "success",
+                    "status": "completed",
+                }
+            ],
+            sha=sha,
+        )
+        is True
+    )
+    assert (
+        ci_dispatch_needed(
+            [
+                {
+                    "headBranch": "release/version",
+                    "headSha": "other",
+                    "conclusion": "success",
+                    "status": "completed",
+                }
+            ],
+            sha=sha,
+        )
+        is True
+    )
+    assert (
+        ci_dispatch_needed(
+            [
+                {
+                    "headBranch": "release/version",
+                    "headSha": sha,
+                    "conclusion": "failure",
+                    "status": "completed",
+                }
+            ],
+            sha=sha,
+        )
+        is True
+    )
+    for status in ("queued", "in_progress", "waiting", "pending", "requested"):
+        assert (
+            ci_dispatch_needed(
+                [
+                    {
+                        "headBranch": "release/version",
+                        "headSha": sha,
+                        "conclusion": "",
+                        "status": status,
+                    }
+                ],
+                sha=sha,
+            )
+            is False
+        )
+    assert (
+        ci_dispatch_needed(
+            [
+                {
+                    "headBranch": "",
+                    "headSha": sha,
+                    "conclusion": "success",
+                    "status": "completed",
+                }
+            ],
+            sha=sha,
+        )
+        is False
+    )
+
+
+def test_publish_concurrency_is_per_sha_and_prepare_is_shared():
+    message = "chore(release): 版本统一到 1.2.4"
+    merge = "Merge pull request #9 from HerbertGao/release/version\n\n" + message
+    assert (
+        release_concurrency_scope(
+            event="push", message=message, sha="aaa", ref="refs/heads/master"
+        )
+        == "publish-aaa"
+    )
+    assert (
+        release_concurrency_scope(
+            event="push", message=merge, sha="bbb", ref="refs/heads/master"
+        )
+        == "publish-bbb"
+    )
+    assert release_concurrency_scope(
+        event="push",
+        message="chore(deps): bump aiohttp",
+        sha="ccc",
+        ref="refs/heads/master",
+    ) == release_concurrency_scope(
+        event="push",
+        message="fix: close the gate",
+        sha="ddd",
+        ref="refs/heads/master",
+    )
+    assert (
+        release_concurrency_scope(
+            event="workflow_dispatch",
+            mode="publish",
+            sha="eee",
+            ref="refs/heads/master",
+        )
+        == "publish-eee"
+    )
+    assert (
+        release_concurrency_scope(
+            event="workflow_dispatch",
+            mode="prepare",
+            message="",
+            sha="fff",
+            ref="refs/heads/master",
+        )
+        == "prepare-refs/heads/master"
+    )
+
+
+def test_release_workflow_authenticates_gh_and_isolates_publish():
+    text = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    assert "cancel-in-progress: false" in text
+    assert "format('publish-{0}', github.sha)" in text
+    assert "format('prepare-{0}', github.ref)" in text
+    assert text.count("GH_TOKEN: ${{ github.token }}") >= 2
+    assert "chore(release): 版本统一到" in text
+    assert "release/version" in text
+
+
 def test_shell_scripts_parse():
     for name in ("open-release-pr.sh", "publish-release.sh", "release.sh"):
         subprocess.run(["bash", "-n", str(SCRIPTS / name)], check=True)
@@ -479,7 +650,15 @@ def test_open_release_pr_is_idempotent_and_skips_dependabot(tmp_path):
     state = tmp_path / "gh.json"
     bin_dir = tmp_path / "bin"
     _write_fake_gh(bin_dir, log, state)
-    env = _script_env(repo, sha=sha, log=log, state=state, bin_dir=bin_dir)
+    env = _script_env(
+        repo,
+        sha=sha,
+        log=log,
+        state=state,
+        bin_dir=bin_dir,
+        GITHUB_ACTIONS="true",
+        GITHUB_TOKEN="gh-test-token",
+    )
 
     first = _run_script("open-release-pr.sh", env)
     assert first.returncode == 0, first.stdout + first.stderr
@@ -508,6 +687,9 @@ def test_open_release_pr_is_idempotent_and_skips_dependabot(tmp_path):
     assert sum(1 for cmd in first_cmds if cmd[:2] == ["pr", "create"]) == 1
     assert sum(1 for cmd in first_cmds if cmd[:2] == ["workflow", "run"]) == 1
     assert "ci.yml" in first_cmds[-1]
+    assert (
+        json.loads(state.read_text(encoding="utf-8"))["seen_token"] == "gh-test-token"
+    )
     sha_before = subprocess.check_output(
         ["git", "--git-dir", str(bare), "rev-parse", "refs/heads/release/version"],
         text=True,
@@ -526,6 +708,63 @@ def test_open_release_pr_is_idempotent_and_skips_dependabot(tmp_path):
     assert sum(1 for cmd in second_cmds if cmd[:2] == ["workflow", "run"]) == 0
     tags = subprocess.check_output(["git", "--git-dir", str(bare), "tag"], text=True)
     assert "v1.2.4" not in tags.split()
+
+
+def test_open_release_pr_redispatches_ci_when_the_first_dispatch_failed(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    bare = tmp_path / "origin.git"
+    _bare_origin(repo, bare)
+    (repo / "note.txt").write_text("fix\n", encoding="utf-8")
+    _commit(repo, "fix: close the gate")
+    _run(repo, "push", "origin", "HEAD:master")
+    sha = _run(repo, "rev-parse", "HEAD").strip()
+    log = tmp_path / "gh.log"
+    state = tmp_path / "gh.json"
+    bin_dir = tmp_path / "bin"
+    _write_fake_gh(bin_dir, log, state)
+    state.write_text(
+        json.dumps({"prs": [], "release": None, "runs": [], "ci_fail_remaining": 1}),
+        encoding="utf-8",
+    )
+    env = _script_env(repo, sha=sha, log=log, state=state, bin_dir=bin_dir)
+
+    first = _run_script("open-release-pr.sh", env)
+    assert first.returncode != 0, first.stdout + first.stderr
+    assert sum(1 for cmd in _gh_log(log) if cmd[:2] == ["pr", "create"]) == 1
+    assert sum(1 for cmd in _gh_log(log) if cmd[:2] == ["workflow", "run"]) == 1
+    branch = subprocess.check_output(
+        ["git", "--git-dir", str(bare), "rev-parse", "refs/heads/release/version"],
+        text=True,
+    ).strip()
+
+    second = _run_script("open-release-pr.sh", env)
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "dispatched CI" in second.stdout
+    cmds = _gh_log(log)
+    assert sum(1 for cmd in cmds if cmd[:2] == ["pr", "create"]) == 1
+    assert sum(1 for cmd in cmds if cmd[:2] == ["workflow", "run"]) == 2
+    saved = json.loads(state.read_text(encoding="utf-8"))
+    assert saved["ci_fail_remaining"] == 0
+    assert saved["runs"] == [
+        {
+            "headBranch": "release/version",
+            "headSha": branch,
+            "conclusion": "success",
+            "status": "completed",
+            "event": "workflow_dispatch",
+            "displayTitle": "release/version",
+        }
+    ]
+
+
+def test_actions_without_gh_token_fails_before_using_gh(tmp_path):
+    env = _env(GITHUB_ACTIONS="true", RELEASE_ROOT=str(tmp_path))
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
+    for name in ("open-release-pr.sh", "publish-release.sh"):
+        result = _run_script(name, env)
+        assert result.returncode != 0
+        assert "GH_TOKEN" in result.stderr
 
 
 def test_publish_release_is_idempotent_and_does_not_move_tags(tmp_path):
