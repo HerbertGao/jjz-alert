@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+from jjz_alert import __version__
 from jjz_alert.base.plate_utils import (
     normalize_plate_for_ha_entity_id,
     extract_province_from_plate,
@@ -63,7 +64,7 @@ class HAPlateDevice:
             name=f"进京证监控 {self.display_name}",
             model=model,
             manufacturer=manufacturer,
-            sw_version="2.0",
+            sw_version=__version__,
             plate_number=self.plate_number,
             display_name=self.display_name,
         )

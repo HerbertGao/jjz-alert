@@ -22,6 +22,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from jjz_alert import __version__
 from jjz_alert.base.logger import get_structured_logger
 from jjz_alert.config.config import config_manager
 
@@ -66,7 +67,7 @@ async def lifespan(app: FastAPI):
     logging.info("应用资源清理完成")
 
 
-app = FastAPI(title="JJZ Alert API", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="JJZ Alert API", version=__version__, lifespan=lifespan)
 
 # 创建结构化日志记录器
 structured_logger = get_structured_logger("rest_api")
@@ -121,7 +122,7 @@ async def health() -> Dict[str, Any]:
 
         health_data = {
             "status": "ok",
-            "version": "2.0.0",
+            "version": __version__,
             "timestamp": timestamp,
             "uptime_seconds": int(time.time()),  # 简化的运行时间
             "config": {
@@ -247,7 +248,7 @@ async def health() -> Dict[str, Any]:
         logging.error(f"健康检查失败: {e}")
         return {
             "status": "error",
-            "version": "2.0.0",
+            "version": __version__,
             "error": str(e),
             "timestamp": timestamp,
             "response_time_ms": round((time.time() - start_time) * 1000, 2),

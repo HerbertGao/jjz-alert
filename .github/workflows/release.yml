@@ -1,0 +1,125 @@
+name: Release
+
+# pi-extensions 风格的发版，按 herbertgao-skills 改成「没有 npm / changesets」：
+# 1) push master，且自最近 vX.Y.Z 以来有可发布提交时，打开或更新唯一的开发版 PR
+#    （分支 release/version，标题 chore(release): 版本统一到 X.Y.Z）。
+# 2) 该 PR 合并进 master 后，打 annotated tag 并发布非 draft GitHub Release。
+# 3) GITHUB_TOKEN 推 tag 不会再次触发 on.push，因此这里 workflow_dispatch
+#    现有的 Docker Image Build（tag ref，仍走 vX.Y.Z + latest）。
+# 4) 手动推 v* tag 仍由 docker-image.yml 构建；已有 Release 时不覆盖 notes。
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "prepare：打开/更新开发版 PR；publish：给当前 __version__ 打 tag 并发布（补救）"
+        type: choice
+        options:
+          - prepare
+          - publish
+        default: prepare
+      version:
+        description: "可选。prepare 时强制使用该版本（N.N.N，不要 v 前缀）"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  classify:
+    if: github.repository == 'HerbertGao/jjz-alert'
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.plan.outputs.action }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      bump: ${{ steps.plan.outputs.bump }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - id: plan
+        env:
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || '' }}
+          RELEASE_FORCE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+        run: |
+          git fetch origin --tags --prune
+          python scripts/release_plan.py plan \
+            --event "$RELEASE_EVENT" \
+            --mode "$RELEASE_MODE" \
+            --force-version "$RELEASE_FORCE_VERSION" \
+            --github-output >> "$GITHUB_OUTPUT"
+
+  checks:
+    needs: classify
+    if: needs.classify.outputs.action == 'prepare'
+    permissions:
+      contents: read
+      actions: write
+    uses: ./.github/workflows/ci.yml
+
+  prepare:
+    name: Open version PR
+    needs: [classify, checks]
+    if: always() && needs.classify.outputs.action == 'prepare' && needs.checks.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: true
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Open or update the version PR
+        env:
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || '' }}
+          RELEASE_FORCE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+        run: bash scripts/open-release-pr.sh
+
+  publish:
+    name: Tag and GitHub Release
+    needs: classify
+    if: needs.classify.outputs.action == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: true
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Publish tag and GitHub Release
+        env:
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || '' }}
+          RELEASE_FORCE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+        run: bash scripts/publish-release.sh

@@ -12,6 +12,7 @@ import json
 import logging
 from typing import Optional, Dict, Any
 
+from jjz_alert import __version__
 from jjz_alert.base.plate_utils import (
     normalize_plate_for_ha_entity_id,
     extract_province_from_plate,
@@ -275,7 +276,7 @@ class HAMQTTPublisher:
             "name": f"进京证监控 {display_name}",
             "model": "Beijing Vehicle",
             "manufacturer": "JJZ Alert",
-            "sw_version": "2.0",
+            "sw_version": __version__,
         }
 
         config_payload = {
