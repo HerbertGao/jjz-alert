@@ -432,6 +432,7 @@ class AutoRenewService:
                 "jsrxm": driver_info.get("jsrxm", ""),
                 "jszh": driver_info.get("jszh", ""),
                 "dabh": driver_info.get("dabh", ""),
+                "rylx": driver_info.get("rylx", ""),
                 "txrxx": [],
                 "txrkg": "0",
                 "wtxr": "",
@@ -499,6 +500,7 @@ class AutoRenewService:
             "jsrxm": driver_info.get("jsrxm", ""),
             "jszh": driver_info.get("jszh", ""),
             "dabh": driver_info.get("dabh", ""),
+            "rylx": driver_info.get("rylx", ""),
             # 同行人（空）
             "txrxx": [],
             # 进京日期
