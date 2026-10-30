@@ -913,7 +913,7 @@ class TestTrafficService:
         mock_page.assert_called_once()
 
     def test_fetch_limit_rules_sync_falls_back_to_ssp(self, traffic_service):
-        """同步路径主接口失败后优先使用交警 App 备用"""
+        """同步路径主接口失败后，目标日已被 SSP 覆盖时不请求官网"""
         ssp_rule = TrafficRule(
             date=date(2026, 10, 30),
             limited_numbers="4和9",
@@ -930,11 +930,139 @@ class TestTrafficService:
         ) as mock_ssp, patch.object(
             traffic_service, "_fetch_rules_from_page"
         ) as mock_page:
-            result = traffic_service._fetch_limit_rules_sync()
+            result = traffic_service._fetch_limit_rules_sync(
+                needed_dates={date(2026, 10, 30)}
+            )
 
         assert result == [traffic_service._rule_to_legacy_dict(ssp_rule)]
         mock_ssp.assert_called_once()
         mock_page.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetch_rules_from_api_ssp_incomplete_merges_page(
+        self, traffic_service
+    ):
+        """SSP 仅当日且目标为明日时，应补查官网并合并"""
+        today = date(2026, 10, 30)
+        tomorrow = date(2026, 10, 31)
+        ssp_rule = TrafficRule(
+            date=today,
+            limited_numbers="4和9",
+            limited_time="2026年10月30日",
+            is_limited=True,
+            data_source="ssp_api",
+        )
+        page_today = TrafficRule(
+            date=today,
+            limited_numbers="4和9",
+            limited_time="2026年10月30日",
+            is_limited=True,
+            data_source="official_page",
+        )
+        page_tomorrow = TrafficRule(
+            date=tomorrow,
+            limited_numbers="5和0",
+            limited_time="2026年10月31日",
+            is_limited=True,
+            data_source="official_page",
+        )
+
+        with patch(
+            "jjz_alert.service.traffic.traffic_service.http_get",
+            side_effect=Exception("primary down"),
+        ), patch.object(
+            traffic_service, "_fetch_rules_from_ssp", return_value=[ssp_rule]
+        ), patch.object(
+            traffic_service,
+            "_fetch_rules_from_page",
+            return_value=[page_today, page_tomorrow],
+        ) as mock_page, patch.object(
+            traffic_service, "_cache_rules", new_callable=AsyncMock
+        ) as mock_cache:
+            rules = await traffic_service._fetch_rules_from_api(needed_dates={tomorrow})
+
+        mock_page.assert_called_once()
+        by_date = {r.date: r for r in rules}
+        assert by_date[today].data_source == "ssp_api"
+        assert by_date[tomorrow].data_source == "official_page"
+        assert by_date[tomorrow].limited_numbers == "5和0"
+        mock_cache.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_fetch_rules_from_api_ssp_covers_needed_skips_page(
+        self, traffic_service
+    ):
+        """SSP 已覆盖目标日时不请求官网"""
+        ssp_rule = TrafficRule(
+            date=date(2026, 10, 30),
+            limited_numbers="4和9",
+            limited_time="2026年10月30日",
+            is_limited=True,
+            data_source="ssp_api",
+        )
+
+        with patch(
+            "jjz_alert.service.traffic.traffic_service.http_get",
+            side_effect=Exception("primary down"),
+        ), patch.object(
+            traffic_service, "_fetch_rules_from_ssp", return_value=[ssp_rule]
+        ), patch.object(
+            traffic_service, "_fetch_rules_from_page"
+        ) as mock_page, patch.object(
+            traffic_service, "_cache_rules", new_callable=AsyncMock
+        ):
+            rules = await traffic_service._fetch_rules_from_api(
+                needed_dates={date(2026, 10, 30)}
+            )
+
+        assert rules == [ssp_rule]
+        mock_page.assert_not_called()
+
+    def test_fetch_limit_rules_sync_ssp_incomplete_merges_page(self, traffic_service):
+        """同步路径 SSP 仅当日且默认需要一周时，应补查官网并合并"""
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
+        ssp_rule = TrafficRule(
+            date=today,
+            limited_numbers="4和9",
+            limited_time=today.strftime("%Y年%m月%d日"),
+            is_limited=True,
+            data_source="ssp_api",
+        )
+        page_today = TrafficRule(
+            date=today,
+            limited_numbers="4和9",
+            limited_time=today.strftime("%Y年%m月%d日"),
+            is_limited=True,
+            data_source="official_page",
+        )
+        page_tomorrow = TrafficRule(
+            date=tomorrow,
+            limited_numbers="5和0",
+            limited_time=tomorrow.strftime("%Y年%m月%d日"),
+            is_limited=True,
+            data_source="official_page",
+        )
+
+        with patch(
+            "jjz_alert.service.traffic.traffic_service.http_get",
+            side_effect=Exception("primary down"),
+        ), patch.object(
+            traffic_service, "_fetch_rules_from_ssp", return_value=[ssp_rule]
+        ), patch.object(
+            traffic_service,
+            "_fetch_rules_from_page",
+            return_value=[page_today, page_tomorrow],
+        ) as mock_page:
+            result = traffic_service._fetch_limit_rules_sync()
+
+        mock_page.assert_called_once()
+        assert result is not None
+        by_time = {r["limitedTime"]: r for r in result}
+        assert by_time[today.strftime("%Y年%m月%d日")]["data_source"] == "ssp_api"
+        assert by_time[tomorrow.strftime("%Y年%m月%d日")]["data_source"] == (
+            "official_page"
+        )
 
     def test_fetch_limit_rules_sync_success(self, traffic_service):
         """测试同步获取限行规则 - 成功"""

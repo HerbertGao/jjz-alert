@@ -8,7 +8,7 @@ import logging
 import re
 from datetime import datetime, date, timedelta
 from html.parser import HTMLParser
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from jjz_alert.base.error_handler import (
     with_error_handling,
@@ -318,14 +318,35 @@ class TrafficService:
             "data_source": rule.data_source,
         }
 
+    @staticmethod
+    def _merge_traffic_rules(
+        preferred: List[TrafficRule], extra: List[TrafficRule]
+    ) -> List[TrafficRule]:
+        """按日期合并规则；preferred 同日优先。"""
+        by_date = {rule.date: rule for rule in extra}
+        by_date.update({rule.date: rule for rule in preferred})
+        return [by_date[d] for d in sorted(by_date)]
+
+    @staticmethod
+    def _rules_cover_dates(
+        rules: List[TrafficRule], needed_dates: Optional[Iterable[date]]
+    ) -> bool:
+        """needed_dates 为空时视为覆盖足够（保留仅 SSP 当日路径）。"""
+        if not needed_dates:
+            return True
+        covered = {rule.date for rule in rules}
+        return all(d in covered for d in needed_dates)
+
     @with_error_handling(
         exceptions=(TrafficServiceError, NetworkError, APIError, Exception),
         service_name="traffic_service",
         default_return=[],
         recovery_config={"max_attempts": 3, "delay": 2.0},
     )
-    async def _fetch_rules_from_api(self) -> List[TrafficRule]:
-        """从API获取限行规则"""
+    async def _fetch_rules_from_api(
+        self, needed_dates: Optional[Iterable[date]] = None
+    ) -> List[TrafficRule]:
+        """从API获取限行规则；needed_dates 用于判断 SSP 是否覆盖目标日。"""
         for attempt in range(self._max_retries):
             try:
                 logging.info(
@@ -356,25 +377,40 @@ class TrafficService:
                     await asyncio.sleep(2)  # 等待2秒后重试
 
         logging.warning("主限行 API 不可用，尝试交警 App 接口备用")
+        ssp_rules: List[TrafficRule] = []
         try:
             ssp_rules = self._fetch_rules_from_ssp()
-            await self._cache_rules(ssp_rules)
             logging.info(
                 "已使用北京交警 App getRuleWithWeek 作为限行规则来源"
                 f"（{len(ssp_rules)} 条，通常仅当日）"
             )
-            return ssp_rules
+            if self._rules_cover_dates(ssp_rules, needed_dates):
+                await self._cache_rules(ssp_rules)
+                return ssp_rules
+            logging.warning("交警 App 规则未覆盖所需日期，继续尝试官网轮换表并合并")
         except Exception as e:
             logging.error(f"交警 App 限行备用来源失败: {e}")
 
-        logging.warning("交警 App 备用不可用，尝试官网轮换表备用来源")
+        logging.warning("交警 App 备用不可用或覆盖不足，尝试官网轮换表备用来源")
         try:
             page_rules = self._fetch_rules_from_page()
-            await self._cache_rules(page_rules)
-            logging.info("已使用北京交管官网轮换表作为限行规则来源")
-            return page_rules
+            merged = (
+                self._merge_traffic_rules(ssp_rules, page_rules)
+                if ssp_rules
+                else page_rules
+            )
+            await self._cache_rules(merged)
+            logging.info(
+                "已使用北京交管官网轮换表作为限行规则来源"
+                + (f"（与 App 规则合并共 {len(merged)} 条）" if ssp_rules else "")
+            )
+            return merged
         except Exception as e:
             logging.error(f"官网限行页面备用来源失败: {e}")
+            if ssp_rules:
+                await self._cache_rules(ssp_rules)
+                logging.warning("官网不可用，回退使用交警 App 已取得的部分规则")
+                return ssp_rules
 
         logging.error("获取限行规则失败，已达到最大重试次数")
         raise TrafficServiceError("获取限行规则失败，已达到最大重试次数")
@@ -429,8 +465,8 @@ class TrafficService:
                         cached_at=cached_data.get("cached_at"),
                     )
 
-            # 缓存未命中，从API获取
-            rules = await self._fetch_rules_from_api()
+            # 缓存未命中，从API获取（传入目标日，避免 SSP 仅当日时提前返回）
+            rules = await self._fetch_rules_from_api(needed_dates={target_date})
 
             # 查找目标日期的规则
             for rule in rules:
@@ -590,7 +626,7 @@ class TrafficService:
         missing_dates = [date for date, data in cached_rules.items() if data is None]
         if missing_dates:
             logging.debug(f"缓存未命中的日期: {missing_dates}")
-            api_rules = await self._fetch_rules_from_api()
+            api_rules = await self._fetch_rules_from_api(needed_dates=missing_dates)
 
             for target_date in missing_dates:
                 for rule in api_rules:
@@ -607,8 +643,9 @@ class TrafficService:
             # 清理旧缓存
             await self.cache_service.clear_cache("traffic")
 
-            # 重新获取
-            return await self._fetch_rules_from_api()
+            # 重新获取（需要一周覆盖，避免 SSP 仅当日就停止）
+            week = [date.today() + timedelta(days=i) for i in range(7)]
+            return await self._fetch_rules_from_api(needed_dates=week)
 
         except Exception as e:
             logging.error(f"刷新限行规则缓存失败: {e}")
@@ -654,8 +691,17 @@ class TrafficService:
     # 兼容原TrafficLimiter接口的方法
     # =============================================================================
 
-    def _fetch_limit_rules_sync(self) -> Optional[List[Dict]]:
-        """同步方式获取限行规则（兼容原TrafficLimiter）"""
+    def _fetch_limit_rules_sync(
+        self, needed_dates: Optional[Iterable[date]] = None
+    ) -> Optional[List[Dict]]:
+        """同步方式获取限行规则（兼容原TrafficLimiter）。
+
+        needed_dates 为空时默认要求今日起一周，避免内存缓存只有当日
+        导致 check_plate_limited_on 查明日误报不限行。
+        """
+        if needed_dates is None:
+            needed_dates = [date.today() + timedelta(days=i) for i in range(7)]
+
         try:
             logging.info(f"正在获取限行规则... (重试次数: {self._retry_count})")
             resp = http_get(self._limit_rules_url, verify=False)
@@ -669,19 +715,30 @@ class TrafficService:
         except Exception as e:
             logging.error(f"获取限行规则异常: {e}")
 
+        ssp_rules: List[TrafficRule] = []
         try:
             logging.warning("同步主限行 API 不可用，尝试交警 App 接口备用")
             ssp_rules = self._fetch_rules_from_ssp()
-            return [self._rule_to_legacy_dict(rule) for rule in ssp_rules]
+            if self._rules_cover_dates(ssp_rules, needed_dates):
+                return [self._rule_to_legacy_dict(rule) for rule in ssp_rules]
+            logging.warning("同步交警 App 规则未覆盖所需日期，继续尝试官网轮换表并合并")
         except Exception as e:
             logging.error(f"交警 App 限行备用来源失败: {e}")
 
         try:
-            logging.warning("同步交警 App 备用不可用，尝试官网轮换表备用来源")
+            logging.warning("同步交警 App 备用不可用或覆盖不足，尝试官网轮换表备用来源")
             page_rules = self._fetch_rules_from_page()
-            return [self._rule_to_legacy_dict(rule) for rule in page_rules]
+            merged = (
+                self._merge_traffic_rules(ssp_rules, page_rules)
+                if ssp_rules
+                else page_rules
+            )
+            return [self._rule_to_legacy_dict(rule) for rule in merged]
         except Exception as e:
             logging.error(f"官网限行页面备用来源失败: {e}")
+            if ssp_rules:
+                logging.warning("官网不可用，回退使用交警 App 已取得的部分规则")
+                return [self._rule_to_legacy_dict(rule) for rule in ssp_rules]
             return None
 
     def _update_memory_cache_if_needed(self):
