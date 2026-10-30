@@ -5,6 +5,11 @@
 `v2.5.0` 及更早的发布没有写入本文件，见
 [GitHub Releases](https://github.com/HerbertGao/jjz-alert/releases)。
 
+## [2.6.0] - 2026-10-30
+
+### 其他
+- 限行：主接口失败时用交警 App getRuleWithWeek 作备用 (#137) (b304cd6)
+
 ## [2.5.2] - 2026-10-30
 
 ### 修复
