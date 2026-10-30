@@ -80,7 +80,12 @@ class TestBuildApplyRequest:
             )
         )
         status = _make_jjz_status(vId="V001", hpzl="02", cllx="01")
-        driver_info = {"jsrxm": "张三", "jszh": "110101199001011234", "dabh": ""}
+        driver_info = {
+            "jsrxm": "张三",
+            "jszh": "110101199001011234",
+            "dabh": "",
+            "rylx": "1",
+        }
         metadata = {
             "elzqyms": "六环外规则",
             "ylzqyms": "六环内规则",
@@ -99,6 +104,7 @@ class TestBuildApplyRequest:
         assert body["elzqyms"] == "六环外规则"
         assert body["jsrxm"] == "张三"
         assert body["jszh"] == "110101199001011234"
+        assert body["rylx"] == "1"
         assert body["jjrq"] == "2026-04-01"
         assert body["jjzzl"] == "02"
         assert body["txrxx"] == []
@@ -841,7 +847,12 @@ class TestApiCallChain:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "code": 200,
-            "data": {"jsrxm": "张三", "jszh": "110101199001011234", "dabh": ""},
+            "data": {
+                "jsrxm": "张三",
+                "jszh": "110101199001011234",
+                "dabh": "",
+                "rylx": "1",
+            },
         }
         mock_resp.raise_for_status = MagicMock()
         mock_post.return_value = mock_resp
@@ -849,6 +860,32 @@ class TestApiCallChain:
         info = self.service._get_driver_info("http://test", "token")
         assert info is not None
         assert info["jsrxm"] == "张三"
+        assert info["rylx"] == "1"
+
+    @patch("jjz_alert.service.jjz.auto_renew_service.http_post")
+    def test_driver_check_forwards_rylx(self, mock_post):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"code": 200, "data": {}}
+        mock_resp.raise_for_status = MagicMock()
+        mock_post.return_value = mock_resp
+
+        ok = self.service._driver_check(
+            "http://test",
+            "token",
+            {
+                "jsrxm": "张三",
+                "jszh": "110101199001011234",
+                "dabh": "",
+                "rylx": "1",
+            },
+        )
+        assert ok is True
+        assert mock_post.called
+        _args, kwargs = mock_post.call_args
+        payload = kwargs.get("json_data")
+        assert payload is not None, mock_post.call_args
+        assert payload["rylx"] == "1"
+        assert payload["jsrxm"] == "张三"
 
     @patch("jjz_alert.service.jjz.auto_renew_service.http_post")
     def test_check_handle_no_dates(self, mock_post):
