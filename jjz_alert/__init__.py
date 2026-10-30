@@ -5,7 +5,7 @@ jjz_alert 顶级包
 """
 
 # 单一版本来源。开发版 PR 只改这一行；API / Home Assistant 从这里导入。
-__version__ = "2.5.1"
+__version__ = "2.5.2"
 
 __all__ = [
     "__version__",

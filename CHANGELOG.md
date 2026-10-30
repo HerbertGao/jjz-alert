@@ -5,6 +5,11 @@
 `v2.5.0` 及更早的发布没有写入本文件，见
 [GitHub Releases](https://github.com/HerbertGao/jjz-alert/releases)。
 
+## [2.5.2] - 2026-10-30
+
+### 修复
+- fix(renew): forward rylx from getJsrxx to applyCheckNum (#135) (cf7a675)
+
 ## [2.5.1] - 2026-10-27
 
 ### 修复
