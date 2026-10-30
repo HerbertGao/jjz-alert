@@ -54,20 +54,33 @@ def test_parse_traffic_page_rejects_invalid_table(traffic_service):
 async def test_async_fetch_falls_back_to_official_page(traffic_service):
     api_failure = Mock()
     api_failure.raise_for_status.side_effect = RuntimeError("502")
+    ssp_failure = Mock()
+    ssp_failure.raise_for_status.side_effect = RuntimeError("ssp down")
     page_response = Mock()
     page_response.raise_for_status = Mock()
     page_response.text = PAGE_HTML
 
     with patch(
         "jjz_alert.service.traffic.traffic_service.http_get",
-        side_effect=[api_failure, api_failure, api_failure, page_response],
+        side_effect=[
+            api_failure,
+            api_failure,
+            api_failure,
+            ssp_failure,
+            page_response,
+        ],
     ) as mock_get, patch.object(
         traffic_service, "_cache_rules", new_callable=AsyncMock
     ) as mock_cache:
         rules = await traffic_service._fetch_rules_from_api()
 
     assert rules[0].data_source == "official_page"
-    assert mock_get.call_args_list[0].args[0].endswith("getRuleWithWeek")
+    assert (
+        mock_get.call_args_list[0]
+        .args[0]
+        .endswith("yw.jtgl.beijing.gov.cn/jgjxx/services/getRuleWithWeek")
+    )
+    assert "ssp.jtgl.beijing.gov.cn" in mock_get.call_args_list[3].args[0]
     assert mock_get.call_args_list[-1].args[0].endswith("660341/index.html")
     mock_cache.assert_awaited_once_with(rules)
 
@@ -75,19 +88,23 @@ async def test_async_fetch_falls_back_to_official_page(traffic_service):
 def test_sync_fetch_falls_back_to_official_page(traffic_service):
     api_failure = Mock()
     api_failure.raise_for_status.side_effect = RuntimeError("502")
+    ssp_failure = Mock()
+    ssp_failure.raise_for_status.side_effect = RuntimeError("ssp down")
     page_response = Mock()
     page_response.raise_for_status = Mock()
     page_response.text = PAGE_HTML
 
     with patch(
         "jjz_alert.service.traffic.traffic_service.http_get",
-        side_effect=[api_failure, page_response],
-    ):
+        side_effect=[api_failure, ssp_failure, page_response],
+    ) as mock_get:
         rules = traffic_service._fetch_limit_rules_sync()
 
     assert rules[0]["limitedTime"] == "2025年09月29日"
     assert rules[0]["limitedNumber"] == "1和6"
     assert rules[0]["data_source"] == "official_page"
+    assert "ssp.jtgl.beijing.gov.cn" in mock_get.call_args_list[1].args[0]
+    assert mock_get.call_args_list[-1].args[0].endswith("660341/index.html")
 
 
 @pytest.mark.asyncio

@@ -136,7 +136,6 @@ class TrafficService:
             logging.error(f"解析限行规则响应失败: {e}")
             return []
 
-
     def _parse_ssp_traffic_response(
         self, response_data: Dict[str, Any]
     ) -> List[TrafficRule]:
