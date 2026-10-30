@@ -8,17 +8,31 @@
 
 ### Requirement: 官方页面降级来源
 
-系统 MUST 优先使用现有限行规则缓存和主 JSON 接口；当主接口请求失败、返回非成功状态或无法解析出规则时，系统 MUST 请求北京交管官方限行详情页作为降级来源。
+系统 MUST 优先使用现有限行规则缓存和主 JSON 接口；当主接口请求失败、返回非成功状态或无法解析出规则时，系统 MUST 依次尝试北京交警 App 开放接口 `getRuleWithWeek`，再请求北京交管官方限行详情页作为最终降级来源。
+
+### Requirement: 交警 App 接口备用
+
+系统 MUST 在主 `yw.jtgl` JSON 接口不可用时，请求 `https://ssp.jtgl.beijing.gov.cn/system/open/api/getRuleWithWeek`（GET、无需令牌）。系统 MUST 按 `code == 200` 与 `data` 字段解析规则，并将来源标记为可区分的值（例如 `ssp_api`）。该接口目前可能仅返回当日一条规则；系统 MUST NOT 根据单日结果臆造整周规则。
+
+#### Scenario: App 接口返回当日规则
+
+- **WHEN** 主接口不可用且交警 App 接口返回可解析的当日规则
+- **THEN** 系统 MUST 使用该规则并缓存，并且 MUST NOT 再请求官网详情页
+
+#### Scenario: App 接口也不可用
+
+- **WHEN** 主接口与交警 App 接口都失败或无法解析
+- **THEN** 系统 MUST 继续尝试官方详情页降级来源
 
 #### Scenario: 主接口正常
 
 - **WHEN** 缓存未命中且主 JSON 接口返回可解析的规则
-- **THEN** 系统 MUST 使用主接口规则并且 MUST NOT 请求官方详情页
+- **THEN** 系统 MUST 使用主接口规则并且 MUST NOT 请求交警 App 接口或官方详情页
 
 #### Scenario: 主接口不可用
 
 - **WHEN** 缓存未命中且主 JSON 接口失败、返回错误状态或返回空规则
-- **THEN** 系统 MUST 尝试从官方详情页提取规则
+- **THEN** 系统 MUST 先尝试交警 App 接口；若仍失败再从官方详情页提取规则
 
 #### Scenario: 两个来源都不可用
 

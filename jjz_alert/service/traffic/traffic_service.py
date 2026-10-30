@@ -58,6 +58,10 @@ class TrafficService:
         self._limit_rules_url = (
             "https://yw.jtgl.beijing.gov.cn/jgjxx/services/getRuleWithWeek"
         )
+        # 北京交警 App 开放接口（仅返回当日规则；主接口失败时作备用）
+        self._limit_rules_app_url = (
+            "https://ssp.jtgl.beijing.gov.cn/system/open/api/getRuleWithWeek"
+        )
         self._limit_rules_page_url = (
             "https://jtgl.beijing.gov.cn/jgj/lszt/659722/660341/index.html"
         )
@@ -130,6 +134,68 @@ class TrafficService:
 
         except Exception as e:
             logging.error(f"解析限行规则响应失败: {e}")
+            return []
+
+
+    def _parse_ssp_traffic_response(
+        self, response_data: Dict[str, Any]
+    ) -> List[TrafficRule]:
+        """解析北京交警 App getRuleWithWeek 响应。
+
+        实测（2026-10）：GET、无需令牌；成功形如
+        {"msg":"操作成功","code":200,"data":{"limitedTime":"...","limitedWeek":"...","limitedNumber":"..."}}
+        data 也可能是同结构对象列表；该接口目前只返回当日一条，不是整周数组。
+        """
+        try:
+            if response_data.get("code") != 200 or "data" not in response_data:
+                error_msg = response_data.get("msg", "未知错误")
+                logging.error(f"交警 App 限行接口返回错误: {error_msg}")
+                return []
+
+            payload = response_data["data"]
+            if payload is None:
+                return []
+            items = payload if isinstance(payload, list) else [payload]
+
+            rules = []
+            for rule_data in items:
+                try:
+                    if not isinstance(rule_data, dict):
+                        continue
+                    limited_time = rule_data.get("limitedTime", "")
+                    if not limited_time:
+                        continue
+
+                    rule_date = datetime.strptime(limited_time, "%Y年%m月%d日").date()
+                    limited_numbers = rule_data.get("limitedNumber", "")
+                    is_limited = limited_numbers != "不限行"
+                    limited_week = rule_data.get("limitedWeek")
+                    description = (
+                        f"北京交警 App 限行 ({limited_week})"
+                        if limited_week
+                        else "北京交警 App 限行"
+                    )
+
+                    rules.append(
+                        TrafficRule(
+                            date=rule_date,
+                            limited_numbers=limited_numbers,
+                            limited_time=limited_time,
+                            is_limited=is_limited,
+                            description=description,
+                            data_source="ssp_api",
+                        )
+                    )
+                except Exception as e:
+                    logging.warning(
+                        f"解析交警 App 单条限行规则失败: {e}, 规则数据: {rule_data}"
+                    )
+                    continue
+
+            logging.info(f"成功解析交警 App 限行规则 {len(rules)} 条")
+            return rules
+        except Exception as e:
+            logging.error(f"解析交警 App 限行响应失败: {e}")
             return []
 
     def _parse_traffic_page(self, html: str) -> List[TrafficRule]:
@@ -225,6 +291,15 @@ class TrafficService:
             logging.error(f"解析官网限行页面失败: {e}")
             return []
 
+    def _fetch_rules_from_ssp(self) -> List[TrafficRule]:
+        """从北京交警 App 开放接口获取限行规则（通常仅当日）。"""
+        response = http_get(self._limit_rules_app_url, verify=False)
+        response.raise_for_status()
+        rules = self._parse_ssp_traffic_response(response.json())
+        if not rules:
+            raise TrafficServiceError("交警 App 限行接口没有可用规则")
+        return rules
+
     def _fetch_rules_from_page(self) -> List[TrafficRule]:
         """从北京交管官网详情页获取限行规则。"""
         response = http_get(self._limit_rules_page_url, verify=False)
@@ -281,7 +356,19 @@ class TrafficService:
                 if attempt < self._max_retries - 1:
                     await asyncio.sleep(2)  # 等待2秒后重试
 
-        logging.warning("主限行 API 不可用，尝试官网轮换表备用来源")
+        logging.warning("主限行 API 不可用，尝试交警 App 接口备用")
+        try:
+            ssp_rules = self._fetch_rules_from_ssp()
+            await self._cache_rules(ssp_rules)
+            logging.info(
+                "已使用北京交警 App getRuleWithWeek 作为限行规则来源"
+                f"（{len(ssp_rules)} 条，通常仅当日）"
+            )
+            return ssp_rules
+        except Exception as e:
+            logging.error(f"交警 App 限行备用来源失败: {e}")
+
+        logging.warning("交警 App 备用不可用，尝试官网轮换表备用来源")
         try:
             page_rules = self._fetch_rules_from_page()
             await self._cache_rules(page_rules)
@@ -556,6 +643,7 @@ class TrafficService:
                     "hit_rate": traffic_stats.get("hit_rate", 0.0),
                 },
                 "api_url": self._limit_rules_url,
+                "app_fallback_url": self._limit_rules_app_url,
                 "fallback_url": self._limit_rules_page_url,
             }
 
@@ -583,7 +671,14 @@ class TrafficService:
             logging.error(f"获取限行规则异常: {e}")
 
         try:
-            logging.warning("同步主限行 API 不可用，尝试官网轮换表备用来源")
+            logging.warning("同步主限行 API 不可用，尝试交警 App 接口备用")
+            ssp_rules = self._fetch_rules_from_ssp()
+            return [self._rule_to_legacy_dict(rule) for rule in ssp_rules]
+        except Exception as e:
+            logging.error(f"交警 App 限行备用来源失败: {e}")
+
+        try:
+            logging.warning("同步交警 App 备用不可用，尝试官网轮换表备用来源")
             page_rules = self._fetch_rules_from_page()
             return [self._rule_to_legacy_dict(rule) for rule in page_rules]
         except Exception as e:
