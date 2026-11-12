@@ -1,6 +1,7 @@
 """进京证查询响应字段：剩余次数、审核原因、当日限行。"""
 
 import asyncio
+import inspect
 import time
 from datetime import date
 from unittest.mock import AsyncMock
@@ -144,3 +145,47 @@ class TestLookupTrafficLimitedToday:
         assert await lookup_traffic_limited_today(PLATE) is None
 
         assert time.monotonic() - started < 1
+
+    @pytest.mark.asyncio
+    async def test_other_callers_keep_running_past_the_permit_deadline(
+        self, monkeypatch
+    ):
+        """查询接口的时限不包住限行服务。直接调用仍会等完自己的查询。"""
+        monkeypatch.setattr(
+            permit_lookup, "PERMIT_TRAFFIC_LOOKUP_TIMEOUT_SECONDS", 0.05
+        )
+        rule = TrafficRule(
+            date=date.today(),
+            limited_numbers="0和5",
+            limited_time="2026年11月12日",
+            is_limited=True,
+        )
+
+        async def slow_rule(_target_date, use_cache=True):
+            await asyncio.sleep(0.2)
+            return rule
+
+        monkeypatch.setattr(traffic_service, "get_traffic_rule", slow_rule)
+
+        started = time.monotonic()
+        status = await traffic_service.check_plate_limited(PLATE)
+        assert time.monotonic() - started >= 0.15
+        assert status.is_limited is True
+        assert status.error_message is None
+        assert status.rule is rule
+
+        started = time.monotonic()
+        assert await lookup_traffic_limited_today(PLATE) is None
+        assert time.monotonic() - started < 0.15
+
+        assert traffic_service._max_retries == 3
+        service_source = "\n".join(
+            inspect.getsource(method)
+            for method in (
+                type(traffic_service).check_plate_limited,
+                type(traffic_service)._fetch_rules_from_api,
+                type(traffic_service).check_multiple_plates,
+            )
+        )
+        assert "PERMIT_TRAFFIC_LOOKUP_TIMEOUT_SECONDS" not in service_source
+        assert "for attempt in range(self._max_retries)" in service_source
