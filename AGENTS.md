@@ -174,7 +174,7 @@ merge commit 也能发布：首行是 `Merge pull request #N from …/release/ve
 
 ### CI 会拒绝认不出的 PR 标题
 
-`.github/workflows/ci.yml` 的 `pr-title` 只在 `pull_request` 时运行 `scripts/check_conventional_title.py`。它调用 `is_conventional_subject`，和 `bump_for` 用同一条 `_HEADER`。
+`.github/workflows/pr-title.yml` 在 pull request 的 `opened`、`synchronize`、`reopened` 和 `edited` 时运行 `scripts/check_conventional_title.py`。它调用 `is_conventional_subject`，和 `bump_for` 用同一条 `_HEADER`。`edited` 必须和前三个活动写在一起：不写 `types` 时 GitHub 只跑前三个，改标题不会重跑检查。这道检查单独成 workflow，改标题或正文不会重跑 `.github/workflows/ci.yml` 里的格式检查和覆盖率。
 
 - 纯中文标题、冒号后没有空格：失败。
 - `docs:` / `chore:` / `style:` / `test:` / `ci:` / `build:` 以及 `chore(release): 版本统一到 X.Y.Z`：通过。它们不自动抬版本，这是发版脚本的行为，检查不去改它。
@@ -210,4 +210,4 @@ docker compose pull && docker compose up -d
 - 发版规则的操作说明：[RELEASE.md](RELEASE.md)
 - 决策实现：`scripts/release_version.py`、`scripts/release_plan.py`
 - 工作流：`.github/workflows/release.yml`
-- PR 标题检查：`scripts/check_conventional_title.py`
+- PR 标题检查：`.github/workflows/pr-title.yml`、`scripts/check_conventional_title.py`
