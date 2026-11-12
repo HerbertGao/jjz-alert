@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ from release_version import (  # noqa: E402
     apply_version,
     bump_for,
     bump_version,
+    is_conventional_subject,
     ci_dispatch_needed,
     docker_dispatch_needed,
     highest_bump,
@@ -271,10 +273,32 @@ def test_commit_classification():
     assert bump_for(commit("refactor: split the client")) == "patch"
     assert bump_for(commit("fix!: drop the field")) == "major"
     assert bump_for(commit("fix: tweak", "BREAKING CHANGE: payload changed")) == "major"
+    assert bump_for(commit("revert: undo the parser change")) == "patch"
     assert bump_for(commit("docs: rewrite the readme")) is None
     assert bump_for(commit("chore(deps): bump aiohttp")) is None
     assert bump_for(commit("ci: retrigger docker")) is None
+    assert bump_for(commit("style: reformat")) is None
+    assert bump_for(commit("test: cover the parser")) is None
+    assert bump_for(commit("build: bump the base image")) is None
+    assert bump_for(commit("chore!: drop the field")) == "major"
+    assert bump_for(commit("docs: note", "BREAKING-CHANGE: wire format")) == "major"
     assert bump_for(commit("update something")) is None
+    assert (
+        bump_for(
+            commit(
+                "增加按令牌绑定车牌的最新进京证查询接口 (#147)",
+                "BREAKING CHANGE: ignored without a conventional subject",
+            )
+        )
+        is None
+    )
+    squashed = "feat(api): 增加按令牌绑定车牌的最新进京证查询接口 (#147)"
+    assert is_conventional_subject(squashed)
+    assert bump_for(commit(squashed)) == "minor"
+    assert not is_conventional_subject("增加按令牌绑定车牌的最新进京证查询接口 (#147)")
+    assert not is_conventional_subject("feat(api):增加接口")
+    assert is_conventional_subject("feature: 增加查询接口")
+    assert bump_for(commit("feature: 增加查询接口")) is None
     assert bump_for(commit("chore(release): 版本统一到 2.5.1")) is None
     assert (
         bump_for(
@@ -371,6 +395,43 @@ def test_plan_patch_minor_major_and_noise(tmp_path):
     (repo / "note.txt").write_text("break\n", encoding="utf-8")
     _commit(repo, "feat!: remove the legacy payload")
     assert plan_repo(repo, event="push").version == "2.0.0"
+
+
+def test_plan_skips_unprefixed_chinese_squash_subject(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    (repo / "note.txt").write_text("api\n", encoding="utf-8")
+    _commit(repo, "增加按令牌绑定车牌的最新进京证查询接口 (#147)")
+    plan = plan_repo(repo, event="push")
+    assert plan.action == "skip"
+    assert "非约定式" in plan.reason
+
+    (repo / "note.txt").write_text("api-2\n", encoding="utf-8")
+    _commit(repo, "feat(api): 增加按令牌绑定车牌的最新进京证查询接口 (#147)")
+    plan = plan_repo(repo, event="push")
+    assert plan.action == "prepare"
+    assert plan.bump == "minor"
+    assert plan.version == "1.3.0"
+
+
+def test_check_conventional_title_script():
+    script = SCRIPTS / "check_conventional_title.py"
+    good = subprocess.run(
+        [sys.executable, str(script), "docs: 将 CLAUDE.md 更新为 AGENTS.md"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert good.returncode == 0
+
+    bad = subprocess.run(
+        [sys.executable, str(script)],
+        env={**os.environ, "PR_TITLE": "增加按令牌绑定车牌的最新进京证查询接口 (#147)"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert bad.returncode == 1
+    assert "约定式" in bad.stderr
 
 
 def test_plan_publish_recognizes_squash_and_merge(tmp_path):
