@@ -187,6 +187,16 @@ def is_dependabot(commit: Commit) -> bool:
     return "dependabot" in blob
 
 
+def is_conventional_subject(subject: str) -> bool:
+    """首行是否匹配 ``bump_for`` 认得的约定式提交头。
+
+    匹配不等于会抬版本。``docs`` / ``chore`` 等也会匹配；是否发版仍由
+    ``bump_for`` 决定。PR 标题检查复用这里，避免另写一套正则。
+    """
+
+    return _HEADER.match(subject.strip()) is not None
+
+
 def bump_for(commit: Commit) -> str | None:
     if is_dependabot(commit) or is_release_commit(commit):
         return None

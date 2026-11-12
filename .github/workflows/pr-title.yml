@@ -1,0 +1,28 @@
+name: PR Title
+
+# pull_request 不写 types 时只在 opened、synchronize、reopened 运行。
+# 指定 types 会替换这三项，所以 edited 必须和它们写在一起。
+# 否则改标题不会重跑：不合规标题改对后仍保持失败，通过后再改成
+# 无前缀中文标题仍显示通过，squash 主题就又能绕过检查。
+# 单独成 workflow，避免改标题或正文时重跑格式检查和覆盖率。
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main, master]
+
+jobs:
+  pr-title:
+    name: Conventional PR Title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Require a Conventional Commits title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python scripts/check_conventional_title.py

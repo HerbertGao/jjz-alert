@@ -29,7 +29,9 @@
 | `chore` / `docs` / `style` / `test` / `ci` / `build`、非约定式提交 | 不发版 |
 | 作者是 Dependabot | 不发版（即使标题像 `fix`） |
 
-多种提交取最高一级。`fix` 再加 `feat` 得到 minor。版本源只有 `jjz_alert/__version__`；REST API 与 Home Assistant 的 `sw_version` 从这里导入。
+多种提交取最高一级。`fix` 再加 `feat` 得到 minor。上表以外的类型词（例如 `feature`）即使带冒号也不抬版本。版本源只有 `jjz_alert/__version__`；REST API 与 Home Assistant 的 `sw_version` 从这里导入。
+
+提交说明和 PR 标题必须是约定式提交，格式与 `scripts/release_version.py` 的 `_HEADER` 相同，见 [AGENTS.md](AGENTS.md)。仓库通常使用 squash merge：落到 `master` 上的是 squash 提交的首行。GitHub 默认把 PR 标题当作这个首行，并在末尾加上 ` (#编号)`。2026-11-12 的 PR #147 使用了没有类型前缀的中文标题，squash 之后 Release 判定为 skip，没有自动打开开发版 PR。合并时保留 `type:` 前缀。CI 在 PR 打开、同步、重新打开和编辑时对标题做同一套头格式检查（`.github/workflows/pr-title.yml`，`scripts/check_conventional_title.py`）。`docs` / `chore` 等不抬版本的标题可以通过检查。
 
 ## 手动
 

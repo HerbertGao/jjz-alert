@@ -167,7 +167,7 @@ tox -e format             # 使用 Black 格式化代码
 
 ## 🚀 发布
 
-推送到 `master` 后，若自最近的 `vX.Y.Z` 以来有需要发版的提交（`feat` / `fix` / `perf` / `refactor` / 破坏性变更），Actions 会打开或更新**一个**开发版 PR（`chore(release): 版本统一到 X.Y.Z`）。Dependabot 和纯文档 / chore 不会单独触发。
+推送到 `master` 后，若自最近的 `vX.Y.Z` 以来有需要发版的提交（`feat` 为 minor，`fix` / `perf` / `refactor` / `revert` 为 patch，`BREAKING CHANGE` 或 `type!` 为 major），Actions 会打开或更新**一个**开发版 PR（`chore(release): 版本统一到 X.Y.Z`）。`chore` / `docs` / `style` / `test` / `ci` / `build`、非约定式标题和 Dependabot 不会单独触发。PR 标题和 squash 提交首行必须是 `type(可选scope): 说明`，见 [AGENTS.md](AGENTS.md)。
 
 合并该 PR 会打 annotated tag、发布 GitHub Release，并构建 `ghcr.io/herbertgao/jjz-alert:vX.Y.Z`（以及 `latest`）。本地预览：`scripts/release.sh --dry-run`。规则与补救步骤见 [RELEASE.md](RELEASE.md)。
 
