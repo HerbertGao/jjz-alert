@@ -566,6 +566,71 @@ class TestJJZService:
         assert status.status == JJZStatusEnum.INVALID.value
         assert "未找到匹配车牌的记录" in status.error_message
 
+    @pytest.mark.asyncio
+    async def test_fetch_from_api_partial_failure_does_not_claim_absence(
+        self, jjz_service
+    ):
+        """一个账户没查到、另一个账户失败时，不能当成没有进京证。"""
+        plate = "京A00000"
+        healthy = Mock()
+        healthy.name = "healthy"
+        healthy.jjz = Mock(url="https://healthy.example/state", token="token-a")
+        failed = Mock()
+        failed.name = "failed"
+        failed.jjz = Mock(url="https://failed.example/state", token="token-b")
+
+        def query(url, token):
+            if url.startswith("https://healthy"):
+                return {"data": {"bzclxx": []}}
+            return {"error": "网络错误"}
+
+        with patch.object(
+            jjz_service, "load_accounts", return_value=[healthy, failed]
+        ), patch.object(jjz_service, "check_jjz_status", side_effect=query), patch(
+            "jjz_alert.service.jjz.jjz_service.handle_critical_error",
+            new_callable=AsyncMock,
+        ):
+            status = await jjz_service._fetch_from_api(plate)
+
+        assert status.status == "error"
+        assert status.error_message == "网络错误"
+
+    @pytest.mark.asyncio
+    async def test_fetch_from_api_returns_found_record_despite_other_account_failure(
+        self, jjz_service
+    ):
+        """已经查到记录时，另一个账户失败不把结果降级成查询错误。"""
+        plate = "京A00000"
+        healthy = Mock()
+        healthy.name = "healthy"
+        healthy.jjz = Mock(url="https://healthy.example/state", token="token-a")
+        failed = Mock()
+        failed.name = "failed"
+        failed.jjz = Mock(url="https://failed.example/state", token="token-b")
+        found = JJZStatus(
+            plate=plate,
+            status=JJZStatusEnum.VALID.value,
+            apply_time="2026-11-01 09:00:00",
+        )
+
+        def query(url, token):
+            if url.startswith("https://failed"):
+                return {"error": "网络错误"}
+            return {"data": {"bzclxx": []}}
+
+        with patch.object(
+            jjz_service, "load_accounts", return_value=[failed, healthy]
+        ), patch.object(jjz_service, "check_jjz_status", side_effect=query), patch(
+            "jjz_alert.service.jjz.jjz_service.parse_all_jjz_records",
+            return_value=[found],
+        ), patch(
+            "jjz_alert.service.jjz.jjz_service.handle_critical_error",
+            new_callable=AsyncMock,
+        ):
+            status = await jjz_service._fetch_from_api(plate)
+
+        assert status is found
+
     def test_check_jjz_status_tls_error(self, jjz_service):
         """测试进京证状态查询 - TLS错误"""
         url = "https://test.example.com"

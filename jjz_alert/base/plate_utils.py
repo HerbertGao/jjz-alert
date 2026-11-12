@@ -49,6 +49,16 @@ PlatePrefix = {
 }
 
 
+def normalize_plate_number(plate_number: Optional[str]) -> str:
+    """规范化车牌号。
+
+    与查询入口一致：去掉首尾空白并转为大写。汉字不受大小写影响。
+    """
+    if plate_number is None:
+        return ""
+    return str(plate_number).strip().upper()
+
+
 def get_plate_pinyin(chinese_char: str) -> Optional[str]:
     return PlatePrefix.get(chinese_char)
 

@@ -5,8 +5,10 @@
 """
 
 import asyncio
+import inspect
 import logging
 import time
+import types
 from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,7 +21,7 @@ from jjz_alert.base.error_handler import (
     NetworkError,
     ConfigurationError,
 )
-from jjz_alert.base.http import http_post
+from jjz_alert.base.http import http_post, http_post_async
 from jjz_alert.base.logger import get_structured_logger, LogCategory
 from jjz_alert.config.config import JJZAccount
 from jjz_alert.service.cache.cache_service import CacheService
@@ -79,38 +81,61 @@ class JJZService:
             logging.debug(f"进京证状态查询成功: {payload}")
             return payload
         except Exception as e:
-            error_msg = str(e)
+            return self._jjz_query_error(e)
 
-            # 特殊处理系统级错误
-            if (
-                "TLS connect error" in error_msg
-                or "OPENSSL_internal" in error_msg
-                or "curl: (35)" in error_msg
-                or "Connection" in error_msg
-                or "Session.request() got an unexpected keyword argument" in error_msg
-                or "HTTP POST请求失败" in error_msg
-                or "HTTP GET请求失败" in error_msg
-            ):
+    async def _query_account_state(self, url: str, token: str) -> Dict[str, Any]:
+        """查询一个账户的进京证。
 
-                error_type = "系统级错误"
-                if "TLS" in error_msg or "SSL" in error_msg:
-                    error_type = "TLS/SSL连接错误"
-                elif "Session.request()" in error_msg:
-                    error_type = "HTTP请求参数错误"
-                elif "HTTP" in error_msg:
-                    error_type = "HTTP请求失败"
-                elif "Connection" in error_msg:
-                    error_type = "网络连接错误"
+        生产路径把阻塞的 HTTP 与重试放进有上限的工作线程，当前事件循环只等待结果。
+        管理员通知仍用当前循环的 ``create_task``。缓存也留在调用方的事件循环上。
+        测试若替换了同步 ``check_jjz_status``，继续走那个替身，避免改写既有 mock。
+        """
+        if not isinstance(self.check_jjz_status, types.MethodType):
+            result = self.check_jjz_status(url, token)
+            if inspect.isawaitable(result):
+                return await result
+            return result
 
-                logging.error(f"{error_type}: {error_msg}")
-                # 异步通知管理员（不等待结果）
-                asyncio.create_task(
-                    self._notify_admin_system_error(error_type, error_msg)
-                )
-                return {"error": f"{error_type}: {error_msg}"}
-            else:
-                logging.error(f"进京证查询失败: {error_msg}")
-                return {"error": error_msg}
+        headers = {"Authorization": token, "Content-Type": "application/json"}
+        try:
+            resp = await http_post_async(url, headers=headers, json_data={})
+            resp.raise_for_status()
+            payload = resp.json()
+            logging.debug(f"进京证状态查询成功: {payload}")
+            return payload
+        except Exception as e:
+            return self._jjz_query_error(e)
+
+    def _jjz_query_error(self, error: Exception) -> Dict[str, Any]:
+        """把查询异常收成错误字典。系统级错误在当前事件循环上通知管理员。"""
+        error_msg = str(error)
+
+        if (
+            "TLS connect error" in error_msg
+            or "OPENSSL_internal" in error_msg
+            or "curl: (35)" in error_msg
+            or "Connection" in error_msg
+            or "Session.request() got an unexpected keyword argument" in error_msg
+            or "HTTP POST请求失败" in error_msg
+            or "HTTP GET请求失败" in error_msg
+        ):
+            error_type = "系统级错误"
+            if "TLS" in error_msg or "SSL" in error_msg:
+                error_type = "TLS/SSL连接错误"
+            elif "Session.request()" in error_msg:
+                error_type = "HTTP请求参数错误"
+            elif "HTTP" in error_msg:
+                error_type = "HTTP请求失败"
+            elif "Connection" in error_msg:
+                error_type = "网络连接错误"
+
+            logging.error(f"{error_type}: {error_msg}")
+            # 异步通知管理员（不等待结果）。必须在正在运行的事件循环上创建。
+            asyncio.create_task(self._notify_admin_system_error(error_type, error_msg))
+            return {"error": f"{error_type}: {error_msg}"}
+
+        logging.error(f"进京证查询失败: {error_msg}")
+        return {"error": error_msg}
 
     def load_accounts(self) -> List[JJZAccount]:
         """加载进京证账户配置"""
@@ -297,7 +322,7 @@ class JJZService:
             try:
                 logging.debug(f"使用账户 {account.name} 查询所有进京证数据")
 
-                response_data = self.check_jjz_status(
+                response_data = await self._query_account_state(
                     account.jjz.url, account.jjz.token
                 )
                 if "error" in response_data:
@@ -415,16 +440,17 @@ class JJZService:
         # 查询所有账户，收集所有数据
         all_statuses = []
         last_error = None
-        all_accounts_failed = True
+        had_account_failure = False
 
         for account in accounts:
             try:
                 logging.debug(f"使用账户 {account.name} 查询所有进京证数据")
 
-                response_data = self.check_jjz_status(
+                response_data = await self._query_account_state(
                     account.jjz.url, account.jjz.token
                 )
                 if "error" in response_data:
+                    had_account_failure = True
                     last_error = response_data["error"]
                     error_msg = response_data["error"]
                     logging.warning(f"账户 {account.name} 查询失败: {error_msg}")
@@ -440,8 +466,6 @@ class JJZService:
                         )
                     continue
 
-                all_accounts_failed = False
-
                 # 解析所有进京证数据
                 all_records = parse_all_jjz_records(
                     response_data, self._determine_status, JJZStatus
@@ -453,6 +477,7 @@ class JJZService:
                         all_statuses.append(record)
 
             except Exception as e:
+                had_account_failure = True
                 last_error = str(e)
                 logging.warning(f"账户 {account.name} 查询失败: {e}")
                 continue
@@ -463,13 +488,16 @@ class JJZService:
             latest_status = max(all_statuses, key=lambda s: s.apply_time or "")
             return latest_status
 
-        # 如果所有账户都失败了，返回错误状态
-        if all_accounts_failed and last_error:
+        # 还有账户没查完时，不能断定这辆车没有进京证。
+        if had_account_failure:
             return JJZStatus(
-                plate=plate, status="error", error_message=last_error, data_source="api"
+                plate=plate,
+                status="error",
+                error_message=last_error or "进京证查询失败",
+                data_source="api",
             )
 
-        # 没有找到匹配的记录
+        # 全部账户都成功返回，且没有这辆车的记录
         return JJZStatus(
             plate=plate,
             status="invalid",
