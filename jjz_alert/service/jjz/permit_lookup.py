@@ -1,10 +1,12 @@
 """把 JJZService 已经算出的进京证状态映射成对外查询字段。"""
 
+import logging
 from typing import Any, Dict, Optional
 
 from jjz_alert.service.jjz.jjz_status import JJZStatus
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 from jjz_alert.service.jjz.jjz_utils import extract_jjz_type_from_jjzzlmc
+from jjz_alert.service.traffic.traffic_models import PlateTrafficStatus
 
 # 这些文案来自现有查询：车牌在账户返回里没有任何进京证记录。
 MISSING_PERMIT_MESSAGES = frozenset(
@@ -66,7 +68,58 @@ def _days_remaining(value: Any) -> Optional[int]:
     return value
 
 
-def to_permit_payload(status: JJZStatus, plate: str) -> Dict[str, Any]:
+def _remaining_count(value: Any) -> Optional[int]:
+    """六环内剩余次数。空白或不能按整数解析时对外为 null。"""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def traffic_limited_today_value(
+    status: Optional[PlateTrafficStatus],
+) -> Optional[bool]:
+    """限行服务给出确定结论时返回布尔值，否则返回 None。
+
+    查询失败时 ``PlateTrafficStatus.is_limited`` 仍是 False，同时带有
+    ``error_message`` 且没有规则。这个占位 False 不能当成“今日不限行”。
+    """
+    if status is None:
+        return None
+    if (status.error_message or "").strip():
+        return None
+    if status.rule is None:
+        return None
+    return bool(status.is_limited)
+
+
+async def lookup_traffic_limited_today(plate: str) -> Optional[bool]:
+    """复用限行服务判断该车牌当日是否限行。查不准时返回 None。"""
+    from jjz_alert.service.traffic.traffic_service import traffic_service
+
+    try:
+        status = await traffic_service.check_plate_limited(plate)
+    except Exception as exc:
+        logging.warning("限行查询失败: %s", type(exc).__name__)
+        return None
+    return traffic_limited_today_value(status)
+
+
+def to_permit_payload(
+    status: JJZStatus,
+    plate: str,
+    *,
+    traffic_limited_today: Optional[bool] = None,
+) -> Dict[str, Any]:
     """映射为查询接口的响应字段。只保留该车牌的进京证状态，不带账户或其它车牌。"""
     permit_type, type_name = _permit_type_fields(status.jjzzlmc)
     status_code = (status.status or "").strip() or JJZStatusEnum.UNKNOWN.value
@@ -79,4 +132,7 @@ def to_permit_payload(status: JJZStatus, plate: str) -> Dict[str, Any]:
         "valid_from": _blank_to_none(status.valid_start),
         "valid_until": _blank_to_none(status.valid_end),
         "days_remaining": _days_remaining(status.days_remaining),
+        "remaining_count": _remaining_count(status.sycs),
+        "reject_reason": _blank_to_none(status.reject_reason),
+        "traffic_limited_today": traffic_limited_today,
     }

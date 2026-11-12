@@ -113,6 +113,9 @@ class PermitResponse(BaseModel):
     valid_from: Optional[str] = Field(None, description="有效期起始日期")
     valid_until: Optional[str] = Field(None, description="有效期截止日期")
     days_remaining: Optional[int] = Field(None, description="剩余有效日历天数")
+    remaining_count: Optional[int] = Field(None, description="六环内进京证剩余次数")
+    reject_reason: Optional[str] = Field(None, description="审核不通过原因")
+    traffic_limited_today: Optional[bool] = Field(None, description="当日是否限行")
 
 
 class QueryRequest(BaseModel):
@@ -491,6 +494,7 @@ async def get_latest_permit(
     """返回该车牌申请时间最新的一条进京证。
 
     数据来自现有的 JJZService.get_jjz_status，不另建数据源。
+    当日是否限行复用限行服务。限行查询失败时该字段为 null，进京证结果仍返回。
     令牌只能查询配置中绑定的车牌；范围外的车牌一律 403，不说明该车牌是否存在。
     """
     from jjz_alert.base.plate_utils import normalize_plate_number
@@ -500,6 +504,7 @@ async def get_latest_permit(
     from jjz_alert.service.jjz.permit_lookup import (
         is_permit_lookup_error,
         is_permit_missing,
+        lookup_traffic_limited_today,
         to_permit_payload,
     )
 
@@ -544,7 +549,9 @@ async def get_latest_permit(
         logging.warning("进京证查询未返回可用记录")
         raise HTTPException(status_code=503, detail="进京证查询暂时不可用")
 
-    return to_permit_payload(status, normalized)
+    # 限行查询失败只让 traffic_limited_today 为 null，不把整次查询变成 503。
+    limited = await lookup_traffic_limited_today(normalized)
+    return to_permit_payload(status, normalized, traffic_limited_today=limited)
 
 
 @app.post("/query")

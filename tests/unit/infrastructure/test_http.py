@@ -119,6 +119,62 @@ def test_http_executor_limits_workers():
 
 
 @pytest.mark.asyncio
+async def test_http_get_async_retries_without_blocking_sleep(monkeypatch):
+    """GET 重试等待走 asyncio.sleep，不占用工作线程。"""
+    sleeps = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(http.asyncio, "sleep", fake_sleep)
+    outcomes = [RuntimeError("fail-1"), DummyResponse("recovered")]
+    _patch_session(monkeypatch, outcomes)
+
+    result = await http.http_get_async("https://example.com/get", max_retries=2)
+
+    assert result.marker == "recovered"
+    assert sleeps == [1]
+
+
+@pytest.mark.asyncio
+async def test_http_get_async_yields_while_upstream_blocks(monkeypatch):
+    """上游 GET 停在工作线程时，事件循环仍能运行其它协程。"""
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+        def get(self, *args, **kwargs):
+            entered.set()
+            assert release.wait(timeout=2)
+            return DummyResponse("ok")
+
+    monkeypatch.setattr(http, "Session", BlockingSession)
+
+    request = asyncio.create_task(http.http_get_async("https://example.com/get"))
+    assert await asyncio.to_thread(entered.wait, 2)
+
+    progressed = False
+
+    async def other_work():
+        nonlocal progressed
+        progressed = True
+
+    await other_work()
+    assert progressed
+    assert not request.done()
+
+    release.set()
+    result = await request
+    assert result.marker == "ok"
+
+
+@pytest.mark.asyncio
 async def test_http_post_async_retries_without_blocking_sleep(monkeypatch):
     """重试等待走 asyncio.sleep，不占用工作线程。"""
     sleeps = []
