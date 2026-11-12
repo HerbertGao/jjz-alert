@@ -25,12 +25,22 @@ class CacheConfig:
 
 
 @dataclass
+class ApiTokenConfig:
+    """对外查询令牌，以及该令牌允许查询的车牌。"""
+
+    token: str
+    plates: List[str] = field(default_factory=list)
+
+
+@dataclass
 class APIConfig:
     """API服务配置"""
 
     enable: bool = True
     host: str = "0.0.0.0"
     port: int = 8000
+    # 每个令牌只能查询自己的车牌。为空时查询接口拒绝全部请求。
+    tokens: List["ApiTokenConfig"] = field(default_factory=list)
 
 
 @dataclass

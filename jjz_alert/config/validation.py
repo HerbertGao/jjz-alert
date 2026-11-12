@@ -80,6 +80,9 @@ class ConfigValidator:
             if not self._validate_time_format(time_str):
                 self.errors.append(f"时间格式无效: {time_str}")
 
+        if remind_config.api:
+            self._validate_api_tokens(remind_config.api)
+
         # 验证自动续办全局配置
         ar_global = config.global_config.auto_renew
         if ar_global:
@@ -89,6 +92,17 @@ class ConfigValidator:
         ha_config = config.global_config.homeassistant
         if ha_config.enabled:
             self._validate_homeassistant_config(ha_config)
+
+    def _validate_api_tokens(self, api_config):
+        """查询令牌为空时接口会拒绝请求；这里只给出警告，不记录令牌原文。"""
+        tokens = list(getattr(api_config, "tokens", None) or [])
+        usable = [item for item in tokens if (getattr(item, "token", "") or "").strip()]
+        if api_config.enable and not usable:
+            self.warnings.append(
+                "已启用 REST API，但未配置可用的查询令牌，进京证查询接口将拒绝所有请求"
+            )
+        if any(not item.plates for item in usable):
+            self.warnings.append("存在未绑定车牌的查询令牌，该令牌无法查询任何车牌")
 
     def _validate_homeassistant_config(self, ha_config):
         """验证Home Assistant配置"""

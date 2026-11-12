@@ -35,7 +35,7 @@ python main.py
 - **多通道推送**：基于 Apprise，支持 80+ 服务（Bark/Telegram/邮件/企业微信/钉钉 等）
 - **Redis 缓存**：缓存 JJZ 与限行数据，支持统计与健康检查
 - **Home Assistant 集成**：支持 REST 与 MQTT Discovery 两种模式
-- **REST API**：/health、/metrics、/query
+- **REST API**：/health、/metrics、/query、/permit
 - **定时提醒**：按 `global.remind.times` 自动执行
 
 ## 🧩 配置（摘自 `config.yaml.example`）
@@ -51,6 +51,10 @@ global:
       enable: true
       host: "0.0.0.0"
       port: 8000
+      tokens:
+        - token: "replace-with-your-api-token"
+          plates:
+            - "京A00000"
   redis:
     host: localhost
     port: 6379
@@ -101,6 +105,7 @@ global:
 
 - `GET /health`：系统健康状态
 - `GET /metrics`：运行与性能指标
+- `GET /permit`：查询单个车牌最新一条进京证。令牌写在 `global.remind.api.tokens`，每个令牌只能查询自己的 `plates`
 - `POST /query`：触发查询与推送，示例：
 
 ```bash
@@ -108,6 +113,16 @@ curl -X POST http://localhost:8000/query \
   -H 'Content-Type: application/json' \
   -d '{"plates":["京A12345"]}'
 ```
+
+查询最新进京证（把令牌和车牌换成自己的配置；示例均为占位符）：
+
+```bash
+curl -G "http://localhost:8000/permit" \
+  --data-urlencode "plate=京A00000" \
+  -H "Authorization: Bearer replace-with-your-api-token"
+```
+
+成功时返回 `plate`、`type`、`type_name`、`status`、`status_name`、`valid_from`、`valid_until`、`days_remaining`。缺少或错误的令牌返回 401；令牌未绑定该车牌返回 403，且不说明这辆车是否存在；车牌在令牌范围内但没有进京证记录返回 404。未配置任何可用令牌时，该接口拒绝所有请求。
 
 注：需在配置中开启 `global.remind.enable=true` 且 `global.remind.api.enable=true`。
 

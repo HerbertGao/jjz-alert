@@ -11,10 +11,12 @@ from typing import Dict, List, Optional, Union
 
 import yaml
 
+from jjz_alert.base.plate_utils import normalize_plate_number
 from jjz_alert.config.config_models import (
     RedisConfig,
     CacheConfig,
     APIConfig,
+    ApiTokenConfig,
     RemindConfig,
     LogConfig,
     AdminConfig,
@@ -39,6 +41,7 @@ __all__ = [
     "RedisConfig",
     "CacheConfig",
     "APIConfig",
+    "ApiTokenConfig",
     "RemindConfig",
     "LogConfig",
     "AdminConfig",
@@ -127,6 +130,7 @@ class ConfigManager:
                         ),
                         host=api_data.get("host", config.global_config.remind.api.host),
                         port=api_data.get("port", config.global_config.remind.api.port),
+                        tokens=self._parse_api_tokens(api_data.get("tokens")),
                     )
 
             # Redis配置
@@ -311,6 +315,66 @@ class ConfigManager:
         self._apply_env_overrides(config)
 
         return config
+
+    def _parse_api_tokens(self, raw_tokens) -> List[ApiTokenConfig]:
+        """解析查询令牌。空令牌会被丢弃，重复令牌合并车牌范围。
+
+        不记录令牌原文。
+        """
+        if raw_tokens is None:
+            return []
+        if not isinstance(raw_tokens, list):
+            logging.warning("global.remind.api.tokens 必须是列表，已忽略该配置")
+            return []
+
+        plates_by_token: Dict[str, List[str]] = {}
+        order: List[str] = []
+        for item in raw_tokens:
+            if not isinstance(item, dict):
+                logging.warning("查询令牌配置项格式无效，已忽略")
+                continue
+            secret = item.get("token")
+            if not isinstance(secret, str):
+                logging.warning("查询令牌必须是字符串，已忽略")
+                continue
+            secret = secret.strip()
+            if not secret:
+                logging.warning("已忽略空的查询令牌")
+                continue
+
+            plates = self._parse_api_token_plates(item.get("plates"))
+            if secret in plates_by_token:
+                logging.warning("检测到重复的查询令牌，已合并其车牌范围")
+                for plate in plates:
+                    if plate not in plates_by_token[secret]:
+                        plates_by_token[secret].append(plate)
+                continue
+
+            order.append(secret)
+            plates_by_token[secret] = plates
+
+        return [
+            ApiTokenConfig(token=secret, plates=plates_by_token[secret])
+            for secret in order
+        ]
+
+    def _parse_api_token_plates(self, raw_plates) -> List[str]:
+        if raw_plates is None:
+            return []
+        if isinstance(raw_plates, str):
+            raw_plates = [raw_plates]
+        if not isinstance(raw_plates, list):
+            logging.warning("查询令牌的 plates 必须是列表，已忽略无效项")
+            return []
+
+        plates: List[str] = []
+        for item in raw_plates:
+            if not isinstance(item, str):
+                continue
+            plate = normalize_plate_number(item)
+            if plate and plate not in plates:
+                plates.append(plate)
+        return plates
 
     def _parse_auto_renew_config(self, ar_data: Dict) -> AutoRenewConfig:
         """解析车牌级自动续办配置"""

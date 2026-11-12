@@ -8,6 +8,7 @@ from jjz_alert.base.plate_utils import (
     get_all_plate_mappings,
     convert_plate_to_pinyin,
     normalize_plate_for_ha_entity_id,
+    normalize_plate_number,
     get_plate_display_name_for_ha,
     extract_province_from_plate,
     validate_plate_number,
@@ -194,3 +195,12 @@ class TestValidatePlateNumber:
         """测试第一个字符无效"""
         assert validate_plate_number("112345") is False  # 数字开头且不是汉字
         assert validate_plate_number("-12345") is False  # 特殊字符开头
+
+
+class TestNormalizePlateNumber:
+    """测试查询入口使用的车牌规范化"""
+
+    def test_strip_and_uppercase(self):
+        assert normalize_plate_number("  京a00000  ") == "京A00000"
+        assert normalize_plate_number(None) == ""
+        assert normalize_plate_number("   ") == ""

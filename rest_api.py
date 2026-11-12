@@ -9,6 +9,8 @@ Endpoints
 ---------
 GET /health              Health check - 综合系统健康状态
 GET /metrics             Monitoring metrics - 详细的监控指标
+GET /permit              查询单个车牌的最新进京证。需要 Authorization: Bearer 令牌，
+                        且该车牌必须在令牌的允许范围内
 POST /query              Body: {"plates": ["京A12345", "津B67890"]}
                         Trigger a query for the specified plates and send notifications
 """
@@ -16,10 +18,10 @@ POST /query              Body: {"plates": ["京A12345", "津B67890"]}
 import logging
 import time
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from jjz_alert import __version__
@@ -98,6 +100,19 @@ async def log_requests(request: Request, call_next):
         )
 
     return response
+
+
+class PermitResponse(BaseModel):
+    """最新一条进京证。字段与对外查询约定一致。"""
+
+    plate: str = Field(..., description="规范化后的车牌号")
+    type: Optional[str] = Field(None, description="进京证类型")
+    type_name: Optional[str] = Field(None, description="中文名称")
+    status: str = Field(..., description="当前状态")
+    status_name: str = Field(..., description="中文状态")
+    valid_from: Optional[str] = Field(None, description="有效期起始日期")
+    valid_until: Optional[str] = Field(None, description="有效期截止日期")
+    days_remaining: Optional[int] = Field(None, description="剩余有效日历天数")
 
 
 class QueryRequest(BaseModel):
@@ -433,6 +448,94 @@ async def metrics() -> Dict[str, Any]:
             "error": str(e),
             "response_time_ms": round((time.time() - start_time) * 1000, 2),
         }
+
+
+def _bearer_token(authorization: Optional[str]) -> str:
+    """取出 Bearer 凭据。缺失或空白时返回空字符串，不记录请求头。"""
+    if not authorization:
+        return ""
+    scheme, separator, credential = authorization.partition(" ")
+    if separator != " " or scheme.lower() != "bearer":
+        return ""
+    return credential.strip()
+
+
+def _unauthorized(presented: str) -> HTTPException:
+    if not presented:
+        return HTTPException(status_code=401, detail="缺少访问令牌")
+    return HTTPException(status_code=401, detail="访问令牌无效")
+
+
+@app.get(
+    "/permit",
+    response_model=PermitResponse,
+    summary="查询指定车牌的最新进京证",
+    responses={
+        401: {"description": "缺少、错误，或服务端未配置可用令牌"},
+        403: {"description": "令牌无权查询该车牌，或 REST API 已关闭"},
+        404: {"description": "车牌在令牌范围内，但没有进京证记录"},
+    },
+)
+async def get_latest_permit(
+    request: Request,
+    plate: str = Query(..., description="车牌号"),
+) -> Dict[str, Any]:
+    """返回该车牌申请时间最新的一条进京证。
+
+    数据来自现有的 JJZService.get_jjz_status，不另建数据源。
+    令牌只能查询配置中绑定的车牌；范围外的车牌一律 403，不说明该车牌是否存在。
+    """
+    from jjz_alert.base.plate_utils import normalize_plate_number
+    from jjz_alert.config.api_tokens import match_api_token, token_allows_plate
+    from jjz_alert.config.config_models import ApiTokenConfig
+    from jjz_alert.service.jjz.jjz_service import jjz_service
+    from jjz_alert.service.jjz.permit_lookup import (
+        is_permit_lookup_error,
+        is_permit_missing,
+        to_permit_payload,
+    )
+
+    presented = _bearer_token(request.headers.get("authorization"))
+    try:
+        app_config = config_manager.load_config()
+        configured = app_config.global_config.remind.api.tokens
+    except Exception as exc:
+        logging.error("读取查询令牌配置失败: %s", type(exc).__name__)
+        configured = []
+
+    tokens = [item for item in configured or [] if isinstance(item, ApiTokenConfig)]
+    matched = match_api_token(presented, tokens)
+    if matched is None:
+        logging.warning("进京证查询被拒绝：缺少或无效的访问令牌")
+        raise _unauthorized(presented)
+
+    if not is_api_enabled():
+        raise HTTPException(
+            status_code=403, detail="REST API 已关闭，请在配置中启用后再试"
+        )
+
+    normalized = normalize_plate_number(plate)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="车牌号不能为空")
+
+    if not token_allows_plate(matched, normalized):
+        logging.info("进京证查询被拒绝：车牌不在当前令牌范围内")
+        raise HTTPException(status_code=403, detail="无权查询该车牌")
+
+    try:
+        status = await jjz_service.get_jjz_status(normalized)
+    except Exception as exc:
+        logging.error("进京证查询失败: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="进京证查询暂时不可用")
+
+    if is_permit_missing(status):
+        raise HTTPException(status_code=404, detail="未找到该车牌的进京证记录")
+
+    if is_permit_lookup_error(status):
+        logging.warning("进京证查询未返回可用记录")
+        raise HTTPException(status_code=503, detail="进京证查询暂时不可用")
+
+    return to_permit_payload(status, normalized)
 
 
 @app.post("/query")

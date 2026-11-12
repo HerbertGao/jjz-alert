@@ -48,6 +48,14 @@ global:
       enable: true
       host: "0.0.0.0"
       port: 8000
+      # 对外查询令牌。每个 token 只能查询自己的 plates。
+      # 不配置，或 token 为空时，GET /permit 会拒绝所有请求。
+      # 这里只能放占位符，不要写入真实令牌或真实车牌。
+      tokens:
+        - token: "replace-with-your-api-token"
+          plates:
+            - "京A00000"
+            - "京B00000"
 
   # Redis数据缓存配置
   redis:
