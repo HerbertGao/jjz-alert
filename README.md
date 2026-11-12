@@ -122,7 +122,7 @@ curl -G "http://localhost:8000/permit" \
   -H "Authorization: Bearer replace-with-your-api-token"
 ```
 
-成功时返回 `plate`、`type`、`type_name`、`status`、`status_name`、`valid_from`、`valid_until`、`days_remaining`。缺少或错误的令牌返回 401；令牌未绑定该车牌返回 403，且不说明这辆车是否存在；车牌在令牌范围内但没有进京证记录返回 404。未配置任何可用令牌时，该接口拒绝所有请求。
+成功时返回 `plate`、`type`、`type_name`、`status`、`status_name`、`valid_from`、`valid_until`、`days_remaining`，以及 `remaining_count`（六环内进京证剩余次数）、`reject_reason`（审核不通过原因）、`traffic_limited_today`（当日是否限行）。没有剩余次数或审核原因时对应字段为 `null`。限行服务无法判断，或这次补充查询超过等待时限时，`traffic_limited_today` 为 `null`，进京证字段仍正常返回。缺少或错误的令牌返回 401；令牌未绑定该车牌返回 403，且不说明这辆车是否存在；车牌在令牌范围内但没有进京证记录返回 404。未配置任何可用令牌时，该接口拒绝所有请求。
 
 注：需在配置中开启 `global.remind.enable=true` 且 `global.remind.api.enable=true`。
 

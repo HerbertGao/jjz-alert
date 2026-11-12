@@ -3,6 +3,7 @@ import asyncio
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import Any
 
 import urllib3
@@ -72,6 +73,35 @@ def http_post(url, headers=None, json_data=None, verify=False, max_retries=3):
                 time.sleep(1 * (attempt + 1))  # 递增延迟
             else:
                 logging.error(f"HTTP POST请求最终失败: {e}")
+                raise
+
+
+async def run_in_http_worker(func, /, *args, **kwargs):
+    """在有上限的工作线程里执行阻塞调用。事件循环只等待结果。"""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_HTTP_EXECUTOR, partial(func, *args, **kwargs))
+
+
+async def http_get_async(url, verify=False, headers=None, max_retries=3):
+    """异步 GET。单次请求在有上限的工作线程中执行，重试等待使用 asyncio.sleep。"""
+    loop = asyncio.get_running_loop()
+    for attempt in range(max_retries):
+        try:
+            return await loop.run_in_executor(
+                _HTTP_EXECUTOR,
+                _get_once,
+                url,
+                verify,
+                headers,
+            )
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logging.warning(
+                    f"HTTP GET请求失败，重试 {attempt + 1}/{max_retries}: {e}"
+                )
+                await asyncio.sleep(1 * (attempt + 1))
+            else:
+                logging.error(f"HTTP GET请求最终失败: {e}")
                 raise
 
 

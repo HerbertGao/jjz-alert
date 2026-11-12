@@ -1,3 +1,5 @@
+import asyncio
+import threading
 from datetime import date
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -83,6 +85,67 @@ async def test_async_fetch_falls_back_to_official_page(traffic_service):
     assert "ssp.jtgl.beijing.gov.cn" in mock_get.call_args_list[3].args[0]
     assert mock_get.call_args_list[-1].args[0].endswith("660341/index.html")
     mock_cache.assert_awaited_once_with(rules)
+
+
+@pytest.mark.asyncio
+async def test_async_fetch_uses_off_loop_get(traffic_service):
+    response = Mock()
+    response.raise_for_status = Mock()
+    response.json.return_value = {
+        "state": "success",
+        "result": [{"limitedTime": "2026年11月12日", "limitedNumber": "不限行"}],
+    }
+
+    with patch(
+        "jjz_alert.service.traffic.traffic_service.http_get_async",
+        new=AsyncMock(return_value=response),
+    ) as mock_get, patch.object(
+        traffic_service, "_cache_rules", new_callable=AsyncMock
+    ):
+        rules = await traffic_service._fetch_rules_from_api()
+
+    assert rules[0].limited_numbers == "不限行"
+    mock_get.assert_awaited_once()
+    assert mock_get.await_args.args[0].endswith("getRuleWithWeek")
+
+
+@pytest.mark.asyncio
+async def test_async_fetch_does_not_block_the_event_loop(traffic_service):
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocking_get(*args, **kwargs):
+        entered.set()
+        assert release.wait(timeout=2)
+        response = Mock()
+        response.raise_for_status = Mock()
+        response.json.return_value = {
+            "state": "success",
+            "result": [{"limitedTime": "2026年11月12日", "limitedNumber": "1和6"}],
+        }
+        return response
+
+    with patch(
+        "jjz_alert.service.traffic.traffic_service.http_get",
+        side_effect=blocking_get,
+    ), patch.object(traffic_service, "_cache_rules", new_callable=AsyncMock):
+        request = asyncio.create_task(traffic_service._fetch_rules_from_api())
+        assert await asyncio.to_thread(entered.wait, 2)
+
+        progressed = False
+
+        async def other_work():
+            nonlocal progressed
+            progressed = True
+
+        await other_work()
+        assert progressed
+        assert not request.done()
+
+        release.set()
+        rules = await request
+
+    assert rules[0].limited_numbers == "1和6"
 
 
 def test_sync_fetch_falls_back_to_official_page(traffic_service):

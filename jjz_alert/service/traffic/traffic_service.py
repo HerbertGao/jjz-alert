@@ -16,9 +16,29 @@ from jjz_alert.base.error_handler import (
     NetworkError,
     APIError,
 )
-from jjz_alert.base.http import http_get
+from jjz_alert.base.http import http_get, http_get_async, run_in_http_worker
 from jjz_alert.service.cache.cache_service import CacheService
 from jjz_alert.service.traffic.traffic_models import TrafficRule, PlateTrafficStatus
+
+# 导入时的同步 GET。测试替换本模块的 http_get 后，异步路径继续调用那个替身。
+_ORIGINAL_HTTP_GET = http_get
+
+
+async def _http_get_off_loop(url, verify=False, headers=None, max_retries=3):
+    """异步限行查询用的 GET，不占用事件循环。
+
+    生产请求走 ``http_get_async``：单次阻塞 IO 在有上限的工作线程里，
+    重试等待使用 ``asyncio.sleep``。测试若替换了同步 ``http_get``，
+    仍调用那个替身，并把它放进同一工作线程。
+    """
+    current = http_get
+    if current is not _ORIGINAL_HTTP_GET:
+        return await run_in_http_worker(
+            current, url, verify=verify, headers=headers, max_retries=max_retries
+        )
+    return await http_get_async(
+        url, verify=verify, headers=headers, max_retries=max_retries
+    )
 
 
 class _TrafficPageTableParser(HTMLParser):
@@ -353,7 +373,7 @@ class TrafficService:
                     f"正在获取限行规则... (尝试 {attempt + 1}/{self._max_retries})"
                 )
 
-                resp = http_get(self._limit_rules_url, verify=False)
+                resp = await _http_get_off_loop(self._limit_rules_url, verify=False)
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -379,7 +399,8 @@ class TrafficService:
         logging.warning("主限行 API 不可用，尝试交警 App 接口备用")
         ssp_rules: List[TrafficRule] = []
         try:
-            ssp_rules = self._fetch_rules_from_ssp()
+            # 备用请求仍是同步 HTTP。整段放进工作线程，避免卡住事件循环。
+            ssp_rules = await run_in_http_worker(self._fetch_rules_from_ssp)
             logging.info(
                 "已使用北京交警 App getRuleWithWeek 作为限行规则来源"
                 f"（{len(ssp_rules)} 条，通常仅当日）"
@@ -393,7 +414,7 @@ class TrafficService:
 
         logging.warning("交警 App 备用不可用或覆盖不足，尝试官网轮换表备用来源")
         try:
-            page_rules = self._fetch_rules_from_page()
+            page_rules = await run_in_http_worker(self._fetch_rules_from_page)
             merged = (
                 self._merge_traffic_rules(ssp_rules, page_rules)
                 if ssp_rules
