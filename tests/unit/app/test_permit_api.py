@@ -10,7 +10,7 @@ from jjz_alert.config.api_tokens import match_api_token
 from jjz_alert.config.config_models import ApiTokenConfig, AppConfig
 from jjz_alert.service.jjz.jjz_service import jjz_service
 from jjz_alert.service.jjz.jjz_status import JJZStatus
-from jjz_alert.service.jjz.permit_lookup import to_permit_payload
+from jjz_alert.service.jjz.permit_lookup import is_permit_missing, to_permit_payload
 
 TOKEN = "replace-with-your-api-token"
 OTHER_TOKEN = "replace-with-another-api-token"
@@ -102,6 +102,40 @@ class TestPermitLookupApi:
         assert payload["valid_from"] is None
         assert payload["valid_until"] is None
         assert payload["days_remaining"] is None
+
+    def test_401_does_not_log_the_plate(self, client, monkeypatch):
+        _use_config(monkeypatch, [ApiTokenConfig(token=TOKEN, plates=[PLATE])])
+        captured = {}
+
+        def capture_call(**kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr(rest_api.structured_logger, "log_api_call", capture_call)
+
+        response = client.get("/permit", params={"plate": PLATE})
+
+        assert response.status_code == 401
+        assert captured["extra_data"]["query_params"]["plate"] == "<redacted>"
+        assert PLATE not in str(captured)
+
+    def test_error_status_with_missing_message_is_not_404(self, client, monkeypatch):
+        _use_config(monkeypatch, [ApiTokenConfig(token=TOKEN, plates=[PLATE])])
+        collided = JJZStatus(
+            plate=PLATE,
+            status="error",
+            error_message="未找到进京证记录",
+        )
+        assert is_permit_missing(collided) is False
+        _mock_lookup(monkeypatch, collided)
+
+        response = client.get(
+            "/permit",
+            params={"plate": PLATE},
+            headers={"Authorization": f"Bearer {TOKEN}"},
+        )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "进京证查询暂时不可用"
 
     def test_401_when_token_missing(self, client, monkeypatch):
         _use_config(monkeypatch, [ApiTokenConfig(token=TOKEN, plates=[PLATE])])

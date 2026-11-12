@@ -440,7 +440,7 @@ class JJZService:
         # 查询所有账户，收集所有数据
         all_statuses = []
         last_error = None
-        all_accounts_failed = True
+        had_account_failure = False
 
         for account in accounts:
             try:
@@ -450,6 +450,7 @@ class JJZService:
                     account.jjz.url, account.jjz.token
                 )
                 if "error" in response_data:
+                    had_account_failure = True
                     last_error = response_data["error"]
                     error_msg = response_data["error"]
                     logging.warning(f"账户 {account.name} 查询失败: {error_msg}")
@@ -465,8 +466,6 @@ class JJZService:
                         )
                     continue
 
-                all_accounts_failed = False
-
                 # 解析所有进京证数据
                 all_records = parse_all_jjz_records(
                     response_data, self._determine_status, JJZStatus
@@ -478,6 +477,7 @@ class JJZService:
                         all_statuses.append(record)
 
             except Exception as e:
+                had_account_failure = True
                 last_error = str(e)
                 logging.warning(f"账户 {account.name} 查询失败: {e}")
                 continue
@@ -488,13 +488,16 @@ class JJZService:
             latest_status = max(all_statuses, key=lambda s: s.apply_time or "")
             return latest_status
 
-        # 如果所有账户都失败了，返回错误状态
-        if all_accounts_failed and last_error:
+        # 还有账户没查完时，不能断定这辆车没有进京证。
+        if had_account_failure:
             return JJZStatus(
-                plate=plate, status="error", error_message=last_error, data_source="api"
+                plate=plate,
+                status="error",
+                error_message=last_error or "进京证查询失败",
+                data_source="api",
             )
 
-        # 没有找到匹配的记录
+        # 全部账户都成功返回，且没有这辆车的记录
         return JJZStatus(
             plate=plate,
             status="invalid",

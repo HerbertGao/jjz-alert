@@ -17,8 +17,13 @@ MISSING_PERMIT_MESSAGES = frozenset(
 
 
 def is_permit_missing(status: Optional[JJZStatus]) -> bool:
-    """范围内的车牌没有进京证记录。查询失败不算缺失。"""
+    """范围内的车牌没有进京证记录。查询失败不算缺失。
+
+    必须同时是 invalid。上游失败时状态是 error，即使文案碰巧相同也不能当成 404。
+    """
     if status is None:
+        return False
+    if (status.status or "").strip() != JJZStatusEnum.INVALID.value:
         return False
     message = (status.error_message or "").strip()
     return message in MISSING_PERMIT_MESSAGES

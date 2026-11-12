@@ -93,7 +93,7 @@ async def log_requests(request: Request, call_next):
             status_code=response.status_code,
             response_time_ms=response_time_ms,
             extra_data={
-                "query_params": dict(request.query_params),
+                "query_params": _logged_query_params(request),
                 "user_agent": request.headers.get("user-agent"),
                 "client_ip": request.client.host if request.client else None,
             },
@@ -448,6 +448,14 @@ async def metrics() -> Dict[str, Any]:
             "error": str(e),
             "response_time_ms": round((time.time() - start_time) * 1000, 2),
         }
+
+
+def _logged_query_params(request: Request) -> Dict[str, str]:
+    """写入日志的查询参数。车牌号不落日志，避免未授权请求把车牌写进来。"""
+    params: Dict[str, str] = {}
+    for key, value in request.query_params.items():
+        params[key] = "<redacted>" if key == "plate" else value
+    return params
 
 
 def _bearer_token(authorization: Optional[str]) -> str:
