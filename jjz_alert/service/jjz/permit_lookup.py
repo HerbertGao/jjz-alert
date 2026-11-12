@@ -1,5 +1,6 @@
 """把 JJZService 已经算出的进京证状态映射成对外查询字段。"""
 
+import asyncio
 import logging
 from typing import Any, Dict, Optional
 
@@ -7,6 +8,12 @@ from jjz_alert.service.jjz.jjz_status import JJZStatus
 from jjz_alert.service.jjz.jjz_status_enum import JJZStatusEnum
 from jjz_alert.service.jjz.jjz_utils import extract_jjz_type_from_jjzzlmc
 from jjz_alert.service.traffic.traffic_models import PlateTrafficStatus
+
+# 限行是补充字段。上游单次请求的套接字超时是 10 秒；这里只多留一点余量，
+# 让一次能返回的查询完成。不跟随限行服务自己的多重重试（那会到大约 100 秒
+# 才开始备用源）。超时后该字段为 null，进京证结果仍返回。其他调用方继续用
+# 限行服务原有的重试。
+PERMIT_TRAFFIC_LOOKUP_TIMEOUT_SECONDS = 12
 
 # 这些文案来自现有查询：车牌在账户返回里没有任何进京证记录。
 MISSING_PERMIT_MESSAGES = frozenset(
@@ -103,11 +110,20 @@ def traffic_limited_today_value(
 
 
 async def lookup_traffic_limited_today(plate: str) -> Optional[bool]:
-    """复用限行服务判断该车牌当日是否限行。查不准时返回 None。"""
+    """复用限行服务判断该车牌当日是否限行。查不准或超过等待时限时返回 None。
+
+    等待只包住这一次补充查询，不修改限行服务的重试次数。
+    """
     from jjz_alert.service.traffic.traffic_service import traffic_service
 
     try:
-        status = await traffic_service.check_plate_limited(plate)
+        status = await asyncio.wait_for(
+            traffic_service.check_plate_limited(plate),
+            timeout=PERMIT_TRAFFIC_LOOKUP_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        logging.warning("限行查询超过等待时限")
+        return None
     except Exception as exc:
         logging.warning("限行查询失败: %s", type(exc).__name__)
         return None

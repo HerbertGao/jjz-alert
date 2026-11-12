@@ -1,11 +1,16 @@
 """进京证查询响应字段：剩余次数、审核原因、当日限行。"""
 
+import asyncio
+import time
 from datetime import date
+from unittest.mock import AsyncMock
 
 import pytest
 
+from jjz_alert.service.jjz import permit_lookup
 from jjz_alert.service.jjz.jjz_status import JJZStatus
 from jjz_alert.service.jjz.permit_lookup import (
+    PERMIT_TRAFFIC_LOOKUP_TIMEOUT_SECONDS,
     lookup_traffic_limited_today,
     to_permit_payload,
     traffic_limited_today_value,
@@ -104,8 +109,6 @@ class TestTrafficLimitedTodayValue:
 class TestLookupTrafficLimitedToday:
     @pytest.mark.asyncio
     async def test_reuses_check_plate_limited(self, monkeypatch):
-        from unittest.mock import AsyncMock
-
         lookup = AsyncMock(return_value=_traffic(True, rule=_rule(True)))
         monkeypatch.setattr(traffic_service, "check_plate_limited", lookup)
 
@@ -114,9 +117,30 @@ class TestLookupTrafficLimitedToday:
 
     @pytest.mark.asyncio
     async def test_exception_is_null_and_does_not_raise(self, monkeypatch):
-        from unittest.mock import AsyncMock
-
         lookup = AsyncMock(side_effect=RuntimeError("down"))
         monkeypatch.setattr(traffic_service, "check_plate_limited", lookup)
 
         assert await lookup_traffic_limited_today(PLATE) is None
+
+    def test_budget_covers_one_request_not_the_retry_cascade(self):
+        # 套接字超时是 10 秒。预算要能等完这一次，但不能跟到多重重试。
+        assert 10 < PERMIT_TRAFFIC_LOOKUP_TIMEOUT_SECONDS <= 12
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_null_without_waiting_out_the_lookup(
+        self, monkeypatch
+    ):
+        monkeypatch.setattr(
+            permit_lookup, "PERMIT_TRAFFIC_LOOKUP_TIMEOUT_SECONDS", 0.05
+        )
+
+        async def slow(_plate):
+            await asyncio.sleep(30)
+            return _traffic(True, rule=_rule(True))
+
+        monkeypatch.setattr(traffic_service, "check_plate_limited", slow)
+        started = time.monotonic()
+
+        assert await lookup_traffic_limited_today(PLATE) is None
+
+        assert time.monotonic() - started < 1

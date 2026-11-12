@@ -1,5 +1,7 @@
 """GET /permit：按令牌绑定的车牌查询最新进京证。"""
 
+import asyncio
+import time
 from datetime import date
 from unittest.mock import AsyncMock
 
@@ -8,6 +10,7 @@ from fastapi.testclient import TestClient
 
 import rest_api
 from jjz_alert.config.api_tokens import match_api_token
+from jjz_alert.service.jjz import permit_lookup
 from jjz_alert.config.config_models import ApiTokenConfig, AppConfig
 from jjz_alert.service.jjz.jjz_service import jjz_service
 from jjz_alert.service.jjz.jjz_status import JJZStatus
@@ -462,6 +465,35 @@ class TestPermitLookupApi:
         assert body["type"] == "六环内"
         assert "secret" not in response.text
         assert "RuntimeError" not in response.text
+
+    def test_slow_traffic_lookup_does_not_hold_the_permit(
+        self, client, monkeypatch, traffic_lookup
+    ):
+        _use_config(monkeypatch, [ApiTokenConfig(token=TOKEN, plates=[PLATE])])
+        _mock_lookup(monkeypatch, _status(sycs="2"))
+        monkeypatch.setattr(
+            permit_lookup, "PERMIT_TRAFFIC_LOOKUP_TIMEOUT_SECONDS", 0.05
+        )
+
+        async def slow(_plate):
+            await asyncio.sleep(30)
+            return _traffic_status(is_limited=True)
+
+        traffic_lookup.side_effect = slow
+        started = time.monotonic()
+
+        response = client.get(
+            "/permit",
+            params={"plate": PLATE},
+            headers={"Authorization": f"Bearer {TOKEN}"},
+        )
+
+        assert time.monotonic() - started < 1
+        assert response.status_code == 200
+        body = response.json()
+        assert body["remaining_count"] == 2
+        assert body["status"] == "valid"
+        assert body["traffic_limited_today"] is None
 
 
 @pytest.mark.unit

@@ -6,7 +6,7 @@
 ## 2. 当日限行
 
 - [x] 2.1 成功查询进京证后调用现有 `TrafficService.check_plate_limited`
-- [x] 2.2 限行失败、无规则或异常时 `traffic_limited_today` 为 `null`，响应仍为 200
+- [x] 2.2 限行失败、无规则、异常或超过 12 秒总等待时 `traffic_limited_today` 为 `null`，响应仍为 200
 - [x] 2.3 401/403/404/503 不查询限行
 - [x] 2.4 异步限行 HTTP 在现有工作线程中执行，不堵住事件循环
 
