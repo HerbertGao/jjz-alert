@@ -5,6 +5,19 @@
 `v2.5.0` 及更早的发布没有写入本文件，见
 [GitHub Releases](https://github.com/HerbertGao/jjz-alert/releases)。
 
+## [2.7.0] - 2026-11-12
+
+### 其他
+- 增加按令牌绑定车牌的最新进京证查询接口 (#147) (a136d92)
+- chore(deps-dev): update tox requirement from >=4.67.4 to >=4.67.13 (#146) (e268151)
+- chore(deps): update pytest-asyncio requirement (#145) (d4c2463)
+- chore(deps): bump github/codeql-action from 4.39.1 to 4.39.3 (#144) (ce40c0e)
+- chore(deps): bump curl-cffi from 0.16.3 to 0.17.0 (#139) (668bd47)
+- chore(deps): update pytest requirement from >=9.1.1 to >=9.2.0 (#142) (2231695)
+- chore(deps): update apprise requirement from >=2.0.1 to >=2.1.0 (#143) (9e43688)
+- chore(deps): update pytest-asyncio requirement from >=1.4.0 to >=1.4.1 (#141) (366ac5e)
+- chore(deps-dev): update tox requirement from >=4.67.1 to >=4.67.4 (#140) (cb75e52)
+
 ## [2.6.0] - 2026-10-30
 
 ### 其他
