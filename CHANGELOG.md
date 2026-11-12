@@ -5,6 +5,14 @@
 `v2.5.0` 及更早的发布没有写入本文件，见
 [GitHub Releases](https://github.com/HerbertGao/jjz-alert/releases)。
 
+## [2.8.0] - 2026-11-12
+
+### 新功能
+- feat(api): 查询接口返回剩余次数、审核原因和当日限行 (32e4a3d)
+
+### 其他
+- docs: 将 CLAUDE.md 更新为 AGENTS.md 并明确 PR 与发版约定 (#149) (c61e2fd)
+
 ## [2.7.0] - 2026-11-12
 
 ### 其他
