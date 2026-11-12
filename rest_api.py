@@ -523,6 +523,7 @@ async def get_latest_permit(
         raise HTTPException(status_code=403, detail="无权查询该车牌")
 
     try:
+        # 上游 HTTP 在有上限的工作线程里执行，这里的等待不会卡住事件循环。
         status = await jjz_service.get_jjz_status(normalized)
     except Exception as exc:
         logging.error("进京证查询失败: %s", type(exc).__name__)
